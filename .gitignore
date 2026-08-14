@@ -1,0 +1,33 @@
+# --- Node / pnpm ---
+node_modules/
+Frontend/**/dist/
+Frontend/**/.vite/
+Frontend/**/dist-ssr/
+pnpm-lock.yaml.bak
+*.local
+
+# --- Env files (never commit real secrets) ---
+.env
+.env.*
+!.env.example
+!*/.env.example
+
+# --- .NET ---
+Backend/**/bin/
+Backend/**/obj/
+Backend/**/*.user
+Backend/**/publish/
+
+# --- Editors / OS ---
+.vs/
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# --- Logs ---
+*.log
+npm-debug.log*
+pnpm-debug.log*
