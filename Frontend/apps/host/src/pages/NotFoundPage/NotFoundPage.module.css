@@ -1,0 +1,16 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--omni-space-3);
+  min-height: 60vh;
+  text-align: center;
+  color: var(--omni-color-text-secondary);
+}
+
+.code {
+  font-size: var(--omni-font-size-2xl);
+  font-weight: var(--omni-font-weight-bold);
+  color: var(--omni-color-text-primary);
+}

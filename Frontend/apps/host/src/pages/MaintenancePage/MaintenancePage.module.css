@@ -1,0 +1,31 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--omni-space-4);
+  min-height: 60vh;
+  text-align: center;
+  padding: var(--omni-space-6);
+}
+
+.icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--omni-color-warning-bg);
+  color: var(--omni-color-warning-text);
+  font-size: var(--omni-font-size-2xl);
+}
+
+.title {
+  color: var(--omni-color-text-primary);
+}
+
+.message {
+  color: var(--omni-color-text-secondary);
+  max-width: 48ch;
+}

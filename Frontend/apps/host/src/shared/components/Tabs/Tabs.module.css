@@ -1,0 +1,23 @@
+.tablist {
+  display: flex;
+  border-bottom: 1px solid var(--omni-color-border);
+}
+
+.tab {
+  padding: var(--omni-space-3) var(--omni-space-4);
+  font-size: var(--omni-font-size-sm);
+  font-weight: var(--omni-font-weight-medium);
+  color: var(--omni-color-text-secondary);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color var(--omni-transition-fast), border-color var(--omni-transition-fast);
+}
+
+.tab:hover {
+  color: var(--omni-color-text-primary);
+}
+
+.tabActive {
+  color: var(--omni-color-primary-700);
+  border-bottom-color: var(--omni-color-primary-600);
+}

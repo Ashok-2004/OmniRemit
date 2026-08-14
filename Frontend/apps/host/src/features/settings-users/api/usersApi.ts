@@ -1,0 +1,110 @@
+import { env } from '../../../config/env'
+import { apiFetch } from '../../../shared/api/httpClient'
+
+const base = env.authServiceUrl
+
+export interface PagedResult<T> {
+  items: T[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+export interface UserListItemDto {
+  id: string
+  name: string
+  email: string
+  phoneNumber: string | null
+  roleId: string | null
+  roleName: string | null
+  isAdministrator: boolean
+  isActive: boolean
+  lastLoginAt: string | null
+}
+
+export interface PermissionOverrideDto {
+  featureKey: string
+  capability: string
+  effect: 'Grant' | 'Revoke'
+}
+
+export interface UserDetailDto {
+  id: string
+  name: string
+  email: string
+  phoneNumber: string | null
+  roleId: string | null
+  roleName: string | null
+  isAdministrator: boolean
+  isActive: boolean
+  mustChangePassword: boolean
+  lastLoginAt: string | null
+  createdAt: string
+  updatedAt: string
+  permissionOverrides: PermissionOverrideDto[]
+}
+
+export interface CreateUserRequest {
+  name: string
+  email: string
+  phoneNumber?: string | null
+  roleId?: string | null
+  isActive?: boolean
+}
+
+export interface CreateUserResponse {
+  user: UserDetailDto
+  temporaryPassword: string
+}
+
+export interface UpdateUserRequest {
+  name: string
+  email: string
+  phoneNumber?: string | null
+  roleId?: string | null
+}
+
+export interface ListUsersParams {
+  page?: number
+  pageSize?: number
+  search?: string
+  isActive?: boolean
+  roleId?: string
+}
+
+function buildQuery(params: object) {
+  const search = new URLSearchParams()
+  for (const [key, value] of Object.entries(params) as [string, string | number | boolean | undefined][]) {
+    if (value !== undefined) search.set(key, String(value))
+  }
+  const query = search.toString()
+  return query ? `?${query}` : ''
+}
+
+export const usersApi = {
+  list: (accessToken: string, params: ListUsersParams = {}) =>
+    apiFetch<PagedResult<UserListItemDto>>(`${base}/api/users${buildQuery(params)}`, { accessToken }),
+
+  get: (accessToken: string, id: string) => apiFetch<UserDetailDto>(`${base}/api/users/${id}`, { accessToken }),
+
+  create: (accessToken: string, body: CreateUserRequest) =>
+    apiFetch<CreateUserResponse>(`${base}/api/users`, { method: 'POST', accessToken, body }),
+
+  update: (accessToken: string, id: string, body: UpdateUserRequest) =>
+    apiFetch<UserDetailDto>(`${base}/api/users/${id}`, { method: 'PUT', accessToken, body }),
+
+  updateStatus: (accessToken: string, id: string, isActive: boolean) =>
+    apiFetch<UserDetailDto>(`${base}/api/users/${id}/status`, { method: 'PATCH', accessToken, body: { isActive } }),
+
+  remove: (accessToken: string, id: string) => apiFetch<void>(`${base}/api/users/${id}`, { method: 'DELETE', accessToken }),
+
+  getOverrides: (accessToken: string, id: string) =>
+    apiFetch<PermissionOverrideDto[]>(`${base}/api/users/${id}/permission-overrides`, { accessToken }),
+
+  replaceOverrides: (accessToken: string, id: string, overrides: PermissionOverrideDto[]) =>
+    apiFetch<PermissionOverrideDto[]>(`${base}/api/users/${id}/permission-overrides`, {
+      method: 'PUT',
+      accessToken,
+      body: { overrides },
+    }),
+}

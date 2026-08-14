@@ -1,0 +1,27 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--omni-space-4);
+  min-height: 60vh;
+}
+
+.frame {
+  flex: 1;
+  border-radius: var(--omni-radius-lg);
+  overflow: hidden;
+}
+
+.errorCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--omni-space-3);
+  min-height: 60vh;
+  text-align: center;
+  color: var(--omni-color-text-secondary);
+  background: var(--omni-color-surface);
+  border: 1px solid var(--omni-color-border);
+  border-radius: var(--omni-radius-lg);
+  padding: var(--omni-space-6);
+}

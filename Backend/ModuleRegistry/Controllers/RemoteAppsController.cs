@@ -1,0 +1,82 @@
+using System.Text.Json;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using ModuleRegistry.Application.DTOs;
+using ModuleRegistry.Application.Services;
+using ModuleRegistry.Infrastructure.Security;
+
+namespace ModuleRegistry.Controllers;
+
+[ApiController]
+[Route("api/remote-apps")]
+[Authorize]
+public class RemoteAppsController(RemoteAppAppService remoteApps) : ControllerBase
+{
+    // Must match AuthService.Infrastructure.Seed.AuthDbSeeder.HostFeatureKeys.SettingsMaintenance —
+    // the two services don't share a code package, so this string is kept in sync by hand.
+    private const string Feature = "host.settings.maintenance";
+
+    [HttpGet]
+    [RequirePermission(Feature, "View")]
+    public async Task<ActionResult<PagedResult<RemoteAppDto>>> List(
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 25, [FromQuery] string? search = null, CancellationToken ct = default)
+        => Ok(await remoteApps.ListAsync(Math.Max(page, 1), Math.Clamp(pageSize, 1, 100), search, ct));
+
+    [HttpGet("{id:guid}")]
+    [RequirePermission(Feature, "View")]
+    public async Task<ActionResult<RemoteAppDto>> Get(Guid id, CancellationToken ct)
+        => Ok(await remoteApps.GetAsync(id, ct));
+
+    [HttpPost]
+    [RequirePermission(Feature, "Create")]
+    public async Task<ActionResult<RemoteAppDto>> Create([FromBody] CreateRemoteAppRequest request, CancellationToken ct)
+    {
+        var result = await remoteApps.CreateAsync(request, CurrentUserId(), ct);
+        return CreatedAtAction(nameof(Get), new { id = result.Id }, result);
+    }
+
+    [HttpPut("{id:guid}")]
+    [RequirePermission(Feature, "Edit")]
+    public async Task<ActionResult<RemoteAppDto>> Update(Guid id, [FromBody] UpdateRemoteAppRequest request, CancellationToken ct)
+        => Ok(await remoteApps.UpdateAsync(id, request, CurrentUserId(), ct));
+
+    [HttpPatch("{id:guid}/status")]
+    [RequirePermission(Feature, "Edit")]
+    public async Task<ActionResult<RemoteAppDto>> UpdateStatus(Guid id, [FromBody] UpdateRemoteAppStatusRequest request, CancellationToken ct)
+        => Ok(await remoteApps.UpdateStatusAsync(id, request.Status, request.MaintenanceMessage, CurrentUserId(), ct));
+
+    [HttpDelete("{id:guid}")]
+    [RequirePermission(Feature, "Delete")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
+    {
+        await remoteApps.DeleteAsync(id, ct);
+        return NoContent();
+    }
+
+    [HttpPost("resync-permissions")]
+    [RequirePermission(Feature, "Edit")]
+    public async Task<IActionResult> ResyncPermissions(CancellationToken ct)
+    {
+        var count = await remoteApps.ResyncPermissionsAsync(ct);
+        return Ok(new { resyncedCount = count });
+    }
+
+    /// <summary>What the host's sidebar actually calls — any authenticated user, filtered server-side to what their token grants.</summary>
+    [HttpGet("for-sidebar")]
+    public async Task<ActionResult<IReadOnlyList<SidebarAppDto>>> ForSidebar(CancellationToken ct)
+    {
+        var isAdministrator = User.FindFirst(JwtClaimTypes.Administrator)?.Value == "true";
+        var permsClaim = User.FindFirst(JwtClaimTypes.Permissions)?.Value;
+        var permissions = string.IsNullOrEmpty(permsClaim)
+            ? new HashSet<string>()
+            : (JsonSerializer.Deserialize<string[]>(permsClaim) ?? []).ToHashSet();
+
+        return Ok(await remoteApps.GetForSidebarAsync(isAdministrator, permissions, ct));
+    }
+
+    private Guid? CurrentUserId()
+    {
+        var sub = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
+        return Guid.TryParse(sub, out var id) ? id : null;
+    }
+}

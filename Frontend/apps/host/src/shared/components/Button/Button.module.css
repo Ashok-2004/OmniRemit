@@ -1,0 +1,100 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--omni-space-2);
+  font-weight: var(--omni-font-weight-semibold);
+  border-radius: var(--omni-radius-md);
+  border: 1px solid transparent;
+  white-space: nowrap;
+  transition: background-color var(--omni-transition-fast), border-color var(--omni-transition-fast),
+    color var(--omni-transition-fast), box-shadow var(--omni-transition-fast), opacity var(--omni-transition-fast);
+}
+
+.button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ---- Sizes ---- */
+.sm {
+  height: 32px;
+  padding: 0 var(--omni-space-3);
+  font-size: var(--omni-font-size-sm);
+}
+
+.md {
+  height: 38px;
+  padding: 0 var(--omni-space-4);
+  font-size: var(--omni-font-size-md);
+}
+
+.lg {
+  height: 44px;
+  padding: 0 var(--omni-space-5);
+  font-size: var(--omni-font-size-lg);
+}
+
+/* ---- Variants ---- */
+.primary {
+  background: var(--omni-color-primary-600);
+  color: var(--omni-color-text-on-primary);
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--omni-color-primary-700);
+}
+
+.secondary {
+  background: var(--omni-color-surface);
+  color: var(--omni-color-text-primary);
+  border-color: var(--omni-color-border-strong);
+}
+
+.secondary:hover:not(:disabled) {
+  background: var(--omni-color-surface-alt);
+}
+
+.ghost {
+  background: transparent;
+  color: var(--omni-color-text-secondary);
+}
+
+.ghost:hover:not(:disabled) {
+  background: var(--omni-color-surface-alt);
+  color: var(--omni-color-text-primary);
+}
+
+.danger {
+  background: var(--omni-color-danger);
+  color: var(--omni-color-text-on-primary);
+}
+
+.danger:hover:not(:disabled) {
+  background: var(--omni-color-danger-text);
+}
+
+.fullWidth {
+  width: 100%;
+}
+
+.spinner {
+  width: 1em;
+  height: 1em;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 1.2s;
+  }
+}

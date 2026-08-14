@@ -1,0 +1,105 @@
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  width: 240px;
+  flex-shrink: 0;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  background: var(--omni-sidebar-bg);
+  border-right: 1px solid var(--omni-sidebar-border);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--omni-space-3);
+  padding: var(--omni-space-5) var(--omni-space-4);
+}
+
+.brandMark {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--omni-radius-md);
+  background: var(--omni-color-primary-800);
+  color: var(--omni-color-text-on-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: var(--omni-font-weight-bold);
+  flex-shrink: 0;
+}
+
+.brandName {
+  font-weight: var(--omni-font-weight-bold);
+  font-size: var(--omni-font-size-lg);
+  color: var(--omni-color-text-primary);
+}
+
+.nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--omni-space-2) var(--omni-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--omni-space-1);
+}
+
+.sectionLabel {
+  padding: var(--omni-space-4) var(--omni-space-3) var(--omni-space-2);
+  font-size: var(--omni-font-size-xs);
+  font-weight: var(--omni-font-weight-semibold);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--omni-color-text-muted);
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: var(--omni-space-3);
+  padding: var(--omni-space-2) var(--omni-space-3);
+  border-radius: var(--omni-radius-md);
+  color: var(--omni-sidebar-text);
+  font-size: var(--omni-font-size-md);
+  font-weight: var(--omni-font-weight-medium);
+  transition: background-color var(--omni-transition-fast), color var(--omni-transition-fast);
+}
+
+.navItem:hover {
+  background: var(--omni-sidebar-bg-hover);
+  color: var(--omni-color-text-primary);
+}
+
+.navItemActive,
+.navItemActive:hover {
+  background: var(--omni-sidebar-bg-active);
+  color: var(--omni-sidebar-text-active);
+}
+
+.navIcon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--omni-font-size-lg);
+  line-height: 1;
+}
+
+.navLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.emptyState {
+  padding: var(--omni-space-4) var(--omni-space-3);
+  font-size: var(--omni-font-size-sm);
+  color: var(--omni-color-text-muted);
+}
+
+.skeletonItem {
+  padding: var(--omni-space-2) var(--omni-space-3);
+}

@@ -1,0 +1,147 @@
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.brandPanel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: var(--omni-space-8);
+  color: var(--omni-color-text-on-primary);
+  background: linear-gradient(155deg, var(--omni-color-primary-800) 0%, var(--omni-color-primary-600) 100%);
+  overflow: hidden;
+}
+
+.brandPanel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle at 15% 20%, color-mix(in srgb, white 10%, transparent) 0, transparent 40%),
+    radial-gradient(circle at 85% 80%, color-mix(in srgb, white 8%, transparent) 0, transparent 45%);
+  pointer-events: none;
+}
+
+.brandMark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--omni-space-3);
+  position: relative;
+}
+
+.brandMarkIcon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--omni-radius-md);
+  background: color-mix(in srgb, white 18%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: var(--omni-font-weight-bold);
+}
+
+.brandMarkText {
+  font-size: var(--omni-font-size-lg);
+  font-weight: var(--omni-font-weight-bold);
+}
+
+.brandCopy {
+  position: relative;
+  max-width: 34ch;
+}
+
+.brandHeadline {
+  font-size: var(--omni-font-size-2xl);
+  line-height: var(--omni-line-height-tight);
+  margin-bottom: var(--omni-space-3);
+}
+
+.brandSubcopy {
+  color: color-mix(in srgb, white 85%, transparent);
+  font-size: var(--omni-font-size-md);
+}
+
+.brandFooter {
+  position: relative;
+  font-size: var(--omni-font-size-xs);
+  color: color-mix(in srgb, white 70%, transparent);
+}
+
+.formPanel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--omni-space-6);
+  background: var(--omni-color-surface);
+}
+
+.formCard {
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--omni-space-6);
+}
+
+.formHeader {
+  display: flex;
+  flex-direction: column;
+  gap: var(--omni-space-2);
+}
+
+.formHeader p {
+  color: var(--omni-color-text-secondary);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--omni-space-4);
+}
+
+.formFooterRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.checkboxRow {
+  display: flex;
+  align-items: center;
+  gap: var(--omni-space-2);
+  font-size: var(--omni-font-size-sm);
+  color: var(--omni-color-text-secondary);
+}
+
+.linkButton {
+  font-size: var(--omni-font-size-sm);
+  color: var(--omni-color-primary-700);
+  font-weight: var(--omni-font-weight-medium);
+}
+
+.linkButton:hover {
+  text-decoration: underline;
+}
+
+.formError {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--omni-space-2);
+  padding: var(--omni-space-3);
+  border-radius: var(--omni-radius-md);
+  background: var(--omni-color-danger-bg);
+  color: var(--omni-color-danger-text);
+  font-size: var(--omni-font-size-sm);
+}
+
+@media (max-width: 860px) {
+  .page {
+    grid-template-columns: 1fr;
+  }
+
+  .brandPanel {
+    display: none;
+  }
+}

@@ -1,0 +1,30 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--omni-space-4);
+  min-height: 60vh;
+  text-align: center;
+  padding: var(--omni-space-6);
+  background: var(--omni-color-surface);
+  border: 1px solid var(--omni-color-border);
+  border-radius: var(--omni-radius-lg);
+}
+
+.icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--omni-color-danger-bg);
+  color: var(--omni-color-danger-text);
+  font-size: var(--omni-font-size-2xl);
+}
+
+.message {
+  color: var(--omni-color-text-secondary);
+  max-width: 48ch;
+}

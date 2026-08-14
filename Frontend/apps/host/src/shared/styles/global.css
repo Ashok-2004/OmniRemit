@@ -1,0 +1,33 @@
+/*
+ * The only global CLASSES (as opposed to bare tags — see reset.css/typography.css) allowed in the
+ * whole app. Every one must be prefixed `omni-` and kept to true cross-cutting utilities. Remote
+ * apps must never import this file — see Frontend/README (once added) for the collision-safety
+ * contract components rely on via CSS Modules instead.
+ */
+
+.omni-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--omni-color-primary-500);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--omni-color-primary-200);
+}
+
+.omni-scroll-region {
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--omni-color-border-strong) transparent;
+}

@@ -1,0 +1,36 @@
+/* Base type — bare tags only, see reset.css for the collision-safety rule this file also follows. */
+
+body {
+  font-family: var(--omni-font-family);
+  font-size: var(--omni-font-size-md);
+  line-height: var(--omni-line-height-normal);
+  font-weight: var(--omni-font-weight-regular);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-weight: var(--omni-font-weight-bold);
+  line-height: var(--omni-line-height-tight);
+}
+
+h1 {
+  font-size: var(--omni-font-size-2xl);
+}
+
+h2 {
+  font-size: var(--omni-font-size-xl);
+}
+
+h3 {
+  font-size: var(--omni-font-size-lg);
+  font-weight: var(--omni-font-weight-semibold);
+}
+
+p {
+  line-height: var(--omni-line-height-normal);
+}

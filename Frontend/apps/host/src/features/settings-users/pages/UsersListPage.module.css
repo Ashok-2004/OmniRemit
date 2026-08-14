@@ -1,0 +1,105 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--omni-space-5);
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--omni-space-1);
+}
+
+.header p {
+  color: var(--omni-color-text-secondary);
+}
+
+.statGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--omni-space-4);
+}
+
+.statCard {
+  background: var(--omni-color-surface);
+  border: 1px solid var(--omni-color-border);
+  border-radius: var(--omni-radius-lg);
+  padding: var(--omni-space-4) var(--omni-space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--omni-space-1);
+}
+
+.statLabel {
+  font-size: var(--omni-font-size-xs);
+  font-weight: var(--omni-font-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--omni-color-text-muted);
+}
+
+.statValue {
+  font-size: var(--omni-font-size-xl);
+  font-weight: var(--omni-font-weight-bold);
+  color: var(--omni-color-text-primary);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--omni-space-4);
+  flex-wrap: wrap;
+}
+
+.searchInput {
+  max-width: 320px;
+}
+
+.userCell {
+  display: flex;
+  align-items: center;
+  gap: var(--omni-space-3);
+}
+
+.nameLink {
+  font-weight: var(--omni-font-weight-medium);
+  color: var(--omni-color-primary-700);
+}
+
+.nameLink:hover {
+  text-decoration: underline;
+}
+
+.emailText {
+  color: var(--omni-color-text-secondary);
+}
+
+.errorBanner {
+  padding: var(--omni-space-3) var(--omni-space-4);
+  border-radius: var(--omni-radius-md);
+  background: var(--omni-color-danger-bg);
+  color: var(--omni-color-danger-text);
+  font-size: var(--omni-font-size-sm);
+}
+
+.actionsCell {
+  display: flex;
+  gap: var(--omni-space-2);
+  justify-content: flex-end;
+}
+
+.emptyCell {
+  text-align: center;
+  color: var(--omni-color-text-muted);
+  padding: var(--omni-space-7);
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--omni-space-3);
+  font-size: var(--omni-font-size-sm);
+  color: var(--omni-color-text-secondary);
+}

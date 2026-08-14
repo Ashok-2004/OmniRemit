@@ -1,0 +1,55 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--omni-space-5);
+  max-width: 640px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--omni-space-4);
+}
+
+.panel {
+  background: var(--omni-color-surface);
+  border: 1px solid var(--omni-color-border);
+  border-radius: var(--omni-radius-lg);
+  padding: var(--omni-space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--omni-space-4);
+}
+
+.readonlyField {
+  display: flex;
+  flex-direction: column;
+  gap: var(--omni-space-1);
+}
+
+.readonlyField label {
+  font-size: var(--omni-font-size-sm);
+  font-weight: var(--omni-font-weight-medium);
+  color: var(--omni-color-text-primary);
+}
+
+.readonlyValue {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--omni-font-size-sm);
+  color: var(--omni-color-text-secondary);
+}
+
+.errorBanner {
+  padding: var(--omni-space-3) var(--omni-space-4);
+  border-radius: var(--omni-radius-md);
+  background: var(--omni-color-danger-bg);
+  color: var(--omni-color-danger-text);
+  font-size: var(--omni-font-size-sm);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--omni-space-3);
+}
