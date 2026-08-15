@@ -23,6 +23,7 @@ builder.Services.Configure<CorsOptions>(builder.Configuration.GetSection(CorsOpt
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
 builder.Services.Configure<AuthCookieOptions>(builder.Configuration.GetSection(AuthCookieOptions.SectionName));
 builder.Services.Configure<InternalApiOptions>(builder.Configuration.GetSection(InternalApiOptions.SectionName));
+builder.Services.Configure<GoogleAuthOptions>(builder.Configuration.GetSection(GoogleAuthOptions.SectionName));
 
 var connectionString = builder.Configuration.GetConnectionString("AuthDb");
 var isDbConfigured = !string.IsNullOrWhiteSpace(connectionString);
@@ -43,6 +44,18 @@ builder.Services.AddScoped<UserAppService>();
 builder.Services.AddScoped<RoleAppService>();
 builder.Services.AddScoped<PermissionCatalogAppService>();
 builder.Services.AddScoped<AuditLogAppService>();
+builder.Services.AddScoped<DashboardAppService>();
+
+// Response compression. The audit-log list and the permission catalog are the two biggest JSON
+// payloads in the platform and both compress extremely well. Enabled for HTTPS too — the BREACH
+// attack that made that inadvisable applies to responses reflecting a secret back to the caller,
+// which none of these are; they are already access-controlled JSON.
+builder.Services.AddResponseCompression(options => options.EnableForHttps = true);
+
+// A health check that actually verifies the database. The previous /health returned a hardcoded
+// "ok" literal, so an orchestrator would happily route traffic to a service whose database was
+// unreachable — the check could never fail.
+builder.Services.AddHealthChecks().AddDbContextCheck<AuthDbContext>("database");
 
 builder.Services.AddCors(options =>
 {
@@ -142,13 +155,16 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+// Compression before CORS/auth so it wraps every response the pipeline produces.
+app.UseResponseCompression();
 app.UseCors("Frontend");
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
-app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "AuthService" }))
-    .WithName("HealthCheck");
+// Real check — reports Unhealthy (503) when the database is unreachable, instead of the previous
+// hardcoded "ok" that could never fail.
+app.MapHealthChecks("/health").WithName("HealthCheck");
 
 app.Run();

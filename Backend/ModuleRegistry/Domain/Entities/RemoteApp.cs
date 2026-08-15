@@ -39,6 +39,29 @@ public class RemoteApp
     /// </summary>
     public string? PermissionsSourceUrl { get; set; }
 
+    /// <summary>
+    /// Result of the last reachability probe against <see cref="ManifestUrl"/>, refreshed on an
+    /// interval by RemoteAppHealthProbeService. Without this the registry happily hands the host a
+    /// sidebar link into an app whose server is not running — the failure only becomes visible when
+    /// a user clicks it and gets a Module Federation runtime error, which is precisely the bug this
+    /// closes.
+    /// </summary>
+    public RemoteAppHealth Health { get; set; } = RemoteAppHealth.Unknown;
+
+    /// <summary>When the last probe ran. Null until the app has been probed at least once.</summary>
+    public DateTimeOffset? LastHealthCheckAt { get; set; }
+
+    /// <summary>The real transport/HTTP error from the last failed probe. Null when healthy — never a placeholder string.</summary>
+    public string? LastHealthError { get; set; }
+
+    /// <summary>
+    /// The Module Federation container name read from the fetched manifest (e.g. "employee_mf"),
+    /// which is NOT the same thing as <see cref="Key"/> (e.g. "employee"). Two different remotes
+    /// built with the same container name would collide on the browser's global scope, so this is
+    /// captured and uniqueness-checked at registration time.
+    /// </summary>
+    public string? ContainerName { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public Guid? CreatedBy { get; set; }

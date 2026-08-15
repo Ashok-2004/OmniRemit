@@ -22,6 +22,12 @@ public class ModuleRegistryDbContext(DbContextOptions<ModuleRegistryDbContext> o
             entity.Property(a => a.PermissionFeatureKey).HasMaxLength(200);
             entity.Property(a => a.PermissionsSourceUrl).HasMaxLength(2048);
             entity.Property(a => a.Status).HasConversion<string>().HasMaxLength(20);
+            entity.Property(a => a.Health).HasConversion<string>().HasMaxLength(20);
+            entity.Property(a => a.LastHealthError).HasMaxLength(1000);
+            entity.Property(a => a.ContainerName).HasMaxLength(200);
+
+            // Both list queries order by SidebarOrder and the sidebar query also filters on Status.
+            entity.HasIndex(a => new { a.Status, a.SidebarOrder });
         });
 
         modelBuilder.Entity<RemoteAppCapability>(entity =>

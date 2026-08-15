@@ -18,6 +18,7 @@ const PAGE_SIZE = 20
 export function RemoteAppsListPage() {
   const accessToken = useAuthStore((s) => s.accessToken)
   const ensureFreshAccessToken = useAuthStore((s) => s.ensureFreshAccessToken)
+  const refreshSession = useAuthStore((s) => s.refreshSession)
   const hasCapability = useAuthStore((s) => s.hasCapability)
 
   const [apps, setApps] = useState<RemoteAppDto[] | null>(null)
@@ -28,9 +29,10 @@ export function RemoteAppsListPage() {
   const [pendingDelete, setPendingDelete] = useState<RemoteAppDto | null>(null)
   const [resyncing, setResyncing] = useState(false)
 
-  const canCreate = hasCapability(FEATURE, 'Create')
+  const canRegister = hasCapability(FEATURE, 'Register')
   const canEdit = hasCapability(FEATURE, 'Edit')
   const canDelete = hasCapability(FEATURE, 'Delete')
+  const canDisable = hasCapability(FEATURE, 'Disable')
 
   const load = useCallback(async () => {
     if (!accessToken) return
@@ -51,6 +53,8 @@ export function RemoteAppsListPage() {
   async function saveStatus(app: RemoteAppDto, status: RemoteAppDto['status'], message: string | null) {
     const token = await ensureFreshAccessToken()
     await remoteAppsApi.updateStatus(token, app.id, status, message)
+    // Disabling/re-enabling an app changes what's assignable — see refreshSession's doc comment.
+    void refreshSession()
     void load()
   }
 
@@ -86,7 +90,7 @@ export function RemoteAppsListPage() {
 
       <div className={styles.toolbar}>
         <div className={styles.toolbarActions}>
-          {canCreate && (
+          {canRegister && (
             <Link to="/settings/applications/new">
               <Button>+ Register App</Button>
             </Link>
@@ -164,7 +168,7 @@ export function RemoteAppsListPage() {
                   {app.manifestUrl}
                 </td>
                 <td>
-                  <StatusToggle app={app} disabled={!canEdit} onSave={(status, message) => saveStatus(app, status, message)} />
+                  <StatusToggle app={app} disabled={!canDisable} onSave={(status, message) => saveStatus(app, status, message)} />
                 </td>
                 {(canEdit || canDelete) && (
                   <td>

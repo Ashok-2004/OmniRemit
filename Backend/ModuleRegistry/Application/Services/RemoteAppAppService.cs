@@ -8,7 +8,11 @@ using ModuleRegistry.Infrastructure;
 
 namespace ModuleRegistry.Application.Services;
 
-public partial class RemoteAppAppService(ModuleRegistryDbContext db, AuthServiceClient authServiceClient, ILogger<RemoteAppAppService> logger)
+public partial class RemoteAppAppService(
+    ModuleRegistryDbContext db,
+    AuthServiceClient authServiceClient,
+    RemoteManifestClient manifestClient,
+    ILogger<RemoteAppAppService> logger)
 {
     [GeneratedRegex("^[a-z0-9][a-z0-9-]{1,49}$")]
     private static partial Regex KeyPattern();
@@ -62,6 +66,32 @@ public partial class RemoteAppAppService(ModuleRegistryDbContext db, AuthService
             throw new ValidationAppException("PermissionsSourceUrl must be a valid absolute URL.");
         }
 
+        var manifestUrl = request.ManifestUrl.Trim();
+
+        // Probe the manifest before accepting the registration. This turns two failure modes that
+        // previously only appeared as a runtime error in the user's browser into an immediate,
+        // actionable message on the registration form.
+        var probe = await manifestClient.ProbeAsync(manifestUrl, ct);
+
+        if (probe.ContainerName is not null)
+        {
+            // The Module Federation container name is a GLOBAL identifier in the browser. Two remotes
+            // sharing one would overwrite each other's container at runtime, producing a bewildering
+            // "wrong app rendered" bug. The DB's unique index is on Key, which is a different value
+            // (Key "employee" vs container "employee_mf"), so it cannot catch this.
+            var clash = await db.RemoteApps
+                .AsNoTracking()
+                .FirstOrDefaultAsync(a => a.ContainerName == probe.ContainerName, ct);
+
+            if (clash is not null)
+            {
+                throw new ConflictAppException(
+                    $"'{clash.DisplayName}' ({clash.Key}) is already registered with the Module Federation " +
+                    $"container name '{probe.ContainerName}'. Two remote apps cannot share a container name — " +
+                    "rename this app's federation 'name' in its vite config and rebuild it.");
+            }
+        }
+
         var now = DateTimeOffset.UtcNow;
         var featureKey = ToFeatureKey(key);
         var displayName = request.DisplayName.Trim();
@@ -73,11 +103,17 @@ public partial class RemoteAppAppService(ModuleRegistryDbContext db, AuthService
             Key = key,
             DisplayName = displayName,
             IconKey = request.IconKey?.Trim(),
-            ManifestUrl = request.ManifestUrl.Trim(),
+            ManifestUrl = manifestUrl,
             SidebarOrder = request.SidebarOrder,
             Status = RemoteAppStatus.Active,
             PermissionFeatureKey = featureKey,
             PermissionsSourceUrl = sourceUrl,
+            // Seed health from the probe we just ran so the app has a real status immediately,
+            // rather than showing Unknown until the next background sweep.
+            Health = probe.Health,
+            LastHealthCheckAt = now,
+            LastHealthError = probe.Error,
+            ContainerName = probe.ContainerName,
             CreatedAt = now,
             UpdatedAt = now,
             CreatedBy = actingUserId,
@@ -208,12 +244,38 @@ public partial class RemoteAppAppService(ModuleRegistryDbContext db, AuthService
     {
         var apps = await db.RemoteApps.Include(a => a.Capabilities).ToListAsync(ct);
 
-        foreach (var app in apps)
+        // Fetch every remote's capability list CONCURRENTLY. Previously this loop awaited each
+        // outbound HTTP call in turn, so N registered apps cost N sequential round trips — and with
+        // no HttpClient timeout configured, N unreachable remotes each burned the 100-second default
+        // before moving on, holding a database connection for the whole time. Both halves are fixed:
+        // the timeout is now set at registration in Program.cs, and the fetches overlap here.
+        var withSource = apps
+            .Where(a => !string.IsNullOrWhiteSpace(a.PermissionsSourceUrl))
+            .ToList();
+
+        var fetches = await Task.WhenAll(withSource.Select(async app =>
+            (app, fetched: await authServiceClient.FetchRemoteCapabilitiesAsync(app.PermissionsSourceUrl!, ct))));
+
+        // The database writes stay sequential and on one context — EF Core's DbContext is not
+        // thread-safe, so only the network I/O above may overlap.
+        var staged = new List<(RemoteApp App, List<RemoteAppCapability> Capabilities)>();
+        foreach (var (app, fetched) in fetches)
         {
-            if (!string.IsNullOrWhiteSpace(app.PermissionsSourceUrl))
+            var rows = ApplyFetchedCapabilities(app, fetched);
+            if (rows is not null)
             {
-                await RefreshCapabilitiesFromSourceAsync(app, app.PermissionsSourceUrl, ct);
+                staged.Add((app, rows));
             }
+        }
+
+        await db.SaveChangesAsync(ct);
+
+        // Navigation fixup must be undone AFTER the save, for the same doubling reason documented on
+        // ResetCapabilityNavigation — and it matters here in particular, because the tuples pushed to
+        // AuthService below are read straight off these collections.
+        foreach (var (app, rows) in staged)
+        {
+            ResetCapabilityNavigation(app, rows);
         }
 
         var active = apps.Where(a => a.Status != RemoteAppStatus.Disabled).ToList();
@@ -244,7 +306,33 @@ public partial class RemoteAppAppService(ModuleRegistryDbContext db, AuthService
             : apps.Where(a => permissions.Any(p => p.StartsWith($"{a.PermissionFeatureKey}:", StringComparison.Ordinal))).ToList();
 
         return visible
-            .Select(a => new SidebarAppDto(a.Key, a.DisplayName, a.IconKey, a.ManifestUrl, a.SidebarOrder, a.Status.ToString(), a.MaintenanceMessage))
+            .Select(a => new SidebarAppDto(
+                a.Key, a.DisplayName, a.IconKey, a.ManifestUrl, a.SidebarOrder,
+                a.Status.ToString(), a.MaintenanceMessage, a.Health.ToString(), a.LastHealthCheckAt))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Real reachability of every registered, non-Disabled app — what the host dashboard's health
+    /// panel renders. Values come straight from the background probe; nothing is inferred or faked,
+    /// and an app that has not been probed yet reports Unknown rather than a guessed status.
+    /// </summary>
+    public async Task<IReadOnlyList<HealthEntryDto>> GetHealthAsync(bool isAdministrator, IReadOnlySet<string> permissions, CancellationToken ct = default)
+    {
+        var apps = await db.RemoteApps
+            .AsNoTracking()
+            .Where(a => a.Status != RemoteAppStatus.Disabled)
+            .OrderBy(a => a.SidebarOrder).ThenBy(a => a.DisplayName)
+            .ToListAsync(ct);
+
+        // Same visibility rule as the sidebar — the health panel must never reveal the existence of
+        // an app the caller has no capability on.
+        var visible = isAdministrator
+            ? apps
+            : apps.Where(a => permissions.Any(p => p.StartsWith($"{a.PermissionFeatureKey}:", StringComparison.Ordinal))).ToList();
+
+        return visible
+            .Select(a => new HealthEntryDto(a.Key, a.DisplayName, a.Health.ToString(), a.LastHealthCheckAt, a.LastHealthError))
             .ToList();
     }
 
@@ -252,29 +340,42 @@ public partial class RemoteAppAppService(ModuleRegistryDbContext db, AuthService
     private async Task RefreshCapabilitiesFromSourceAsync(RemoteApp app, string sourceUrl, CancellationToken ct)
     {
         var fetched = await authServiceClient.FetchRemoteCapabilitiesAsync(sourceUrl, ct);
+        var staged = ApplyFetchedCapabilities(app, fetched);
+        if (staged is null)
+        {
+            return;
+        }
+
+        await db.SaveChangesAsync(ct);
+        ResetCapabilityNavigation(app, staged);
+    }
+
+    /// <summary>
+    /// Stages a fetched capability set onto the tracked entity WITHOUT saving, so callers can batch
+    /// many apps into a single SaveChanges. Returns the staged rows, or null when the fetch failed
+    /// (in which case the last-known set is deliberately left untouched).
+    /// </summary>
+    private List<RemoteAppCapability>? ApplyFetchedCapabilities(RemoteApp app, IReadOnlyList<(string Key, string DisplayName)>? fetched)
+    {
         if (fetched is null)
         {
             logger.LogWarning("Keeping last-known capability set for '{Key}' — permissions source unreachable or invalid.", app.Key);
-            return;
+            return null;
         }
 
         db.RemoteAppCapabilities.RemoveRange(app.Capabilities);
         app.Capabilities.Clear();
 
-        var i = 0;
-        var newCapabilities = new List<RemoteAppCapability>();
-        foreach (var (capKey, displayName) in fetched)
-        {
-            newCapabilities.Add(new RemoteAppCapability
+        var newCapabilities = fetched
+            .Select((cap, i) => new RemoteAppCapability
             {
                 Id = Guid.NewGuid(),
                 RemoteAppId = app.Id,
-                Key = capKey,
-                DisplayName = displayName,
+                Key = cap.Key,
+                DisplayName = cap.DisplayName,
                 SortOrder = i * 10,
-            });
-            i++;
-        }
+            })
+            .ToList();
 
         // Add via the DbSet directly (not app.Capabilities.Add(...)) — these entities carry a
         // client-generated, non-default Guid key, and EF's change-tracker heuristic for entities
@@ -282,16 +383,21 @@ public partial class RemoteAppAppService(ModuleRegistryDbContext db, AuthService
         // exists", issuing UPDATEs instead of INSERTs (a real bug caught via live end-to-end
         // testing: DbUpdateConcurrencyException, 0 rows affected).
         db.RemoteAppCapabilities.AddRange(newCapabilities);
-        await db.SaveChangesAsync(ct);
+        return newCapabilities;
+    }
 
-        // EF's relationship fixup during the SaveChanges above may ALSO have wired these into
-        // app.Capabilities on its own (same tracked entities, matching FK) — reset explicitly
-        // rather than trust that timing, so callers reading app.Capabilities right after this
-        // method (e.g. ToCapabilityTuples, pushed straight to AuthService) see exactly
-        // newCapabilities once each, never doubled. This exact doubling was caught live: it sent 6
-        // capability rows for 3 real ones and tripped AuthService's own unique constraint.
+    /// <summary>
+    /// EF's relationship fixup during SaveChanges may ALSO have wired the new rows into
+    /// app.Capabilities on its own (same tracked entities, matching FK) — reset explicitly rather
+    /// than trust that timing, so callers reading app.Capabilities afterwards (e.g.
+    /// ToCapabilityTuples, pushed straight to AuthService) see each capability exactly once, never
+    /// doubled. This exact doubling was caught live: it sent 6 capability rows for 3 real ones and
+    /// tripped AuthService's own unique constraint.
+    /// </summary>
+    private static void ResetCapabilityNavigation(RemoteApp app, List<RemoteAppCapability> staged)
+    {
         app.Capabilities.Clear();
-        foreach (var capability in newCapabilities)
+        foreach (var capability in staged)
         {
             app.Capabilities.Add(capability);
         }
@@ -306,6 +412,7 @@ public partial class RemoteAppAppService(ModuleRegistryDbContext db, AuthService
         a.Id, a.Key, a.DisplayName, a.IconKey, a.ManifestUrl, a.SidebarOrder,
         a.Status.ToString(), a.MaintenanceMessage, a.PermissionFeatureKey, a.PermissionsSourceUrl,
         a.Capabilities.OrderBy(c => c.SortOrder).Select(c => new CapabilityDto(c.Key, c.DisplayName)).ToList(),
+        a.Health.ToString(), a.LastHealthCheckAt, a.LastHealthError, a.ContainerName,
         a.CreatedAt, a.UpdatedAt);
 
     private static NotFoundAppException NotFound(Guid id) => new($"Remote app '{id}' was not found.");

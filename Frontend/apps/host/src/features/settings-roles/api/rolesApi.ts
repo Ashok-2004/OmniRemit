@@ -38,6 +38,12 @@ export interface UpsertRoleRequest {
   permissions: RolePermissionGrantDto[]
 }
 
+/** `total` is the real full count even when `items` is capped, so the UI can say "showing N of M" honestly. */
+export interface RoleUsersDto {
+  items: RoleUserDto[]
+  total: number
+}
+
 export interface RoleUserDto {
   id: string
   name: string
@@ -73,5 +79,9 @@ export const rolesApi = {
 
   remove: (accessToken: string, id: string) => apiFetch<void>(`${base}/api/roles/${id}`, { method: 'DELETE', accessToken }),
 
-  users: (accessToken: string, id: string) => apiFetch<RoleUserDto[]>(`${base}/api/roles/${id}/users`, { accessToken }),
+  /**
+   * Users assigned to a role. Capped server-side (the endpoint used to return every member
+   * unbounded), so `total` is the real count and `items` may be a prefix of it.
+   */
+  users: (accessToken: string, id: string) => apiFetch<RoleUsersDto>(`${base}/api/roles/${id}/users`, { accessToken }),
 }

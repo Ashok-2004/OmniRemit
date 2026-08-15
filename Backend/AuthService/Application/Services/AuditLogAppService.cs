@@ -1,3 +1,4 @@
+using System.Text;
 using AuthService.Application.DTOs;
 using AuthService.Domain.Entities;
 using AuthService.Infrastructure;
@@ -16,7 +17,9 @@ public class AuditLogAppService(AuthDbContext db)
 {
     public async Task WriteAsync(
         string serviceName, Guid? actorUserId, string? actorName, string action,
-        string? entityType, string? entityId, string? details, string? sourceIp = null, CancellationToken ct = default)
+        string? entityType, string? entityId, string? details, string? sourceIp = null,
+        string? authMethod = null, string result = "Success", string? userAgent = null,
+        string? failureReason = null, string? correlationId = null, CancellationToken ct = default)
     {
         db.AuditLogs.Add(new AuditLog
         {
@@ -30,12 +33,88 @@ public class AuditLogAppService(AuthDbContext db)
             EntityId = entityId,
             Details = details,
             SourceIp = sourceIp,
+            AuthMethod = authMethod,
+            Result = result,
+            UserAgent = userAgent,
+            FailureReason = failureReason,
+            CorrelationId = correlationId ?? Guid.NewGuid().ToString(),
         });
         await db.SaveChangesAsync(ct);
     }
 
     public async Task<PagedResult<AuditLogDto>> ListAsync(
-        int page, int pageSize, string? service, string? action, DateTimeOffset? from, DateTimeOffset? to, CancellationToken ct = default)
+        int page, int pageSize, string? service, string? action, string? result,
+        DateTimeOffset? from, DateTimeOffset? to, string? sortDir, CancellationToken ct = default)
+    {
+        var query = BuildFilteredQuery(service, action, result, from, to);
+
+        var total = await query.CountAsync(ct);
+        var ordered = string.Equals(sortDir, "asc", StringComparison.OrdinalIgnoreCase)
+            ? query.OrderBy(a => a.OccurredAt)
+            : query.OrderByDescending(a => a.OccurredAt);
+
+        var items = await ordered
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(a => ToDto(a))
+            .ToListAsync(ct);
+
+        return new PagedResult<AuditLogDto>(items, total, page, pageSize);
+    }
+
+    /// <summary>Real aggregate counts over the given date range — never derived client-side from a partial page of rows.</summary>
+    public async Task<AuditLogSummaryDto> SummaryAsync(DateTimeOffset? from, DateTimeOffset? to, CancellationToken ct = default)
+    {
+        var query = BuildFilteredQuery(null, null, null, from, to);
+
+        var loginSuccesses = await query.CountAsync(a => a.Action == "auth.login_succeeded", ct);
+        var loginErrors = await query.CountAsync(a => a.Action == "auth.login_failed", ct);
+        var totalAuditEvents = await query.CountAsync(ct);
+        var activeUsers = await query
+            .Where(a => a.ActorUserId != null)
+            .Select(a => a.ActorUserId)
+            .Distinct()
+            .CountAsync(ct);
+
+        return new AuditLogSummaryDto(loginSuccesses, loginErrors, totalAuditEvents, activeUsers);
+    }
+
+    /// <summary>CSV of the current filtered result set, capped at a sane row count so a huge unfiltered export can't lock up the request.</summary>
+    public async Task<string> ExportCsvAsync(
+        string? service, string? action, string? result, DateTimeOffset? from, DateTimeOffset? to, CancellationToken ct = default)
+    {
+        const int maxRows = 10_000;
+        var items = await BuildFilteredQuery(service, action, result, from, to)
+            .OrderByDescending(a => a.OccurredAt)
+            .Take(maxRows)
+            .ToListAsync(ct);
+
+        var sb = new StringBuilder();
+        sb.AppendLine("Time,Service,Actor,Action,Result,AuthMethod,EntityType,EntityId,SourceIp,UserAgent,FailureReason,CorrelationId,Details");
+        foreach (var a in items)
+        {
+            sb.AppendLine(string.Join(",", new[]
+            {
+                CsvField(a.OccurredAt.ToString("O")),
+                CsvField(a.ServiceName),
+                CsvField(a.ActorName),
+                CsvField(a.Action),
+                CsvField(a.Result),
+                CsvField(a.AuthMethod),
+                CsvField(a.EntityType),
+                CsvField(a.EntityId),
+                CsvField(a.SourceIp),
+                CsvField(a.UserAgent),
+                CsvField(a.FailureReason),
+                CsvField(a.CorrelationId),
+                CsvField(a.Details),
+            }));
+        }
+
+        return sb.ToString();
+    }
+
+    private IQueryable<AuditLog> BuildFilteredQuery(string? service, string? action, string? result, DateTimeOffset? from, DateTimeOffset? to)
     {
         var query = db.AuditLogs.AsNoTracking().AsQueryable();
 
@@ -49,6 +128,11 @@ public class AuditLogAppService(AuthDbContext db)
             query = query.Where(a => a.Action.Contains(action));
         }
 
+        if (!string.IsNullOrWhiteSpace(result))
+        {
+            query = query.Where(a => a.Result == result);
+        }
+
         if (from is not null)
         {
             query = query.Where(a => a.OccurredAt >= from);
@@ -59,14 +143,18 @@ public class AuditLogAppService(AuthDbContext db)
             query = query.Where(a => a.OccurredAt <= to);
         }
 
-        var total = await query.CountAsync(ct);
-        var items = await query
-            .OrderByDescending(a => a.OccurredAt)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .Select(a => new AuditLogDto(a.Id, a.OccurredAt, a.ServiceName, a.ActorUserId, a.ActorName, a.Action, a.EntityType, a.EntityId, a.Details))
-            .ToListAsync(ct);
-
-        return new PagedResult<AuditLogDto>(items, total, page, pageSize);
+        return query;
     }
+
+    private static string CsvField(string? value)
+    {
+        var text = value ?? string.Empty;
+        return text.Contains(',') || text.Contains('"') || text.Contains('\n')
+            ? $"\"{text.Replace("\"", "\"\"")}\""
+            : text;
+    }
+
+    private static AuditLogDto ToDto(AuditLog a) => new(
+        a.Id, a.OccurredAt, a.ServiceName, a.ActorUserId, a.ActorName, a.Action, a.EntityType, a.EntityId,
+        a.Details, a.SourceIp, a.AuthMethod, a.Result, a.UserAgent, a.FailureReason, a.CorrelationId);
 }

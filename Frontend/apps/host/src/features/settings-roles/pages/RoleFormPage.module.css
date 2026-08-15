@@ -11,13 +11,6 @@
   gap: var(--omni-space-4);
 }
 
-.grid {
-  display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-  gap: var(--omni-space-6);
-  align-items: start;
-}
-
 .mainPanel {
   background: var(--omni-color-surface);
   border: 1px solid var(--omni-color-border);
@@ -56,14 +49,6 @@
   color: var(--omni-color-text-muted);
 }
 
-.sideColumn {
-  display: flex;
-  flex-direction: column;
-  gap: var(--omni-space-4);
-  position: sticky;
-  top: var(--omni-space-6);
-}
-
 .errorBanner {
   padding: var(--omni-space-3) var(--omni-space-4);
   border-radius: var(--omni-radius-md);
@@ -76,10 +61,5 @@
   display: flex;
   justify-content: flex-end;
   gap: var(--omni-space-3);
-}
-
-@media (max-width: 860px) {
-  .grid {
-    grid-template-columns: 1fr;
-  }
+  margin-top: var(--omni-space-5);
 }

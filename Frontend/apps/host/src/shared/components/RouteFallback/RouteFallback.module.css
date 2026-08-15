@@ -1,0 +1,31 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--omni-space-5);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--omni-space-4);
+}
+
+.body {
+  background: var(--omni-color-surface);
+  border: 1px solid var(--omni-color-border);
+  border-radius: var(--omni-radius-lg);
+  padding: var(--omni-space-5);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

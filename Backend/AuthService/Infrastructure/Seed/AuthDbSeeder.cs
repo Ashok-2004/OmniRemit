@@ -30,12 +30,42 @@ public static class AuthDbSeeder
     private static readonly string[] StandardCrud = ["View", "Create", "Edit", "Delete"];
     private static readonly string[] ViewOnly = ["View"];
 
+    // Enterprise action vocabulary — Layer 1 (fixed host permissions). Confirmed with the user:
+    // Users gains Disable (status toggle, distinct from Edit's field changes); Applications' create
+    // action is renamed Create→Register (registering a remote app IS the create operation, named
+    // more specifically) and gains Disable (status toggle); Roles is unchanged; Audit Logs gains
+    // Export. See RenameLegacyCapabilityAsync for how the Create→Register migration preserves
+    // existing role grants instead of silently dropping them.
+    private static readonly string[] UsersCapabilities = ["View", "Create", "Edit", "Delete", "Disable"];
+    private static readonly string[] ApplicationsCapabilities = ["View", "Register", "Edit", "Delete", "Disable"];
+    private static readonly string[] AuditLogsCapabilities = ["View", "Export"];
+
+    /// <summary>Pre-rename feature key. Its absence is the marker that legacy data migrations are already done.</summary>
+    private const string LegacyMaintenanceFeatureKey = "host.settings.maintenance";
+
     public static async Task SeedAsync(AuthDbContext db, ILogger logger, CancellationToken ct = default)
     {
-        // "Maintenance" was renamed to "Applications" as the platform matured — rename the existing
-        // row in place (RolePermission references FeatureId, not the key string, so every existing
-        // grant survives untouched) rather than seeding a duplicate and orphaning the old one.
-        await RenameLegacyFeatureKeyAsync(db, "host.settings.maintenance", HostFeatureKeys.SettingsApplications, "Setup — Applications", ct);
+        // These two are one-time data migrations from earlier schema revisions. They are pure
+        // overhead on every subsequent boot, and this seeder runs BEFORE the port opens — so their
+        // cost is paid by startup latency on a possibly-cold serverless database every single time.
+        //
+        // A single cheap existence check gates both. The legacy feature key is the marker: if no row
+        // still uses it, neither migration has anything left to do. This turns ~3 round trips into 1
+        // on every warm boot, which is the common case.
+        var hasLegacyRows = await db.PermissionFeatures.AnyAsync(f => f.Key == LegacyMaintenanceFeatureKey, ct);
+        if (hasLegacyRows)
+        {
+            // "Maintenance" was renamed to "Applications" as the platform matured — rename the
+            // existing row in place (RolePermission references FeatureId, not the key string, so
+            // every existing grant survives untouched) rather than seeding a duplicate and orphaning
+            // the old one.
+            await RenameLegacyFeatureKeyAsync(db, LegacyMaintenanceFeatureKey, HostFeatureKeys.SettingsApplications, "Setup — Applications", ct);
+
+            // Applications' "Create" capability became "Register" — rename the capability row AND
+            // re-point every existing RolePermission/UserPermissionOverride grant that referenced
+            // "Create" by its key string, so no admin silently loses register-app access on upgrade.
+            await RenameLegacyCapabilityAsync(db, HostFeatureKeys.SettingsApplications, "Create", "Register", ct);
+        }
 
         var features = await SeedHostFeaturesAsync(db, ct);
         var roles = await SeedRolesAsync(db, features, ct);
@@ -56,16 +86,70 @@ public static class AuthDbSeeder
         await db.SaveChangesAsync(ct);
     }
 
+    private static async Task RenameLegacyCapabilityAsync(AuthDbContext db, string featureKey, string oldCapability, string newCapability, CancellationToken ct)
+    {
+        var feature = await db.PermissionFeatures.FirstOrDefaultAsync(f => f.Key == featureKey, ct);
+        if (feature is null)
+        {
+            return;
+        }
+
+        var oldRow = await db.PermissionFeatureCapabilities
+            .FirstOrDefaultAsync(c => c.FeatureId == feature.Id && c.Key == oldCapability, ct);
+        if (oldRow is null)
+        {
+            // Already renamed (or never existed) — nothing to do. This is the common case on
+            // every startup after the first.
+            return;
+        }
+
+        // Defensive: if a row already holds the new key (should only happen if a previous run's
+        // rename partially applied — e.g. the capability row was updated but the process died
+        // before the grants below were re-pointed), renaming oldRow.Key would collide with it on
+        // the (FeatureId, Key) unique index. Re-point any grants still on the old key onto the
+        // already-correct new row and remove the stale duplicate instead of blindly updating.
+        var newRowAlreadyExists = await db.PermissionFeatureCapabilities
+            .AnyAsync(c => c.FeatureId == feature.Id && c.Key == newCapability, ct);
+
+        if (newRowAlreadyExists)
+        {
+            db.PermissionFeatureCapabilities.Remove(oldRow);
+        }
+        else
+        {
+            oldRow.Key = newCapability;
+            oldRow.DisplayName = newCapability;
+        }
+
+        var rolePermissions = await db.RolePermissions
+            .Where(rp => rp.FeatureId == feature.Id && rp.Capability == oldCapability)
+            .ToListAsync(ct);
+        foreach (var rp in rolePermissions)
+        {
+            rp.Capability = newCapability;
+        }
+
+        var overrides = await db.UserPermissionOverrides
+            .Where(o => o.FeatureId == feature.Id && o.Capability == oldCapability)
+            .ToListAsync(ct);
+        foreach (var o in overrides)
+        {
+            o.Capability = newCapability;
+        }
+
+        await db.SaveChangesAsync(ct);
+    }
+
     private static async Task<Dictionary<string, PermissionFeature>> SeedHostFeaturesAsync(AuthDbContext db, CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
         var seedFeatures = new[]
         {
             new { Key = HostFeatureKeys.Dashboard, DisplayName = "Dashboard", SortOrder = 0, Capabilities = ViewOnly },
-            new { Key = HostFeatureKeys.SettingsUsers, DisplayName = "Setup — User", SortOrder = 10, Capabilities = StandardCrud },
+            new { Key = HostFeatureKeys.SettingsUsers, DisplayName = "Setup — User", SortOrder = 10, Capabilities = UsersCapabilities },
             new { Key = HostFeatureKeys.SettingsRoles, DisplayName = "Setup — Role", SortOrder = 20, Capabilities = StandardCrud },
-            new { Key = HostFeatureKeys.SettingsApplications, DisplayName = "Setup — Applications", SortOrder = 30, Capabilities = StandardCrud },
-            new { Key = HostFeatureKeys.SystemAuditLogs, DisplayName = "System — Audit Logs", SortOrder = 40, Capabilities = ViewOnly },
+            new { Key = HostFeatureKeys.SettingsApplications, DisplayName = "Setup — Applications", SortOrder = 30, Capabilities = ApplicationsCapabilities },
+            new { Key = HostFeatureKeys.SystemAuditLogs, DisplayName = "System — Audit Logs", SortOrder = 40, Capabilities = AuditLogsCapabilities },
         };
 
         var existing = await db.PermissionFeatures.Include(f => f.Capabilities).ToDictionaryAsync(f => f.Key, ct);
@@ -104,6 +188,11 @@ public static class AuthDbSeeder
             };
             db.PermissionFeatures.Add(feature);
 
+            // Keep the in-memory map authoritative: it is what this method returns, replacing a
+            // second full read of the table. Omitting this would drop every newly-created feature
+            // from the result on a first run.
+            existing[seed.Key] = feature;
+
             for (var i = 0; i < seed.Capabilities.Length; i++)
             {
                 db.PermissionFeatureCapabilities.Add(new PermissionFeatureCapability
@@ -122,7 +211,11 @@ public static class AuthDbSeeder
             await db.SaveChangesAsync(ct);
         }
 
-        return await db.PermissionFeatures.ToDictionaryAsync(f => f.Key, ct);
+        // `existing` already holds every feature — the pre-existing ones loaded above, plus any this
+        // method just created (added to the dictionary as they were constructed). Re-querying the
+        // whole PermissionFeatures table here was a second full read of data already in memory, on
+        // every single startup.
+        return existing;
     }
 
     private static async Task<Dictionary<string, Role>> SeedRolesAsync(
@@ -141,10 +234,10 @@ public static class AuthDbSeeder
             ("Admin", "Full access except deleting users or roles.", false, new()
             {
                 [HostFeatureKeys.Dashboard] = ["View"],
-                [HostFeatureKeys.SettingsUsers] = ["View", "Create", "Edit"],
+                [HostFeatureKeys.SettingsUsers] = ["View", "Create", "Edit", "Disable"],
                 [HostFeatureKeys.SettingsRoles] = ["View", "Create", "Edit"],
-                [HostFeatureKeys.SettingsApplications] = ["View", "Create", "Edit"],
-                [HostFeatureKeys.SystemAuditLogs] = ["View"],
+                [HostFeatureKeys.SettingsApplications] = ["View", "Register", "Edit", "Disable"],
+                [HostFeatureKeys.SystemAuditLogs] = ["View", "Export"],
             }),
             ("Manager", "Runs campaigns, contacts and boards day to day.", false, new()
             {
@@ -168,11 +261,14 @@ public static class AuthDbSeeder
             }),
         };
 
-        var existingNames = await db.Roles.Select(r => r.Name).ToListAsync(ct);
+        // Load full entities once, keyed by name. This previously read the Roles table TWICE on
+        // every startup — once for names to test existence, then again at the end to build the
+        // dictionary this returns. One read serves both.
+        var roles = await db.Roles.ToDictionaryAsync(r => r.Name, ct);
 
         foreach (var seed in seedRoles)
         {
-            if (existingNames.Contains(seed.Name))
+            if (roles.ContainsKey(seed.Name))
             {
                 continue;
             }
@@ -188,6 +284,7 @@ public static class AuthDbSeeder
                 UpdatedAt = now,
             };
             db.Roles.Add(role);
+            roles[seed.Name] = role;
 
             foreach (var (featureKey, capabilities) in seed.Grants)
             {
@@ -214,7 +311,7 @@ public static class AuthDbSeeder
             await db.SaveChangesAsync(ct);
         }
 
-        return await db.Roles.ToDictionaryAsync(r => r.Name, ct);
+        return roles;
     }
 
     private static async Task SeedSuperAdminUserAsync(

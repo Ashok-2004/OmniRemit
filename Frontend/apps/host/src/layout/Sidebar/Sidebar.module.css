@@ -103,3 +103,52 @@
 .skeletonItem {
   padding: var(--omni-space-2) var(--omni-space-3);
 }
+
+/*
+ * Registry-outage state. Distinct from .emptyState on purpose: "we could not reach the registry"
+ * and "nothing is registered" are different facts, and showing the second when the first is true
+ * actively misleads the user about why their apps disappeared.
+ */
+.errorState {
+  padding: var(--omni-space-3);
+  margin: var(--omni-space-2) var(--omni-space-1);
+  border-radius: var(--omni-radius-md);
+  background: color-mix(in srgb, var(--omni-color-danger-500) 14%, transparent);
+  color: var(--omni-sidebar-text);
+  font-size: var(--omni-font-size-sm);
+  line-height: 1.4;
+}
+
+/* Dimmed, not disabled — the app may have recovered since the last probe, so the link still works. */
+.navItemUnreachable .navLabel,
+.navItemUnreachable .navIcon {
+  opacity: 0.55;
+}
+
+.unreachableBadge {
+  margin-left: auto;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--omni-radius-full, 999px);
+  background: var(--omni-color-danger-500);
+  color: #fff;
+  font-size: 11px;
+  font-weight: var(--omni-font-weight-semibold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

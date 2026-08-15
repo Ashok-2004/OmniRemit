@@ -13,7 +13,11 @@ Env.TraversePath().Load();
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
-builder.Services.AddHealthChecks();
+// AddHealthChecks() with no checks registered always reported healthy — it could not fail even with
+// the database completely unreachable. Now it actually verifies the DbContext can connect.
+builder.Services.AddHealthChecks().AddDbContextCheck<EmployeeService.Data.AppDbContext>("database");
+
+builder.Services.AddResponseCompression(options => options.EnableForHttps = true);
 
 builder.Services.AddEndpointsApiExplorer();
 
@@ -85,6 +89,15 @@ builder.Services.AddAuthorization();
 var app = builder.Build();
 
 app.UsePathBase("/api/employee-service");
+
+// Exception handling must sit OUTSIDE authentication and CORS, not inside. It used to be registered
+// within ConfigurePipeline() — i.e. after UseAuthentication — so anything thrown by the auth handler
+// bypassed it entirely and came back as a bare 500 with no CORS headers. The browser then reported
+// that as an opaque CORS failure, hiding the actual error completely. AuthService and ModuleRegistry
+// both put their exception handler first for the same reason.
+app.UseMiddleware<EmployeeService.Middleware.ExceptionMiddleware>();
+
+app.UseResponseCompression();
 
 app.UseCors("AllowFrontend");
 

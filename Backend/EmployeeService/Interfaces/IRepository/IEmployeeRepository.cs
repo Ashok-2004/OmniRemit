@@ -1,10 +1,12 @@
+using EmployeeService.DTOs.Requests;
 using EmployeeService.Models;
 
 namespace EmployeeService.Interfaces.IRepository;
 
 public interface IEmployeeRepository
 {
-    Task<List<Employee>> GetAllAsync();
+    /// <summary>Returns one page of employees plus real aggregates over the whole filtered set, all computed server-side.</summary>
+    Task<(List<Employee> Items, int Total, int DepartmentCount, decimal AverageSalary)> GetPagedAsync(EmployeeQuery query);
 
     Task<Employee?> GetByIdAsync(Guid id);
 

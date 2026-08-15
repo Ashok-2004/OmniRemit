@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { ApiError } from '../../../shared/api/httpClient'
+import { ApiError, registerAuthHooks } from '../../../shared/api/httpClient'
 import { authServiceClient, type CurrentUserDto, type RefreshResponse } from '../../../shared/api/authServiceClient'
 
 export type AuthStatus = 'idle' | 'hydrating' | 'authenticated' | 'unauthenticated'
@@ -12,33 +12,98 @@ interface AuthState {
   accessTokenExpiresAt: number | null
   loginLoading: boolean
   loginError: string | null
+  /** Set when a session ended on its own (expiry, idle timeout, absolute cap) so /login can explain why. */
+  sessionExpiredReason: string | null
 
   login: (email: string, password: string) => Promise<void>
-  logout: () => Promise<void>
+  /** Same session-establishing flow as login(), fed a verified Google ID token instead of a password. */
+  loginWithGoogle: (idToken: string) => Promise<void>
+  logout: (reason?: string) => Promise<void>
   /** Attempts to restore a session from the httpOnly refresh cookie on app boot, without a full login. */
   hydrate: () => Promise<void>
   /** Returns a valid access token, refreshing first if it's missing or close to expiry. Throws if refresh fails (caller should treat as logged out). */
   ensureFreshAccessToken: () => Promise<string>
+  /**
+   * Unconditionally re-fetches the current session (bypassing ensureFreshAccessToken's near-expiry
+   * skip) and applies the result — the acting user's own permissions/JWT claims are recomputed
+   * fresh server-side on every refresh, so this is what makes editing your own role/permissions
+   * take effect immediately instead of waiting up to AccessTokenMinutes for the token to naturally
+   * expire. Call after any save that could have changed the CURRENT user's own effective access.
+   */
+  refreshSession: () => Promise<void>
   hasCapability: (featureKey: string, capability: string) => boolean
+  clearSessionExpiredReason: () => void
 }
 
 const REFRESH_SKEW_MS = 30_000
 
-// The refresh-token cookie is rotated server-side on every use (RefreshTokenService.RotateAsync) —
-// a second concurrent call presenting the same now-already-rotated cookie is indistinguishable
-// from token theft and trips reuse detection, which revokes the whole session (see AuthController).
-// React 19 StrictMode double-invokes mount effects in dev (so useSilentRefresh/AppRoutes' hydrate()
-// can genuinely fire twice), and in production two components could just as easily race a call to
-// ensureFreshAccessToken() at the same time — so every caller here shares one in-flight refresh
-// request instead of firing a duplicate one.
+/**
+ * Callbacks that wipe non-auth client state on logout.
+ *
+ * Registered by the modules that own that state, so authStore does not have to import them (which
+ * would create cycles). This exists because logout previously cleared ONLY the auth store: the
+ * module-registry store kept `status: 'loaded'` with the previous user's apps, and App.tsx guards
+ * its fetch on `registryStatus !== 'idle'` — so signing out and signing in as a different user
+ * showed the PREVIOUS user's sidebar. The federated-component cache and the query cache had the
+ * same problem.
+ */
+const sessionCleanupHandlers = new Set<() => void>()
+
+export function registerSessionCleanup(handler: () => void): () => void {
+  sessionCleanupHandlers.add(handler)
+  return () => sessionCleanupHandlers.delete(handler)
+}
+
+function runSessionCleanup() {
+  for (const handler of sessionCleanupHandlers) {
+    try {
+      handler()
+    } catch {
+      // One failing cleanup must not prevent the others from running.
+    }
+  }
+}
+
+/**
+ * Cross-tab coordination.
+ *
+ * Logout in one tab must sign out the others; without this, tab B kept rendering an authenticated
+ * UI with a live in-memory token after tab A signed out.
+ */
+const AUTH_CHANNEL = 'omniremit-auth'
+type AuthBroadcast = { type: 'logout'; reason?: string }
+
+const authChannel: BroadcastChannel | null =
+  typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(AUTH_CHANNEL) : null
+
+// Within a single tab: React 19 StrictMode double-invokes mount effects, and two components can
+// race a refresh in production too — so every caller shares one in-flight request.
 let inFlightRefresh: Promise<RefreshResponse> | null = null
 
+/**
+ * Performs the refresh, serialised ACROSS TABS via the Web Locks API.
+ *
+ * The refresh cookie is rotated server-side on every use (RefreshTokenService.RotateAsync), and
+ * presenting an already-rotated token is — correctly — treated as theft, which revokes the entire
+ * session. The previous in-tab dedupe was module-scoped and therefore per-tab, so two tabs waking
+ * together (a laptop resuming, or simply two open tabs) both POSTed /api/auth/refresh with the same
+ * cookie and the second one killed the user's session outright.
+ *
+ * Serialising is sufficient to fix it: cookies are shared across tabs, so once the first refresh
+ * completes the second tab's request naturally carries the NEW cookie and is a legitimate rotation.
+ * Web Locks is used rather than hand-rolled leader election because it is purpose-built for this
+ * and releases automatically if a tab is closed mid-refresh.
+ */
 function refreshOnce(): Promise<RefreshResponse> {
-  if (!inFlightRefresh) {
-    inFlightRefresh = authServiceClient.refresh().finally(() => {
-      inFlightRefresh = null
-    })
-  }
+  inFlightRefresh ??= (async () => {
+    if (typeof navigator !== 'undefined' && 'locks' in navigator) {
+      return navigator.locks.request('omniremit-token-refresh', () => authServiceClient.refresh())
+    }
+    return authServiceClient.refresh()
+  })().finally(() => {
+    inFlightRefresh = null
+  })
+
   return inFlightRefresh
 }
 
@@ -48,7 +113,15 @@ function applySession(session: { accessToken: string; expiresAt: string; user: C
     accessToken: session.accessToken,
     accessTokenExpiresAt: new Date(session.expiresAt).getTime(),
     status: 'authenticated' as const,
+    sessionExpiredReason: null,
   }
+}
+
+const signedOutState = {
+  status: 'unauthenticated' as const,
+  user: null,
+  accessToken: null,
+  accessTokenExpiresAt: null,
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -58,6 +131,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   accessTokenExpiresAt: null,
   loginLoading: false,
   loginError: null,
+  sessionExpiredReason: null,
 
   async login(email, password) {
     set({ loginLoading: true, loginError: null })
@@ -72,13 +146,28 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  async logout() {
+  async loginWithGoogle(idToken) {
+    set({ loginLoading: true, loginError: null })
+    try {
+      const session = await authServiceClient.loginWithGoogle(idToken)
+      set({ ...applySession(session), loginLoading: false })
+    } catch (err) {
+      set({
+        loginLoading: false,
+        loginError: err instanceof ApiError ? err.message : 'Something went wrong. Please try again.',
+      })
+    }
+  },
+
+  async logout(reason) {
     try {
       await authServiceClient.logout()
     } catch {
       // best-effort — the client-side session is cleared either way
     }
-    set({ status: 'unauthenticated', user: null, accessToken: null, accessTokenExpiresAt: null })
+    set({ ...signedOutState, sessionExpiredReason: reason ?? null })
+    runSessionCleanup()
+    authChannel?.postMessage({ type: 'logout', reason } satisfies AuthBroadcast)
   },
 
   async hydrate() {
@@ -91,7 +180,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set(applySession(session))
     } catch {
       if (get().status !== 'authenticated') {
-        set({ status: 'unauthenticated', user: null, accessToken: null, accessTokenExpiresAt: null })
+        set(signedOutState)
       }
     }
   },
@@ -108,9 +197,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return session.accessToken
     } catch (err) {
       if (get().status !== 'authenticated') {
-        set({ status: 'unauthenticated', user: null, accessToken: null, accessTokenExpiresAt: null })
+        set(signedOutState)
       }
       throw err
+    }
+  },
+
+  async refreshSession() {
+    try {
+      const session = await refreshOnce()
+      set(applySession(session))
+    } catch (err) {
+      // A transient network blip is not a dead session, so this stays best-effort — but a definitive
+      // 401 IS the server telling us the session is over. Previously every failure was swallowed,
+      // leaving status 'authenticated' with stale permissions: a zombie UI that looked signed in and
+      // failed every subsequent request.
+      if (err instanceof ApiError && err.status === 401) {
+        set({ ...signedOutState, sessionExpiredReason: 'Your session expired. Please sign in again.' })
+        runSessionCleanup()
+      }
     }
   },
 
@@ -120,4 +225,36 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (user.isAdministrator) return true
     return user.permissions.includes(`${featureKey}:${capability}`)
   },
+
+  clearSessionExpiredReason() {
+    set({ sessionExpiredReason: null })
+  },
 }))
+
+// Another tab signed out — drop this tab's in-memory session too.
+authChannel?.addEventListener('message', (event: MessageEvent<AuthBroadcast>) => {
+  if (event.data?.type !== 'logout') return
+  if (useAuthStore.getState().status === 'unauthenticated') return
+
+  useAuthStore.setState({ ...signedOutState, sessionExpiredReason: event.data.reason ?? null })
+  runSessionCleanup()
+})
+
+/**
+ * Lets httpClient refresh-and-retry a 401, and tear the session down when the refresh itself fails,
+ * without importing this store (which would be a cycle — this store imports the API clients that
+ * import httpClient).
+ */
+registerAuthHooks({
+  refresh: async () => {
+    const session = await refreshOnce()
+    useAuthStore.setState(applySession(session))
+    return session.accessToken
+  },
+  onSessionExpired: (reason) => {
+    if (useAuthStore.getState().status === 'unauthenticated') return
+    useAuthStore.setState({ ...signedOutState, sessionExpiredReason: reason })
+    runSessionCleanup()
+    authChannel?.postMessage({ type: 'logout', reason } satisfies AuthBroadcast)
+  },
+})

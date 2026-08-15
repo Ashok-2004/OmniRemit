@@ -5,7 +5,7 @@ namespace EmployeeService.Interfaces.IServices;
 
 public interface IEmployeeService
 {
-    Task<List<EmployeeResponse>> GetAllAsync();
+    Task<EmployeeListResult> GetPagedAsync(EmployeeQuery query);
 
     Task<EmployeeResponse?> GetByIdAsync(Guid id);
 

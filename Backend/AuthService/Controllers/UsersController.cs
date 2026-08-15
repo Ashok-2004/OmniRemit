@@ -41,7 +41,7 @@ public class UsersController(UserAppService users) : ControllerBase
         => Ok(await users.UpdateAsync(id, request, CurrentUserId(), ct));
 
     [HttpPatch("{id:guid}/status")]
-    [RequirePermission(Feature, "Edit")]
+    [RequirePermission(Feature, "Disable")]
     public async Task<ActionResult<UserDetailDto>> UpdateStatus(Guid id, [FromBody] UpdateUserStatusRequest request, CancellationToken ct)
         => Ok(await users.UpdateStatusAsync(id, request.IsActive, CurrentUserId(), ct));
 

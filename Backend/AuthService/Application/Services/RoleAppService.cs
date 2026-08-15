@@ -129,18 +129,28 @@ public class RoleAppService(AuthDbContext db, AuditLogAppService auditLog)
         await auditLog.WriteAsync(ServiceName, actingUserId, actorName, action, "Role", roleId.ToString(), details, ct: ct);
     }
 
-    public async Task<IReadOnlyList<RoleUserDto>> GetUsersAsync(Guid id, CancellationToken ct = default)
+    /// <summary>
+    /// Users assigned to a role. Capped rather than unbounded: this drives a side panel in the Role
+    /// editor, and a role with tens of thousands of members would otherwise serialise every one of
+    /// them into that panel. The total is returned separately so the UI can say "showing N of M".
+    /// </summary>
+    public async Task<RoleUsersDto> GetUsersAsync(Guid id, int limit = 50, CancellationToken ct = default)
     {
         if (!await db.Roles.AnyAsync(r => r.Id == id, ct))
         {
             throw NotFound(id);
         }
 
-        return await db.Users
-            .Where(u => u.RoleId == id)
+        var assigned = db.Users.AsNoTracking().Where(u => u.RoleId == id);
+
+        var total = await assigned.CountAsync(ct);
+        var users = await assigned
             .OrderBy(u => u.Name)
+            .Take(Math.Clamp(limit, 1, 200))
             .Select(u => new RoleUserDto(u.Id, u.Name, u.Email))
             .ToListAsync(ct);
+
+        return new RoleUsersDto(users, total);
     }
 
     private async Task ApplyPermissionsAsync(Guid roleId, IReadOnlyList<RolePermissionGrantDto> grants, CancellationToken ct)
@@ -180,6 +190,7 @@ public class RoleAppService(AuthDbContext db, AuditLogAppService auditLog)
 
     private async Task<IReadOnlyList<RolePermissionGrantDto>> LoadPermissionsAsync(Guid roleId, CancellationToken ct) =>
         await db.RolePermissions
+            .AsNoTracking()
             .Include(rp => rp.Feature)
             .Where(rp => rp.RoleId == roleId)
             .Select(rp => new RolePermissionGrantDto(rp.Feature!.Key, rp.Capability))

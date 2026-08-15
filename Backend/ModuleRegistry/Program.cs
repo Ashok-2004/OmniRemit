@@ -19,6 +19,7 @@ builder.Services.AddOpenApi();
 builder.Services.Configure<CorsOptions>(builder.Configuration.GetSection(CorsOptions.SectionName));
 builder.Services.Configure<JwtValidationOptions>(builder.Configuration.GetSection(JwtValidationOptions.SectionName));
 builder.Services.Configure<AuthIntegrationOptions>(builder.Configuration.GetSection(AuthIntegrationOptions.SectionName));
+builder.Services.Configure<RemoteHealthOptions>(builder.Configuration.GetSection(RemoteHealthOptions.SectionName));
 
 var connectionString = builder.Configuration.GetConnectionString("RegistryDb");
 var isDbConfigured = !string.IsNullOrWhiteSpace(connectionString);
@@ -26,8 +27,22 @@ var isDbConfigured = !string.IsNullOrWhiteSpace(connectionString);
 builder.Services.AddDbContext<ModuleRegistryDbContext>(options =>
     options.UseNpgsql(isDbConfigured ? connectionString : "Host=unconfigured;Database=unconfigured;Username=unconfigured;Password=unconfigured"));
 
-builder.Services.AddHttpClient<AuthServiceClient>();
+// Explicit timeouts on both outbound clients. Without one, HttpClient inherits the 100-second
+// default: a single unreachable remote could hold a request (and its DB connection) for over a
+// minute and a half, and a resync across several dead remotes could run for many minutes.
+var remoteHealthSection = builder.Configuration.GetSection(RemoteHealthOptions.SectionName);
+var probeTimeout = remoteHealthSection.GetValue<TimeSpan?>(nameof(RemoteHealthOptions.ProbeTimeout))
+    ?? TimeSpan.FromSeconds(5);
+
+builder.Services.AddHttpClient<AuthServiceClient>(client => client.Timeout = TimeSpan.FromSeconds(10));
+builder.Services.AddHttpClient<RemoteManifestClient>(client => client.Timeout = probeTimeout);
 builder.Services.AddScoped<RemoteAppAppService>();
+builder.Services.AddHostedService<RemoteAppHealthProbeService>();
+
+builder.Services.AddResponseCompression(options => options.EnableForHttps = true);
+
+// Verifies the database rather than returning a hardcoded "ok" that could never fail.
+builder.Services.AddHealthChecks().AddDbContextCheck<ModuleRegistryDbContext>("database");
 
 builder.Services.AddCors(options =>
 {
@@ -126,13 +141,13 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+app.UseResponseCompression();
 app.UseCors("Frontend");
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
-app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "ModuleRegistry" }))
-    .WithName("HealthCheck");
+app.MapHealthChecks("/health").WithName("HealthCheck");
 
 app.Run();

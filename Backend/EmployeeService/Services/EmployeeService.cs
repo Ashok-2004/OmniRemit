@@ -1,8 +1,7 @@
-using AutoMapper;
 using EmployeeService.DTOs.Requests;
 using EmployeeService.DTOs.Responses;
 using EmployeeService.Infrastructure;
-using EmployeeService.Models;
+using EmployeeService.Mappings;
 using EmployeeService.Interfaces.IRepository;
 using EmployeeService.Interfaces.IServices;
 
@@ -11,56 +10,56 @@ namespace EmployeeService.Services;
 public class EmployeeService : IEmployeeService
 {
     private readonly IEmployeeRepository _repository;
-    private readonly IMapper _mapper;
     private readonly AuthServiceClient _auditLog;
 
     public EmployeeService(
         IEmployeeRepository repository,
-        IMapper mapper,
         AuthServiceClient auditLog)
     {
         _repository = repository;
-        _mapper = mapper;
         _auditLog = auditLog;
     }
 
-    public async Task<List<EmployeeResponse>> GetAllAsync()
+    public async Task<EmployeeListResult> GetPagedAsync(EmployeeQuery query)
     {
-        var employees = await _repository.GetAllAsync();
+        var (employees, total, departmentCount, averageSalary) = await _repository.GetPagedAsync(query);
 
-        return _mapper.Map<List<EmployeeResponse>>(employees);
+        return new EmployeeListResult(
+            employees.ToResponseList(),
+            total,
+            query.Page,
+            query.PageSize,
+            departmentCount,
+            averageSalary);
     }
 
     public async Task<EmployeeResponse> CreateAsync(CreateEmployeeRequest request, Guid? actorUserId, string? actorName)
     {
-        var employee = _mapper.Map<Employee>(request);
-        var created = await _repository.CreateAsync(employee);
+        var created = await _repository.CreateAsync(request.ToEntity());
 
         await _auditLog.PushAuditLogAsync(
             "employee.created", "Employee", created.Id.ToString(),
             $"Created employee '{created.Name}' ({created.Email}).", actorUserId, actorName);
 
-        return _mapper.Map<EmployeeResponse>(created);
+        return created.ToResponse();
     }
 
     public async Task<EmployeeResponse?> GetByIdAsync(Guid id)
     {
         var employee = await _repository.GetByIdAsync(id);
-        if (employee == null) return null;
-        return _mapper.Map<EmployeeResponse>(employee);
+        return employee?.ToResponse();
     }
 
     public async Task<EmployeeResponse?> UpdateAsync(Guid id, UpdateEmployeeRequest request, Guid? actorUserId, string? actorName)
     {
-        var employee = _mapper.Map<Employee>(request);
-        var updated = await _repository.UpdateAsync(id, employee);
+        var updated = await _repository.UpdateAsync(id, request.ToEntity());
         if (updated == null) return null;
 
         await _auditLog.PushAuditLogAsync(
             "employee.updated", "Employee", updated.Id.ToString(),
             $"Updated employee '{updated.Name}' ({updated.Email}).", actorUserId, actorName);
 
-        return _mapper.Map<EmployeeResponse>(updated);
+        return updated.ToResponse();
     }
 
     public async Task<bool> DeleteAsync(Guid id, Guid? actorUserId, string? actorName)

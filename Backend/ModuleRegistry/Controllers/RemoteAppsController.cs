@@ -28,7 +28,7 @@ public class RemoteAppsController(RemoteAppAppService remoteApps) : ControllerBa
         => Ok(await remoteApps.GetAsync(id, ct));
 
     [HttpPost]
-    [RequirePermission(Feature, "Create")]
+    [RequirePermission(Feature, "Register")]
     public async Task<ActionResult<RemoteAppDto>> Create([FromBody] CreateRemoteAppRequest request, CancellationToken ct)
     {
         var result = await remoteApps.CreateAsync(request, CurrentUserId(), CurrentUserName(), ct);
@@ -41,7 +41,7 @@ public class RemoteAppsController(RemoteAppAppService remoteApps) : ControllerBa
         => Ok(await remoteApps.UpdateAsync(id, request, CurrentUserId(), CurrentUserName(), ct));
 
     [HttpPatch("{id:guid}/status")]
-    [RequirePermission(Feature, "Edit")]
+    [RequirePermission(Feature, "Disable")]
     public async Task<ActionResult<RemoteAppDto>> UpdateStatus(Guid id, [FromBody] UpdateRemoteAppStatusRequest request, CancellationToken ct)
         => Ok(await remoteApps.UpdateStatusAsync(id, request.Status, request.MaintenanceMessage, CurrentUserId(), CurrentUserName(), ct));
 
@@ -72,6 +72,29 @@ public class RemoteAppsController(RemoteAppAppService remoteApps) : ControllerBa
             : (JsonSerializer.Deserialize<string[]>(permsClaim) ?? []).ToHashSet();
 
         return Ok(await remoteApps.GetForSidebarAsync(isAdministrator, permissions, ct));
+    }
+
+    /// <summary>
+    /// Real reachability of each registered app, for the host dashboard's system-health panel. Same
+    /// visibility rule as the sidebar (any authenticated user, filtered to what their token grants),
+    /// so this cannot be used to enumerate apps the caller has no access to.
+    /// </summary>
+    [HttpGet("health")]
+    public async Task<ActionResult<IReadOnlyList<HealthEntryDto>>> Health(CancellationToken ct)
+    {
+        var (isAdministrator, permissions) = CallerAccess();
+        return Ok(await remoteApps.GetHealthAsync(isAdministrator, permissions, ct));
+    }
+
+    private (bool IsAdministrator, IReadOnlySet<string> Permissions) CallerAccess()
+    {
+        var isAdministrator = User.FindFirst(JwtClaimTypes.Administrator)?.Value == "true";
+        var permsClaim = User.FindFirst(JwtClaimTypes.Permissions)?.Value;
+        var permissions = string.IsNullOrEmpty(permsClaim)
+            ? new HashSet<string>()
+            : (JsonSerializer.Deserialize<string[]>(permsClaim) ?? []).ToHashSet();
+
+        return (isAdministrator, permissions);
     }
 
     private Guid? CurrentUserId()

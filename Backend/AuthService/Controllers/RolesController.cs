@@ -48,8 +48,8 @@ public class RolesController(RoleAppService roles) : ControllerBase
 
     [HttpGet("{id:guid}/users")]
     [RequirePermission(Feature, "View")]
-    public async Task<ActionResult<IReadOnlyList<RoleUserDto>>> GetUsers(Guid id, CancellationToken ct)
-        => Ok(await roles.GetUsersAsync(id, ct));
+    public async Task<ActionResult<RoleUsersDto>> GetUsers(Guid id, [FromQuery] int limit = 50, CancellationToken ct = default)
+        => Ok(await roles.GetUsersAsync(id, limit, ct));
 
     private Guid? CurrentUserId()
     {

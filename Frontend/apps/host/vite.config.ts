@@ -1,20 +1,19 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { federation } from '@module-federation/vite'
+import { hostFederationConfig } from '@omniremit/federation-config'
 
 // This app is a Module Federation 2.0 *host* with zero build-time remotes. Every remote app is
 // registered at runtime (see src/shared/federation/remoteLoader.ts) from a manifest URL fetched
 // from the Module Registry API — nothing about which remotes exist is known at build time.
+//
+// The shared-dependency set deliberately lives in @omniremit/federation-config, not inline here:
+// the host and every remote must agree on it exactly, and a copy-pasted block drifts. See that
+// package's header for which packages belong in it and why.
 export default defineConfig({
   plugins: [
     react(),
-    federation({
-      name: 'omniremit_host',
-      shared: {
-        react: { singleton: true, requiredVersion: '^19.2.0' },
-        'react-dom': { singleton: true, requiredVersion: '^19.2.0' },
-      },
-    }),
+    federation(hostFederationConfig('omniremit_host')),
   ],
   css: {
     modules: {
@@ -32,5 +31,18 @@ export default defineConfig({
   },
   build: {
     target: 'esnext',
+    rollupOptions: {
+      output: {
+        // Split long-lived vendor code out of the app chunk so a deploy that only changes app code
+        // doesn't invalidate the (much larger) framework bundles in users' caches.
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined
+          if (id.includes('react-router')) return 'vendor-router'
+          if (id.includes('@tanstack')) return 'vendor-query'
+          if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/scheduler/')) return 'vendor-react'
+          return undefined
+        },
+      },
+    },
   },
 })

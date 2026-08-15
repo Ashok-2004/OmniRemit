@@ -229,6 +229,24 @@
   gap: var(--omni-space-4);
 }
 
+.divider {
+  display: flex;
+  align-items: center;
+  gap: var(--omni-space-3);
+  color: var(--omni-color-text-muted);
+  font-size: var(--omni-font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--omni-color-border);
+}
+
 .eyeToggle {
   display: flex;
   align-items: center;

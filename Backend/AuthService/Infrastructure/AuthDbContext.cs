@@ -30,6 +30,7 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             entity.Property(u => u.Email).HasMaxLength(320);
             entity.Property(u => u.PhoneNumber).HasMaxLength(32);
             entity.Property(u => u.Status).HasConversion<string>().HasMaxLength(20);
+            entity.Property(u => u.AuthProvider).HasConversion<string>().HasMaxLength(20);
 
             entity.HasOne(u => u.Role)
                 .WithMany(r => r.Users)
@@ -37,6 +38,17 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
                 .OnDelete(DeleteBehavior.Restrict); // role deletion is blocked at the app layer while users reference it; this is defense in depth
 
             entity.HasQueryFilter(u => !u.IsDeleted);
+
+            // Every page of GET /api/users sorts by Name, and GET /api/roles/{id}/users does too —
+            // previously an unindexed sort of the whole filtered set on every request.
+            entity.HasIndex(u => u.Name);
+
+            // Status is an equality filter on the same list endpoint.
+            entity.HasIndex(u => u.Status);
+
+            // IsDeleted is appended to EVERY Users query by the global filter above, so it is the
+            // single most-touched predicate in this service.
+            entity.HasIndex(u => u.IsDeleted);
         });
 
         modelBuilder.Entity<PermissionFeature>(entity =>
@@ -108,6 +120,26 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
         {
             entity.HasIndex(a => a.OccurredAt);
             entity.HasIndex(a => a.ServiceName);
+
+            // AuditLogs is the fastest-growing table in the system — every login attempt, success or
+            // failure, writes a row. These three columns are all filtered or aggregated on and had
+            // no index at all.
+            //
+            // Action backs the two equality counts in SummaryAsync ("auth.login_succeeded" /
+            // "auth.login_failed"), which run on every dashboard and audit-page load.
+            entity.HasIndex(a => a.Action);
+
+            // ActorUserId backs SummaryAsync's Distinct().Count() for the active-users card.
+            entity.HasIndex(a => a.ActorUserId);
+
+            // Composite, and ordered deliberately: the audit page filters by ServiceName/Result and
+            // then sorts by OccurredAt descending. Two separate single-column indexes cannot serve
+            // "filter then sort" in one pass — Postgres would still need a separate sort step. These
+            // let the whole query be satisfied by one index scan.
+            entity.HasIndex(a => new { a.ServiceName, a.OccurredAt })
+                .IsDescending(false, true);
+            entity.HasIndex(a => new { a.Result, a.OccurredAt })
+                .IsDescending(false, true);
             entity.Property(a => a.ServiceName).HasMaxLength(100);
             entity.Property(a => a.Action).HasMaxLength(150);
             entity.Property(a => a.ActorName).HasMaxLength(200);

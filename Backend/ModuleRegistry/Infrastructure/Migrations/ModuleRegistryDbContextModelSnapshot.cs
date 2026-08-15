@@ -28,6 +28,10 @@ namespace ModuleRegistry.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ContainerName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -39,6 +43,11 @@ namespace ModuleRegistry.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<string>("Health")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<string>("IconKey")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
@@ -47,6 +56,13 @@ namespace ModuleRegistry.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset?>("LastHealthCheckAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastHealthError")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
 
                     b.Property<string>("MaintenanceMessage")
                         .HasMaxLength(2000)
@@ -87,6 +103,8 @@ namespace ModuleRegistry.Infrastructure.Migrations
 
                     b.HasIndex("PermissionFeatureKey")
                         .IsUnique();
+
+                    b.HasIndex("Status", "SidebarOrder");
 
                     b.ToTable("RemoteApps");
                 });

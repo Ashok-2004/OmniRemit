@@ -5,10 +5,12 @@ import styles from './UsersUsingRolePanel.module.css'
 export interface UsersUsingRolePanelProps {
   /** undefined while loading, [] once loaded with no assignments, undefined-vs-not-yet-saved handled by caller (new roles show a "save first" hint). */
   users?: RoleUserDto[]
+  /** Real total assigned count. May exceed `users.length`, which the server caps. */
+  total?: number
   isNewRole?: boolean
 }
 
-export function UsersUsingRolePanel({ users, isNewRole }: UsersUsingRolePanelProps) {
+export function UsersUsingRolePanel({ users, total, isNewRole }: UsersUsingRolePanelProps) {
   return (
     <div className={styles.panel}>
       <span className={styles.title}>👥 List of users using this role</span>
@@ -27,6 +29,13 @@ export function UsersUsingRolePanel({ users, isNewRole }: UsersUsingRolePanelPro
               <span className={styles.userEmail}>{user.email}</span>
             </div>
           ))}
+          {typeof total === 'number' && total > users.length && (
+            // The server caps this list. Say so plainly rather than letting the panel imply the role
+            // has only as many members as happen to be rendered.
+            <p className={styles.empty}>
+              Showing {users.length} of {total} assigned users.
+            </p>
+          )}
         </div>
       )}
     </div>

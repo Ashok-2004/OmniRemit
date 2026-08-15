@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useClickOutside } from '../../shared/hooks/useClickOutside'
+import { useMenuKeyboardNav } from '../../shared/hooks/useMenuKeyboardNav'
 import { Icon } from '../../shared/components/Icon/Icon'
 import styles from './Topbar.module.css'
 
@@ -34,9 +35,14 @@ export function Topbar({ userName, settingsAccess, onLogout }: TopbarProps) {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const settingsRef = useRef<HTMLDivElement>(null)
+  const userTriggerRef = useRef<HTMLButtonElement>(null)
+  const settingsTriggerRef = useRef<HTMLButtonElement>(null)
 
   useClickOutside([menuRef], () => setMenuOpen(false), menuOpen)
   useClickOutside([settingsRef], () => setSettingsOpen(false), settingsOpen)
+
+  const handleUserMenuKeyDown = useMenuKeyboardNav(menuRef, () => setMenuOpen(false), userTriggerRef)
+  const handleSettingsMenuKeyDown = useMenuKeyboardNav(settingsRef, () => setSettingsOpen(false), settingsTriggerRef)
 
   const initial = userName?.trim().charAt(0).toUpperCase() || '?'
   const visibleSettingsLinks = SETTINGS_LINKS.filter((link) => settingsAccess?.[link.key])
@@ -50,8 +56,9 @@ export function Topbar({ userName, settingsAccess, onLogout }: TopbarProps) {
 
       <div className={styles.actions}>
         {visibleSettingsLinks.length > 0 && (
-          <div className={styles.menuWrapper} ref={settingsRef}>
+          <div className={styles.menuWrapper} ref={settingsRef} onKeyDown={handleSettingsMenuKeyDown}>
             <button
+              ref={settingsTriggerRef}
               type="button"
               className={styles.iconButton}
               aria-label="Settings"
@@ -86,8 +93,9 @@ export function Topbar({ userName, settingsAccess, onLogout }: TopbarProps) {
           <Icon.Bell width={18} height={18} />
         </button>
 
-        <div className={styles.menuWrapper} ref={menuRef}>
+        <div className={styles.menuWrapper} ref={menuRef} onKeyDown={handleUserMenuKeyDown}>
           <button
+            ref={userTriggerRef}
             type="button"
             className={styles.userButton}
             onClick={() => setMenuOpen((open) => !open)}
@@ -102,6 +110,10 @@ export function Topbar({ userName, settingsAccess, onLogout }: TopbarProps) {
 
           {menuOpen && (
             <div className={styles.menu} role="menu">
+              <Link to="/profile" role="menuitem" className={styles.menuItem} onClick={() => setMenuOpen(false)}>
+                <Icon.Users width={16} height={16} />
+                <span>My Profile</span>
+              </Link>
               <button
                 type="button"
                 role="menuitem"

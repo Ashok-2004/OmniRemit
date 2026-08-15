@@ -24,7 +24,8 @@ public class InternalAuditLogsController(AuditLogAppService auditLog) : Controll
         var sourceIp = HttpContext.Connection.RemoteIpAddress?.ToString();
         await auditLog.WriteAsync(
             request.ServiceName, request.ActorUserId, request.ActorName, request.Action,
-            request.EntityType, request.EntityId, request.Details, sourceIp, ct);
+            request.EntityType, request.EntityId, request.Details, sourceIp,
+            request.AuthMethod, request.Result, request.UserAgent, request.FailureReason, request.CorrelationId, ct);
         return NoContent();
     }
 }

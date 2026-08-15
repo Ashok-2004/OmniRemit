@@ -1,3 +1,15 @@
+/*
+ * Base styles for this remote's subtree.
+ *
+ * `:root` is deliberate, not a mistake: postcss.config.cjs maps `:root` / `html` / `body` onto the
+ * bare scope selector (`#employee-mf-scope`), so this block lands on this app's own root element.
+ *
+ * These rules previously used a `.employee-mf-root` class and were entirely DEAD. The prefixer
+ * rewrites `.employee-mf-root` to the *descendant* selector `#employee-mf-scope .employee-mf-root`,
+ * but the id and the class were on the SAME element, so nothing ever matched — including
+ * `box-sizing: border-box`, which meant this app was silently borrowing the host's global reset and
+ * would have laid out differently anywhere else.
+ */
 :root {
   --text: #334155;
   --text-h: #0f172a;
@@ -16,9 +28,7 @@
 
   --sans: 'Inter', system-ui, -apple-system, sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-}
 
-.employee-mf-root {
   margin: 0;
   font-family: var(--sans);
   background-color: var(--bg);
@@ -30,18 +40,29 @@
   flex: 1;
   height: 100%;
   width: 100%;
+  /* Also set on the root itself — a `*` rule only covers descendants, never the element it scopes to. */
+  box-sizing: border-box;
 }
 
-.employee-mf-root h1, .employee-mf-root h2, .employee-mf-root h3, .employee-mf-root h4, .employee-mf-root h5, .employee-mf-root h6 {
+/*
+ * Bare element selectors are safe here ONLY because the prefixer scopes them to
+ * `#employee-mf-scope <selector>`. Verified in the built dist/assets/style.css.
+ */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   color: var(--text-h);
   font-weight: 600;
   margin: 0;
 }
 
-.employee-mf-root button {
+button {
   font-family: var(--sans);
 }
 
-.employee-mf-root * {
+* {
   box-sizing: border-box;
 }

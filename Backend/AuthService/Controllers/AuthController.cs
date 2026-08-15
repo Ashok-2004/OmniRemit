@@ -24,7 +24,7 @@ public class AuthController(
     {
         try
         {
-            var result = await authAppService.LoginAsync(request.Email, request.Password, ClientIp(), ct);
+            var result = await authAppService.LoginAsync(request.Email, request.Password, ClientIp(), UserAgent(), ct);
             SetRefreshCookie(result.RefreshToken, result.RefreshExpiresAt);
             return Ok(new LoginResponse(result.AccessToken, result.ExpiresAt, result.User));
         }
@@ -37,6 +37,43 @@ public class AuthController(
             return StatusCode(403, new ProblemDetails { Title = ex.Message, Status = 403 });
         }
     }
+
+    [HttpPost("google")]
+    [AllowAnonymous]
+    public async Task<ActionResult<LoginResponse>> GoogleLogin([FromBody] GoogleLoginRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var result = await authAppService.GoogleLoginAsync(request.IdToken, ClientIp(), UserAgent(), ct);
+            SetRefreshCookie(result.RefreshToken, result.RefreshExpiresAt);
+            return Ok(new LoginResponse(result.AccessToken, result.ExpiresAt, result.User));
+        }
+        catch (SsoNotConfiguredException ex)
+        {
+            return StatusCode(503, new ProblemDetails { Title = ex.Message, Status = 503 });
+        }
+        catch (SsoDomainNotAllowedException ex)
+        {
+            return Unauthorized(new ProblemDetails { Title = ex.Message, Status = 401 });
+        }
+        catch (SsoAccountNotFoundException ex)
+        {
+            return Unauthorized(new ProblemDetails { Title = ex.Message, Status = 401 });
+        }
+        catch (InvalidCredentialsException)
+        {
+            return Unauthorized(new ProblemDetails { Title = "Invalid or expired Google sign-in. Please try again.", Status = 401 });
+        }
+        catch (AccountInactiveException ex)
+        {
+            return StatusCode(403, new ProblemDetails { Title = ex.Message, Status = 403 });
+        }
+    }
+
+    /// <summary>Public, non-secret — lets the frontend know whether to show "Sign in with Google" and which domains it accepts, instead of hardcoding either.</summary>
+    [HttpGet("sso-config")]
+    [AllowAnonymous]
+    public ActionResult<SsoConfigDto> SsoConfig() => Ok(authAppService.GetSsoConfig());
 
     [HttpPost("refresh")]
     [AllowAnonymous]
@@ -116,4 +153,6 @@ public class AuthController(
     private void ClearRefreshCookie() => Response.Cookies.Delete(_cookieOptions.RefreshCookieName, new CookieOptions { Path = "/api/auth" });
 
     private string? ClientIp() => HttpContext.Connection.RemoteIpAddress?.ToString();
+
+    private string? UserAgent() => Request.Headers.UserAgent.ToString() is { Length: > 0 } ua ? ua : null;
 }

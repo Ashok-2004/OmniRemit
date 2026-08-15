@@ -31,6 +31,7 @@ export function UsersListPage() {
   const canCreate = hasCapability(FEATURE, 'Create')
   const canEdit = hasCapability(FEATURE, 'Edit')
   const canDelete = hasCapability(FEATURE, 'Delete')
+  const canDisable = hasCapability(FEATURE, 'Disable')
 
   const load = useCallback(async () => {
     if (!accessToken) return
@@ -126,7 +127,7 @@ export function UsersListPage() {
               <th>Phone</th>
               <th>Role</th>
               <th>Status</th>
-              {(canEdit || canDelete) && <th aria-label="Actions" />}
+              {(canEdit || canDelete || canDisable) && <th aria-label="Actions" />}
             </tr>
           </thead>
           <tbody>
@@ -166,10 +167,10 @@ export function UsersListPage() {
                     {user.isActive ? 'Active' : 'Inactive'}
                   </Badge>
                 </td>
-                {(canEdit || canDelete) && (
+                {(canEdit || canDelete || canDisable) && (
                   <td>
                     <div className={styles.actionsCell}>
-                      {canEdit && (
+                      {canDisable && (
                         <Button size="sm" variant="ghost" onClick={() => void toggleStatus(user)}>
                           {user.isActive ? 'Deactivate' : 'Activate'}
                         </Button>

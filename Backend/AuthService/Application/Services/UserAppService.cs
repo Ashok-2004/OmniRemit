@@ -67,8 +67,13 @@ public class UserAppService(AuthDbContext db, PasswordHasher passwordHasher, Aud
             throw new NotFoundAppException($"Role '{request.RoleId}' was not found.");
         }
 
+        if (!Enum.TryParse<Domain.Enums.AuthProvider>(request.AuthProvider, out var authProvider))
+        {
+            throw new ValidationAppException($"Unknown authentication provider '{request.AuthProvider}'.");
+        }
+
         var now = DateTimeOffset.UtcNow;
-        var tempPassword = TemporaryPasswordGenerator.Generate();
+        var isLocal = authProvider == Domain.Enums.AuthProvider.Local;
 
         var user = new User
         {
@@ -76,16 +81,27 @@ public class UserAppService(AuthDbContext db, PasswordHasher passwordHasher, Aud
             Name = request.Name.Trim(),
             Email = email,
             PhoneNumber = request.PhoneNumber?.Trim(),
-            PasswordHash = string.Empty,
+            AuthProvider = authProvider,
             Status = request.IsActive ? UserStatus.Active : UserStatus.Inactive,
             RoleId = request.RoleId,
-            MustChangePassword = true,
+            // Google accounts have no local password to force a change on — MustChangePassword only
+            // applies to the Local flow's system-generated temporary password.
+            MustChangePassword = isLocal,
             CreatedAt = now,
             UpdatedAt = now,
             CreatedBy = actingUserId,
             UpdatedBy = actingUserId,
         };
-        user.PasswordHash = passwordHasher.Hash(user, tempPassword);
+
+        // Local: generate + hash a real one-time temp password, returned once to the caller.
+        // Google: PasswordHash stays null — this account can never sign in with a local password,
+        // see AuthAppService.LoginAsync's null-guard.
+        string? tempPassword = null;
+        if (isLocal)
+        {
+            tempPassword = TemporaryPasswordGenerator.Generate();
+            user.PasswordHash = passwordHasher.Hash(user, tempPassword);
+        }
 
         db.Users.Add(user);
         await db.SaveChangesAsync(ct);
@@ -229,6 +245,7 @@ public class UserAppService(AuthDbContext db, PasswordHasher passwordHasher, Aud
 
     private async Task<IReadOnlyList<PermissionOverrideDto>> LoadOverridesAsync(Guid userId, CancellationToken ct) =>
         await db.UserPermissionOverrides
+            .AsNoTracking()
             .Include(o => o.Feature)
             .Where(o => o.UserId == userId)
             .Select(o => new PermissionOverrideDto(o.Feature!.Key, o.Capability, o.Effect.ToString()))
@@ -236,12 +253,12 @@ public class UserAppService(AuthDbContext db, PasswordHasher passwordHasher, Aud
 
     private static UserListItemDto ToListItemDto(User u) => new(
         u.Id, u.Name, u.Email, u.PhoneNumber, u.RoleId, u.Role?.Name,
-        u.Role != null && u.Role.IsAdministrator, u.Status == UserStatus.Active, u.LastLoginAt);
+        u.Role != null && u.Role.IsAdministrator, u.Status == UserStatus.Active, u.LastLoginAt, u.AuthProvider.ToString());
 
     private static UserDetailDto ToDetailDto(User u, IReadOnlyList<PermissionOverrideDto> overrides) => new(
         u.Id, u.Name, u.Email, u.PhoneNumber, u.RoleId, u.Role?.Name,
         u.Role != null && u.Role.IsAdministrator, u.Status == UserStatus.Active, u.MustChangePassword,
-        u.LastLoginAt, u.CreatedAt, u.UpdatedAt, overrides);
+        u.LastLoginAt, u.CreatedAt, u.UpdatedAt, overrides, u.AuthProvider.ToString());
 
     private static NotFoundAppException NotFound(Guid id) => new($"User '{id}' was not found.");
 }

@@ -28,3 +28,49 @@
   color: var(--omni-color-text-secondary);
   max-width: 48ch;
 }
+
+.retryStatus {
+  font-size: var(--omni-font-size-sm);
+  color: var(--omni-color-text-secondary);
+  margin: 0;
+}
+
+/*
+ * The raw Module Federation error is developer diagnostics, not an operator-facing message. It is
+ * kept verbatim, but one disclosure away, so the default view stays readable for a non-technical
+ * user while a developer can still get the exact RUNTIME-00x code and manifest URL.
+ */
+.details {
+  margin-top: var(--omni-space-4);
+  max-width: 640px;
+  width: 100%;
+  text-align: left;
+}
+
+.detailsSummary {
+  cursor: pointer;
+  font-size: var(--omni-font-size-sm);
+  color: var(--omni-color-text-secondary);
+  user-select: none;
+}
+
+.detailsSummary:focus-visible {
+  outline: 2px solid var(--omni-color-primary-500);
+  outline-offset: 2px;
+  border-radius: var(--omni-radius-sm);
+}
+
+.detailsBody {
+  margin-top: var(--omni-space-2);
+  padding: var(--omni-space-3);
+  border-radius: var(--omni-radius-md);
+  background: var(--omni-color-surface-alt);
+  border: 1px solid var(--omni-color-border);
+  color: var(--omni-color-text-secondary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--omni-font-size-xs);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+}

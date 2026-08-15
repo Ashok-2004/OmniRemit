@@ -22,6 +22,9 @@ function extractErrorMessage(error, fallback) {
 
 function Dashboard() {
   const [employees, setEmployees] = useState([]);
+  // Real aggregates over the WHOLE roster, from the server. Deriving these from `employees` would
+  // now silently mean "stats for the current page" while still being labelled as totals.
+  const [stats, setStats] = useState({ total: 0, departmentCount: 0, averageSalary: 0 });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [loadError, setLoadError] = useState(null);
@@ -38,8 +41,13 @@ function Dashboard() {
   const loadEmployees = async () => {
     setLoadError(null);
     try {
-      const data = await getEmployees();
-      setEmployees(data);
+      const result = await getEmployees();
+      setEmployees(result.items);
+      setStats({
+        total: result.total,
+        departmentCount: result.departmentCount,
+        averageSalary: result.averageSalary,
+      });
     } catch (error) {
       console.error("Failed to load employees:", error);
       setLoadError(extractErrorMessage(error, "Could not load employees."));
@@ -138,7 +146,7 @@ function Dashboard() {
             <div className="metric-icon">👥</div>
             <div className="metric-data">
               <h3>Total Members</h3>
-              <h2>{employees.length}</h2>
+              <h2>{stats.total}</h2>
               <span className="trend positive">Active Team</span>
             </div>
           </div>
@@ -146,7 +154,7 @@ function Dashboard() {
             <div className="metric-icon">🏢</div>
             <div className="metric-data">
               <h3>Departments</h3>
-              <h2>{new Set(employees.map(e => e.department)).size}</h2>
+              <h2>{stats.departmentCount}</h2>
               <span className="trend neutral">Across Enterprise</span>
             </div>
           </div>
@@ -154,7 +162,7 @@ function Dashboard() {
             <div className="metric-icon">💰</div>
             <div className="metric-data">
               <h3>Average Salary</h3>
-              <h2>₹ {employees.length ? Math.round(employees.reduce((acc, curr) => acc + Number(curr.salary), 0) / employees.length).toLocaleString() : 0}</h2>
+              <h2>₹ {Math.round(Number(stats.averageSalary) || 0).toLocaleString()}</h2>
               <span className="trend neutral">Current Fiscal Year</span>
             </div>
           </div>

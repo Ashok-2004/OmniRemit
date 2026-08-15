@@ -231,6 +231,25 @@ catalog automatically — nothing about the capability list is hand-typed anywhe
 group in every role's permission editor (**Setup → Role**) — grant whichever ones a role should have.
 As the Super Admin, everything is already granted (administrators bypass per-capability checks).
 
+### Enabling Google SSO (optional)
+
+Google Sign-In ships fully wired but **inert by default** — the login page shows an honest
+"Google Sign-In is not configured yet" state and nobody can authenticate this way until you do the
+following:
+
+1. In [Google Cloud Console](https://console.cloud.google.com/apis/credentials), create an **OAuth
+   2.0 Client ID** of type "Web application".
+2. Add `http://localhost:5173` under **Authorized JavaScript origins** (no path, no trailing slash).
+3. Copy the generated Client ID and set it in **both**:
+   - `Backend/AuthService/.env` — `Google__ClientId=` (also set `Google__AllowedDomains=` to a
+     comma-separated list of email domains allowed to sign in, e.g. `acme.com,acme.co.uk`)
+   - `Frontend/apps/host/.env` — `VITE_GOOGLE_CLIENT_ID=` (same value)
+4. Restart AuthService and the frontend dev server.
+5. Create a user with **Authentication Method: Google SSO** in Setup → User — SSO never
+   auto-creates an account, an admin still provisions the User row first, just with no password.
+   That user's email domain must be one of the allowed domains from step 3.
+6. That user can now sign in with the "Sign in with Google" button on the login page.
+
 ## Troubleshooting
 
 - **A backend crashes immediately on startup** ("address already in use") — something else is already
@@ -247,5 +266,8 @@ As the Super Admin, everything is already granted (administrators bypass per-cap
   come back from `Permissions source URL`. Check EmployeeService is actually running on `:5285` and
   that `http://localhost:5285/api/employee-service/permissions` returns JSON in a browser tab, then
   hit **Resync permissions** on the Applications page.
+- **"Sign in with Google" still shows "not configured"** after setting the env vars — confirm you set
+  `VITE_GOOGLE_CLIENT_ID` in `Frontend/apps/host/.env` (not just `Backend/AuthService/.env`'s
+  `Google__ClientId`) and restarted the frontend dev server — Vite only reads `.env` at startup.
 - Anything else: check the terminal output of whichever service is failing — every backend logs clear
   error messages rather than crashing silently.

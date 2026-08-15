@@ -4,7 +4,7 @@
     {
       "name": "frontend-dev",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "host", "dev"],
+      "runtimeArgs": ["-C", "Frontend", "--filter", "host", "dev"],
       "port": 5173
     },
     {
@@ -28,7 +28,7 @@
     {
       "name": "employee-mf-dev",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "employee-mf", "preview"],
+      "runtimeArgs": ["-C", "Frontend", "--filter", "employee-mf", "dev"],
       "port": 5001
     }
   ]

@@ -5,6 +5,7 @@ using EmployeeService.Repositories;
 using EmployeeService.Services;
 using EmployeeService.Validators;
 using FluentValidation;
+using FluentValidation.AspNetCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace EmployeeService.Extensions;
@@ -32,9 +33,12 @@ public static class ServiceExtensions
 
         services.AddScoped<IEmployeeService, Services.EmployeeService>();
 
-        services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
-
         services.AddValidatorsFromAssemblyContaining<CreateEmployeeValidator>();
+
+        // Registering validators does NOT make them run. Without this, CreateEmployeeValidator was
+        // resolvable from DI but nothing ever invoked it, so CreateEmployee/UpdateEmployee accepted
+        // completely unvalidated input — the validators had never executed once in this service.
+        services.AddFluentValidationAutoValidation();
 
         return services;
     }

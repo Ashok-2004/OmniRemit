@@ -107,6 +107,21 @@
   box-shadow: 0 0 0 3px var(--omni-color-primary-100);
 }
 
+.readonlyField {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 var(--omni-space-3);
+  background: var(--omni-color-surface-alt);
+  border: 1px solid var(--omni-color-border);
+  border-radius: var(--omni-radius-md);
+}
+
+.readonlyValue {
+  font-size: var(--omni-font-size-md);
+  color: var(--omni-color-text-secondary);
+}
+
 .adminNotice {
   padding: var(--omni-space-3);
   border-radius: var(--omni-radius-md);

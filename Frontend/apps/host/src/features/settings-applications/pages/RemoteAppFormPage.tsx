@@ -14,6 +14,7 @@ export function RemoteAppFormPage() {
   const navigate = useNavigate()
   const accessToken = useAuthStore((s) => s.accessToken)
   const ensureFreshAccessToken = useAuthStore((s) => s.ensureFreshAccessToken)
+  const refreshSession = useAuthStore((s) => s.refreshSession)
 
   const [loading, setLoading] = useState(isEdit)
   const [saving, setSaving] = useState(false)
@@ -79,6 +80,10 @@ export function RemoteAppFormPage() {
           sidebarOrder,
         })
       }
+      // Registering/editing an app changes the Applications feature's capability set (via
+      // PermissionsSourceUrl sync) — refresh this session's own JWT so a just-changed capability
+      // the acting admin now holds (or lost) takes effect immediately, same as role/user saves.
+      void refreshSession()
       navigate('/settings/applications')
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not save this app.')

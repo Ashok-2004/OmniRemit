@@ -1,0 +1,19 @@
+.buttonSlot {
+  display: flex;
+  justify-content: center;
+  min-height: 44px;
+}
+
+.notConfigured {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  border-radius: var(--omni-radius-md);
+  border: 1px dashed var(--omni-color-border-strong);
+  color: var(--omni-color-text-muted);
+  font-size: var(--omni-font-size-sm);
+  text-align: center;
+  padding: 0 var(--omni-space-4);
+  cursor: not-allowed;
+}

@@ -14,8 +14,9 @@ public static class MiddlewareExtensions
             app.UseSwaggerUI();
         }
 
-        app.UseMiddleware<ExceptionMiddleware>();
-
+        // ExceptionMiddleware is deliberately NOT here — it is registered in Program.cs before
+        // UseCors/UseAuthentication so it can actually catch auth-pipeline exceptions and still
+        // emit CORS headers on the error response.
         app.UseAuthorization();
 
         app.MapHealthChecks("/health");

@@ -25,10 +25,21 @@ public class EmployeesController : ControllerBase
         _service = service;
     }
 
+    /// <summary>
+    /// Reading the employee roster requires an explicit "View" grant.
+    /// <para>
+    /// This endpoint previously carried only the class-level [Authorize], which meant ANY
+    /// authenticated user on the platform — including one holding zero remote.employee grants —
+    /// could read every employee record, salary included, while Create/Edit/Delete were all
+    /// correctly gated. Adding the attribute also makes "View" appear automatically in the host's
+    /// Role editor, because the discovery endpoint reflects over exactly these attributes.
+    /// </para>
+    /// </summary>
     [HttpGet]
-    public async Task<IActionResult> GetEmployees()
+    [RequiresCapability("View")]
+    public async Task<IActionResult> GetEmployees([FromQuery] EmployeeQuery query)
     {
-        var employees = await _service.GetAllAsync();
+        var employees = await _service.GetPagedAsync(query);
 
         return Ok(new ApiResponse<object>
         {

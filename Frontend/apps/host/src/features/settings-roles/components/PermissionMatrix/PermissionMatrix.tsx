@@ -8,6 +8,10 @@ export interface PermissionMatrixProps {
   permissions: RolePermissionGrantDto[]
   onChange: (permissions: RolePermissionGrantDto[]) => void
   disabled?: boolean
+  /** Shown when catalog is empty. Defaults to the generic "not registered yet" message; callers that pre-filter to one source (e.g. a Host-only or RemoteApp-only tab) should pass something specific to that context. */
+  emptyMessage?: string
+  /** Set false when the caller already pre-filtered catalog to a single source (e.g. one tab per source) — the per-group "Platform"/"Remote apps" label would just be a redundant repeat of the tab's own title. */
+  showGroupHeader?: boolean
 }
 
 /**
@@ -18,7 +22,14 @@ export interface PermissionMatrixProps {
  * on any feature (host or remote) shows up here the next time the catalog is fetched, with nothing
  * to hand-edit on this side.
  */
-export function PermissionMatrix({ catalog, permissions, onChange, disabled }: PermissionMatrixProps) {
+export function PermissionMatrix({
+  catalog,
+  permissions,
+  onChange,
+  disabled,
+  emptyMessage = 'No permission features registered yet.',
+  showGroupHeader = true,
+}: PermissionMatrixProps) {
   const grouped = groupBy(catalog, (f) => f.source)
   const has = (featureKey: string, capability: string) =>
     permissions.some((p) => p.featureKey === featureKey && p.capability === capability)
@@ -44,21 +55,31 @@ export function PermissionMatrix({ catalog, permissions, onChange, disabled }: P
   }
 
   if (catalog.length === 0) {
-    return <div className={styles.wrapper}><div className={styles.emptyState}>No permission features registered yet.</div></div>
+    return <div className={styles.wrapper}><div className={styles.emptyState}>{emptyMessage}</div></div>
   }
 
   return (
     <div className={styles.wrapper}>
       {Object.entries(grouped).map(([source, features]) => (
         <div key={source}>
-          <div className={styles.groupHeader}>
-            <span className={styles.groupTitle}>{source === 'Host' ? 'Platform' : 'Remote apps'}</span>
-            {!disabled && (
+          {showGroupHeader && (
+            <div className={styles.groupHeader}>
+              <span className={styles.groupTitle}>{source === 'Host' ? 'Platform' : 'Remote apps'}</span>
+              {!disabled && (
+                <button type="button" className={styles.selectAll} onClick={() => toggleGroup(features)}>
+                  Select all
+                </button>
+              )}
+            </div>
+          )}
+          {!showGroupHeader && !disabled && (
+            <div className={styles.groupHeader}>
+              <span />
               <button type="button" className={styles.selectAll} onClick={() => toggleGroup(features)}>
                 Select all
               </button>
-            )}
-          </div>
+            </div>
+          )}
           {features.map((feature) => (
             <div className={styles.row} key={feature.key}>
               <span className={styles.featureName}>{feature.displayName}</span>

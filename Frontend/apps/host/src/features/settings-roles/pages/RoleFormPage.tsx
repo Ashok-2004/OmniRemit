@@ -1,10 +1,12 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuthStore } from '../../auth/store/authStore'
 import { Button } from '../../../shared/components/Button/Button'
 import { Input } from '../../../shared/components/Input/Input'
 import { Switch } from '../../../shared/components/Switch/Switch'
 import { SkeletonText } from '../../../shared/components/Skeleton'
+import { Tabs, TabPanel } from '../../../shared/components/Tabs/Tabs'
+import { Badge } from '../../../shared/components/Badge/Badge'
 import { ApiError } from '../../../shared/api/httpClient'
 import { permissionsApi, type PermissionFeatureDto } from '../../../shared/api/permissionsApi'
 import { rolesApi, type RolePermissionGrantDto, type RoleUserDto } from '../api/rolesApi'
@@ -12,20 +14,31 @@ import { PermissionMatrix } from '../components/PermissionMatrix/PermissionMatri
 import { UsersUsingRolePanel } from '../components/UsersUsingRolePanel/UsersUsingRolePanel'
 import styles from './RoleFormPage.module.css'
 
+const TAB_IDS = {
+  basics: 'basics',
+  hostPermissions: 'host-permissions',
+  applicationAccess: 'application-access',
+  assignedUsers: 'assigned-users',
+} as const
+
 export function RoleFormPage() {
   const { id } = useParams<{ id: string }>()
   const isEdit = Boolean(id)
   const navigate = useNavigate()
   const accessToken = useAuthStore((s) => s.accessToken)
   const ensureFreshAccessToken = useAuthStore((s) => s.ensureFreshAccessToken)
+  const refreshSession = useAuthStore((s) => s.refreshSession)
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isSystemRole, setIsSystemRole] = useState(false)
+  const [activeTab, setActiveTab] = useState<string>(TAB_IDS.basics)
 
   const [catalog, setCatalog] = useState<PermissionFeatureDto[]>([])
   const [roleUsers, setRoleUsers] = useState<RoleUserDto[] | undefined>(undefined)
+  /** Real total assigned count — the list itself is capped server-side. */
+  const [roleUsersTotal, setRoleUsersTotal] = useState<number | undefined>(undefined)
 
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -53,7 +66,10 @@ export function RoleFormPage() {
           setPermissions(role.permissions)
 
           const users = await rolesApi.users(token, id)
-          if (!cancelled) setRoleUsers(users)
+          if (!cancelled) {
+            setRoleUsers(users.items)
+            setRoleUsersTotal(users.total)
+          }
         }
       } catch (err) {
         if (!cancelled) setError(err instanceof ApiError ? err.message : 'Could not load this page.')
@@ -68,6 +84,9 @@ export function RoleFormPage() {
     }
   }, [accessToken, id])
 
+  const hostFeatures = useMemo(() => catalog.filter((f) => f.source === 'Host'), [catalog])
+  const remoteFeatures = useMemo(() => catalog.filter((f) => f.source === 'RemoteApp'), [catalog])
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     setError(null)
@@ -81,6 +100,11 @@ export function RoleFormPage() {
       } else {
         await rolesApi.create(token, body)
       }
+      // The acting admin may have just changed a role that affects their OWN effective permissions
+      // (their own role, or a capability the sidebar/routes are already checking) — force this
+      // session's own JWT to refresh now instead of waiting up to AccessTokenMinutes. Other
+      // already-logged-in users on this role pick it up on their own next natural refresh.
+      void refreshSession()
       navigate('/settings/roles')
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not save this role.')
@@ -92,6 +116,17 @@ export function RoleFormPage() {
   if (loading) {
     return <SkeletonText lines={6} />
   }
+
+  const tabs = [
+    { key: TAB_IDS.basics, label: 'Basic Details' },
+    { key: TAB_IDS.hostPermissions, label: 'Host Permissions' },
+    {
+      key: TAB_IDS.applicationAccess,
+      label: 'Application Access',
+      suffix: remoteFeatures.length > 0 ? <Badge tone="neutral">{remoteFeatures.length}</Badge> : undefined,
+    },
+    { key: TAB_IDS.assignedUsers, label: 'Assigned Users' },
+  ]
 
   return (
     <div className={styles.page}>
@@ -105,7 +140,9 @@ export function RoleFormPage() {
       {error && <div className={styles.errorBanner}>{error}</div>}
 
       <form onSubmit={(e) => void handleSubmit(e)}>
-        <div className={styles.grid}>
+        <Tabs id="role-form-tabs" tabs={tabs} activeKey={activeTab} onChange={setActiveTab} />
+
+        <TabPanel id="role-form-tabs" tabId={TAB_IDS.basics} active={activeTab === TAB_IDS.basics}>
           <div className={styles.mainPanel}>
             <Input label="Role" required value={name} onChange={(e) => setName(e.target.value)} />
             <Input
@@ -128,19 +165,34 @@ export function RoleFormPage() {
                 onChange={(e) => setIsAdministrator(e.target.checked)}
               />
             </div>
-
-            <PermissionMatrix
-              catalog={catalog}
-              permissions={permissions}
-              onChange={setPermissions}
-              disabled={isAdministrator}
-            />
           </div>
+        </TabPanel>
 
-          <div className={styles.sideColumn}>
-            <UsersUsingRolePanel users={roleUsers} isNewRole={!isEdit} />
-          </div>
-        </div>
+        <TabPanel id="role-form-tabs" tabId={TAB_IDS.hostPermissions} active={activeTab === TAB_IDS.hostPermissions}>
+          <PermissionMatrix
+            catalog={hostFeatures}
+            permissions={permissions}
+            onChange={setPermissions}
+            disabled={isAdministrator}
+            showGroupHeader={false}
+            emptyMessage="No host permission features found."
+          />
+        </TabPanel>
+
+        <TabPanel id="role-form-tabs" tabId={TAB_IDS.applicationAccess} active={activeTab === TAB_IDS.applicationAccess}>
+          <PermissionMatrix
+            catalog={remoteFeatures}
+            permissions={permissions}
+            onChange={setPermissions}
+            disabled={isAdministrator}
+            showGroupHeader={false}
+            emptyMessage="Registered applications will appear here for role-based access assignment."
+          />
+        </TabPanel>
+
+        <TabPanel id="role-form-tabs" tabId={TAB_IDS.assignedUsers} active={activeTab === TAB_IDS.assignedUsers}>
+          <UsersUsingRolePanel users={roleUsers} total={roleUsersTotal} isNewRole={!isEdit} />
+        </TabPanel>
 
         <div className={styles.actions}>
           <Button type="submit" loading={saving}>

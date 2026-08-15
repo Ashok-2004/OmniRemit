@@ -2,10 +2,12 @@ import { useState, type FormEvent } from 'react'
 import { Button } from '../../shared/components/Button/Button'
 import { Input } from '../../shared/components/Input/Input'
 import { Icon } from '../../shared/components/Icon/Icon'
+import { GoogleSignInButton } from '../../features/auth/components/GoogleSignInButton'
 import styles from './LoginPage.module.css'
 
 export interface LoginPageProps {
   onSubmit: (email: string, password: string) => Promise<void>
+  onGoogleCredential: (idToken: string) => Promise<void>
   loading?: boolean
   errorMessage?: string | null
 }
@@ -16,7 +18,7 @@ const TRUST_ITEMS = [
   { icon: Icon.Chat, title: 'Support', desc: '24/7 dedicated support' },
 ]
 
-export function LoginPage({ onSubmit, loading, errorMessage }: LoginPageProps) {
+export function LoginPage({ onSubmit, onGoogleCredential, loading, errorMessage }: LoginPageProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -126,6 +128,12 @@ export function LoginPage({ onSubmit, loading, errorMessage }: LoginPageProps) {
             <Button type="submit" fullWidth loading={loading}>
               Sign in
             </Button>
+
+            <div className={styles.divider} role="separator">
+              <span>or</span>
+            </div>
+
+            <GoogleSignInButton onCredential={(idToken) => void onGoogleCredential(idToken)} />
           </div>
         </form>
 

@@ -25,3 +25,10 @@ public record RoleDetailDto(
 public record UpsertRoleRequest(string Name, string? Description, bool IsAdministrator, IReadOnlyList<RolePermissionGrantDto> Permissions);
 
 public record RoleUserDto(Guid Id, string Name, string Email);
+
+/// <summary>
+/// Users assigned to a role. <paramref name="Total"/> is the real full count even when
+/// <paramref name="Items"/> is capped, so the UI can honestly say "showing 50 of 4,312" rather than
+/// implying the role has only 50 members.
+/// </summary>
+public record RoleUsersDto(IReadOnlyList<RoleUserDto> Items, int Total);

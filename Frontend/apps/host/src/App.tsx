@@ -1,24 +1,38 @@
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, type Location } from 'react-router-dom'
 import { AppShell } from './layout/AppShell/AppShell'
-import { DashboardPage } from './pages/DashboardPage/DashboardPage'
-import { LoginPage } from './pages/LoginPage/LoginPage'
-import { MaintenancePage } from './pages/MaintenancePage/MaintenancePage'
-import { NotFoundPage } from './pages/NotFoundPage/NotFoundPage'
-import { RemoteAppPage } from './pages/RemoteAppPage/RemoteAppPage'
 import { RequireAuth } from './features/auth/components/RequireAuth'
 import { RequireCapability } from './features/auth/components/RequireCapability'
 import { useSilentRefresh } from './features/auth/hooks/useSilentRefresh'
 import { useAuthStore } from './features/auth/store/authStore'
 import { useModuleRegistryStore } from './shared/stores/moduleRegistryStore'
 import { SetupPanel } from './layout/SetupPanel/SetupPanel'
-import { UsersListPage } from './features/settings-users/pages/UsersListPage'
-import { UserFormPage } from './features/settings-users/pages/UserFormPage'
-import { RolesListPage } from './features/settings-roles/pages/RolesListPage'
-import { RoleFormPage } from './features/settings-roles/pages/RoleFormPage'
-import { RemoteAppsListPage } from './features/settings-applications/pages/RemoteAppsListPage'
-import { RemoteAppFormPage } from './features/settings-applications/pages/RemoteAppFormPage'
-import { AuditLogsPage } from './features/system-audit-logs/pages/AuditLogsPage'
+import { RouteFallback } from './shared/components/RouteFallback/RouteFallback'
+
+/**
+ * Every route is code-split.
+ *
+ * Previously all thirteen pages were imported statically here, which produced a single ~117KB app
+ * chunk plus one ~59KB stylesheet, and index.html preloaded all of it. A user sitting on the login
+ * screen was downloading and parsing the audit-logs page, the permission matrix, and all three
+ * settings CRUD flows before they had typed a password.
+ *
+ * AppShell / SetupPanel / the route guards stay eager: they are the frame around every authenticated
+ * route, so splitting them would only add a waterfall.
+ */
+const DashboardPage = lazy(() => import('./pages/DashboardPage/DashboardPage').then((m) => ({ default: m.DashboardPage })))
+const LoginPage = lazy(() => import('./pages/LoginPage/LoginPage').then((m) => ({ default: m.LoginPage })))
+const MaintenancePage = lazy(() => import('./pages/MaintenancePage/MaintenancePage').then((m) => ({ default: m.MaintenancePage })))
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage/NotFoundPage').then((m) => ({ default: m.NotFoundPage })))
+const RemoteAppPage = lazy(() => import('./pages/RemoteAppPage/RemoteAppPage').then((m) => ({ default: m.RemoteAppPage })))
+const UsersListPage = lazy(() => import('./features/settings-users/pages/UsersListPage').then((m) => ({ default: m.UsersListPage })))
+const UserFormPage = lazy(() => import('./features/settings-users/pages/UserFormPage').then((m) => ({ default: m.UserFormPage })))
+const RolesListPage = lazy(() => import('./features/settings-roles/pages/RolesListPage').then((m) => ({ default: m.RolesListPage })))
+const RoleFormPage = lazy(() => import('./features/settings-roles/pages/RoleFormPage').then((m) => ({ default: m.RoleFormPage })))
+const RemoteAppsListPage = lazy(() => import('./features/settings-applications/pages/RemoteAppsListPage').then((m) => ({ default: m.RemoteAppsListPage })))
+const RemoteAppFormPage = lazy(() => import('./features/settings-applications/pages/RemoteAppFormPage').then((m) => ({ default: m.RemoteAppFormPage })))
+const AuditLogsPage = lazy(() => import('./features/system-audit-logs/pages/AuditLogsPage').then((m) => ({ default: m.AuditLogsPage })))
+const ProfilePage = lazy(() => import('./features/profile/pages/ProfilePage').then((m) => ({ default: m.ProfilePage })))
 
 const FEATURE_KEYS = {
   users: 'host.settings.users',
@@ -30,6 +44,7 @@ const FEATURE_KEYS = {
 function LoginRoute() {
   const status = useAuthStore((s) => s.status)
   const login = useAuthStore((s) => s.login)
+  const loginWithGoogle = useAuthStore((s) => s.loginWithGoogle)
   const loginLoading = useAuthStore((s) => s.loginLoading)
   const loginError = useAuthStore((s) => s.loginError)
   const navigate = useNavigate()
@@ -42,7 +57,14 @@ function LoginRoute() {
     }
   }, [status, navigate, location.state])
 
-  return <LoginPage onSubmit={login} loading={loginLoading} errorMessage={loginError} />
+  return (
+    <LoginPage
+      onSubmit={login}
+      onGoogleCredential={loginWithGoogle}
+      loading={loginLoading}
+      errorMessage={loginError}
+    />
+  )
 }
 
 function AuthenticatedShell() {
@@ -55,6 +77,7 @@ function AuthenticatedShell() {
 
   const registryStatus = useModuleRegistryStore((s) => s.status)
   const registryApps = useModuleRegistryStore((s) => s.apps)
+  const registryError = useModuleRegistryStore((s) => s.error)
   const fetchForSidebar = useModuleRegistryStore((s) => s.fetchForSidebar)
 
   useEffect(() => {
@@ -77,6 +100,7 @@ function AuthenticatedShell() {
   return (
     <AppShell
       apps={registryStatus === 'idle' || registryStatus === 'loading' ? undefined : registryApps}
+      appsError={registryError}
       userName={user?.name}
       settingsAccess={settingsAccess}
       canAccessAuditLogs={canAccessAuditLogs}
@@ -96,8 +120,9 @@ function AppRoutes() {
   }, [hydrate])
 
   return (
-    <Routes>
-      <Route path="/login" element={<LoginRoute />} />
+    <Suspense fallback={<RouteFallback />}>
+      <Routes>
+        <Route path="/login" element={<LoginRoute />} />
 
       <Route
         element={
@@ -107,6 +132,7 @@ function AppRoutes() {
         }
       >
         <Route index element={<DashboardPage />} />
+        <Route path="profile" element={<ProfilePage />} />
         <Route path="apps/:appKey" element={<RemoteAppPage />} />
 
         <Route
@@ -195,10 +221,11 @@ function AppRoutes() {
         </Route>
       </Route>
 
-      <Route path="/maintenance-preview" element={<MaintenancePage appDisplayName="Example App" />} />
-      <Route path="/404" element={<NotFoundPage />} />
-      <Route path="*" element={<Navigate to="/404" replace />} />
-    </Routes>
+        <Route path="/maintenance-preview" element={<MaintenancePage appDisplayName="Example App" />} />
+        <Route path="/404" element={<NotFoundPage />} />
+        <Route path="*" element={<Navigate to="/404" replace />} />
+      </Routes>
+    </Suspense>
   )
 }
 

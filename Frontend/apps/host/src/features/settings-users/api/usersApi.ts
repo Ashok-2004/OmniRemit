@@ -10,6 +10,8 @@ export interface PagedResult<T> {
   pageSize: number
 }
 
+export type AuthProviderValue = 'Local' | 'Google'
+
 export interface UserListItemDto {
   id: string
   name: string
@@ -20,6 +22,7 @@ export interface UserListItemDto {
   isAdministrator: boolean
   isActive: boolean
   lastLoginAt: string | null
+  authProvider: AuthProviderValue
 }
 
 export interface PermissionOverrideDto {
@@ -42,19 +45,23 @@ export interface UserDetailDto {
   createdAt: string
   updatedAt: string
   permissionOverrides: PermissionOverrideDto[]
+  authProvider: AuthProviderValue
 }
 
+/** authProvider defaults "Local" and is immutable after creation — see the backend DTO's doc comment. */
 export interface CreateUserRequest {
   name: string
   email: string
   phoneNumber?: string | null
   roleId?: string | null
   isActive?: boolean
+  authProvider?: AuthProviderValue
 }
 
+/** Null for Google-provisioned accounts — there's no local password to show. */
 export interface CreateUserResponse {
   user: UserDetailDto
-  temporaryPassword: string
+  temporaryPassword: string | null
 }
 
 export interface UpdateUserRequest {

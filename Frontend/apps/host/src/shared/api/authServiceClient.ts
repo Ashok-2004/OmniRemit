@@ -3,6 +3,8 @@ import { apiFetch } from './httpClient'
 
 const base = env.authServiceUrl
 
+export type AuthProvider = 'Local' | 'Google'
+
 export interface CurrentUserDto {
   id: string
   name: string
@@ -13,6 +15,9 @@ export interface CurrentUserDto {
   isAdministrator: boolean
   mustChangePassword: boolean
   permissions: string[]
+  authProvider: AuthProvider
+  isActive: boolean
+  lastLoginAt: string | null
 }
 
 export interface LoginResponse {
@@ -23,10 +28,20 @@ export interface LoginResponse {
 
 export type RefreshResponse = LoginResponse
 
+export interface SsoConfigDto {
+  googleEnabled: boolean
+  allowedDomains: string[]
+}
+
 /** Raw calls against AuthService's /api/auth/* surface. No token/refresh orchestration here — see features/auth/store/authStore.ts for that. */
 export const authServiceClient = {
   login: (email: string, password: string) =>
     apiFetch<LoginResponse>(`${base}/api/auth/login`, { method: 'POST', body: { email, password } }),
+
+  loginWithGoogle: (idToken: string) =>
+    apiFetch<LoginResponse>(`${base}/api/auth/google`, { method: 'POST', body: { idToken } }),
+
+  ssoConfig: () => apiFetch<SsoConfigDto>(`${base}/api/auth/sso-config`),
 
   refresh: () => apiFetch<RefreshResponse>(`${base}/api/auth/refresh`, { method: 'POST' }),
 

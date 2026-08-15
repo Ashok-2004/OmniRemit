@@ -15,4 +15,6 @@ function required(name: string, value: string | undefined): string {
 export const env = {
   authServiceUrl: required('VITE_AUTH_SERVICE_URL', import.meta.env.VITE_AUTH_SERVICE_URL),
   moduleRegistryUrl: required('VITE_MODULE_REGISTRY_URL', import.meta.env.VITE_MODULE_REGISTRY_URL),
+  /** Deliberately optional — Google SSO stays off (LoginPage shows an honest "not configured" state) until this is set. */
+  googleClientId: import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined,
 }

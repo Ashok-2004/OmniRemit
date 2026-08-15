@@ -17,7 +17,7 @@ namespace AuthService.Infrastructure.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.0")
+                .HasAnnotation("ProductVersion", "10.0.8")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -40,6 +40,13 @@ namespace AuthService.Infrastructure.Migrations
                     b.Property<Guid?>("ActorUserId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("AuthMethod")
+                        .HasColumnType("text");
+
+                    b.Property<string>("CorrelationId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<string>("Details")
                         .HasColumnType("text");
 
@@ -51,8 +58,15 @@ namespace AuthService.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<string>("FailureReason")
+                        .HasColumnType("text");
+
                     b.Property<DateTimeOffset>("OccurredAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Result")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<string>("ServiceName")
                         .IsRequired()
@@ -63,11 +77,24 @@ namespace AuthService.Infrastructure.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<string>("UserAgent")
+                        .HasColumnType("text");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("Action");
+
+                    b.HasIndex("ActorUserId");
 
                     b.HasIndex("OccurredAt");
 
                     b.HasIndex("ServiceName");
+
+                    b.HasIndex("Result", "OccurredAt")
+                        .IsDescending(false, true);
+
+                    b.HasIndex("ServiceName", "OccurredAt")
+                        .IsDescending(false, true);
 
                     b.ToTable("AuditLogs");
                 });
@@ -251,6 +278,11 @@ namespace AuthService.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("AuthProvider")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -277,7 +309,6 @@ namespace AuthService.Infrastructure.Migrations
                         .HasColumnType("character varying(200)");
 
                     b.Property<string>("PasswordHash")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("PhoneNumber")
@@ -303,7 +334,13 @@ namespace AuthService.Infrastructure.Migrations
                     b.HasIndex("Email")
                         .IsUnique();
 
+                    b.HasIndex("IsDeleted");
+
+                    b.HasIndex("Name");
+
                     b.HasIndex("RoleId");
+
+                    b.HasIndex("Status");
 
                     b.ToTable("Users");
                 });

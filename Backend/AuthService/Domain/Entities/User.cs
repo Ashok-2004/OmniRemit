@@ -8,7 +8,13 @@ public class User
     public required string Name { get; set; }
     public required string Email { get; set; }
     public string? PhoneNumber { get; set; }
-    public required string PasswordHash { get; set; }
+
+    /// <summary>Null for Google-provisioned accounts — they never have a local password, see AuthProvider.</summary>
+    public string? PasswordHash { get; set; }
+
+    /// <summary>How this user signs in. Google accounts are still admin-provisioned here (same as Local) — SSO never auto-creates a User row, it only authenticates an already-existing one.</summary>
+    public AuthProvider AuthProvider { get; set; } = AuthProvider.Local;
+
     public UserStatus Status { get; set; } = UserStatus.Active;
 
     /// <summary>
