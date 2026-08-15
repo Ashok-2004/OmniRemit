@@ -1,17 +1,20 @@
 .page {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   min-height: 100vh;
+  background: var(--omni-color-surface-alt);
 }
+
+/* ---- Brand panel (left) ---- */
 
 .brandPanel {
   position: relative;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: var(--omni-space-8);
+  padding: var(--omni-space-7) var(--omni-space-8);
   color: var(--omni-color-text-on-primary);
-  background: linear-gradient(155deg, var(--omni-color-primary-800) 0%, var(--omni-color-primary-600) 100%);
+  background: linear-gradient(160deg, var(--omni-color-primary-900) 0%, var(--omni-color-primary-700) 55%, var(--omni-color-primary-600) 100%);
   overflow: hidden;
 }
 
@@ -19,8 +22,20 @@
   content: '';
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(circle at 15% 20%, color-mix(in srgb, white 10%, transparent) 0, transparent 40%),
-    radial-gradient(circle at 85% 80%, color-mix(in srgb, white 8%, transparent) 0, transparent 45%);
+  background-image: radial-gradient(circle at 12% 15%, color-mix(in srgb, white 12%, transparent) 0, transparent 42%),
+    radial-gradient(circle at 88% 78%, color-mix(in srgb, white 10%, transparent) 0, transparent 46%);
+  pointer-events: none;
+}
+
+.brandPanel::after {
+  content: '';
+  position: absolute;
+  right: -120px;
+  bottom: -120px;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, white 12%, transparent);
   pointer-events: none;
 }
 
@@ -32,19 +47,42 @@
 }
 
 .brandMarkIcon {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border-radius: var(--omni-radius-md);
-  background: color-mix(in srgb, white 18%, transparent);
+  background: color-mix(in srgb, white 16%, transparent);
+  border: 1px solid color-mix(in srgb, white 24%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: var(--omni-font-weight-bold);
+  font-size: var(--omni-font-size-lg);
 }
 
 .brandMarkText {
   font-size: var(--omni-font-size-lg);
   font-weight: var(--omni-font-weight-bold);
+  display: flex;
+  align-items: center;
+  gap: var(--omni-space-2);
+}
+
+.brandMarkBadge {
+  font-size: 10px;
+  font-weight: var(--omni-font-weight-bold);
+  letter-spacing: 0.04em;
+  padding: 2px var(--omni-space-2);
+  border-radius: var(--omni-radius-sm);
+  background: color-mix(in srgb, white 20%, transparent);
+}
+
+.brandGraphic {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
 }
 
 .brandCopy {
@@ -58,6 +96,10 @@
   margin-bottom: var(--omni-space-3);
 }
 
+.brandHeadlineAccent {
+  color: var(--omni-color-primary-200);
+}
+
 .brandSubcopy {
   color: color-mix(in srgb, white 85%, transparent);
   font-size: var(--omni-font-size-md);
@@ -66,29 +108,115 @@
 .brandFooter {
   position: relative;
   font-size: var(--omni-font-size-xs);
-  color: color-mix(in srgb, white 70%, transparent);
+  color: color-mix(in srgb, white 65%, transparent);
 }
 
+/* ---- Decorative geometric mark (CSS only, no image assets) ---- */
+
+.geo {
+  position: relative;
+  width: 260px;
+  height: 260px;
+}
+
+.geoTile {
+  position: absolute;
+  border-radius: var(--omni-radius-md);
+  background: linear-gradient(150deg, color-mix(in srgb, white 30%, transparent), color-mix(in srgb, white 8%, transparent));
+  border: 1px solid color-mix(in srgb, white 30%, transparent);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.18);
+}
+
+.geoTile:nth-child(1) {
+  width: 100px;
+  height: 100px;
+  left: 30px;
+  top: 90px;
+  transform: rotate(-8deg);
+}
+
+.geoTile:nth-child(2) {
+  width: 130px;
+  height: 130px;
+  left: 100px;
+  top: 40px;
+  transform: rotate(6deg);
+  background: linear-gradient(150deg, color-mix(in srgb, white 40%, transparent), color-mix(in srgb, white 12%, transparent));
+}
+
+.geoTile:nth-child(3) {
+  width: 80px;
+  height: 80px;
+  left: 150px;
+  top: 130px;
+  transform: rotate(-4deg);
+}
+
+.geoDot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--omni-color-primary-200);
+}
+
+/* ---- Form panel (right) ---- */
+
 .formPanel {
+  position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: var(--omni-space-6);
+  background: var(--omni-color-surface-alt);
+}
+
+.langButton {
+  position: absolute;
+  top: var(--omni-space-6);
+  right: var(--omni-space-6);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--omni-space-2);
+  padding: var(--omni-space-2) var(--omni-space-3);
+  border-radius: var(--omni-radius-md);
+  border: 1px solid var(--omni-color-border);
   background: var(--omni-color-surface);
+  color: var(--omni-color-text-secondary);
+  font-size: var(--omni-font-size-sm);
+  font-weight: var(--omni-font-weight-medium);
 }
 
 .formCard {
   width: 100%;
-  max-width: 380px;
+  max-width: 400px;
   display: flex;
   flex-direction: column;
   gap: var(--omni-space-6);
+  background: var(--omni-color-surface);
+  border-radius: var(--omni-radius-xl);
+  border: 1px solid var(--omni-color-border);
+  box-shadow: var(--omni-shadow-lg);
+  padding: var(--omni-space-7);
+}
+
+.formIcon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--omni-color-primary-50);
+  color: var(--omni-color-primary-600);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--omni-space-2);
 }
 
 .formHeader {
   display: flex;
   flex-direction: column;
-  gap: var(--omni-space-2);
+  gap: var(--omni-space-1);
 }
 
 .formHeader p {
@@ -101,28 +229,16 @@
   gap: var(--omni-space-4);
 }
 
-.formFooterRow {
+.eyeToggle {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
+  color: var(--omni-color-text-muted);
+  pointer-events: auto;
 }
 
-.checkboxRow {
-  display: flex;
-  align-items: center;
-  gap: var(--omni-space-2);
-  font-size: var(--omni-font-size-sm);
+.eyeToggle:hover {
   color: var(--omni-color-text-secondary);
-}
-
-.linkButton {
-  font-size: var(--omni-font-size-sm);
-  color: var(--omni-color-primary-700);
-  font-weight: var(--omni-font-weight-medium);
-}
-
-.linkButton:hover {
-  text-decoration: underline;
 }
 
 .formError {
@@ -136,12 +252,56 @@
   font-size: var(--omni-font-size-sm);
 }
 
-@media (max-width: 860px) {
+.trustRow {
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  justify-content: center;
+  gap: var(--omni-space-7);
+  margin-top: var(--omni-space-6);
+}
+
+.trustItem {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--omni-space-2);
+  max-width: 140px;
+}
+
+.trustIcon {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--omni-color-primary-50);
+  color: var(--omni-color-primary-600);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.trustTitle {
+  font-size: var(--omni-font-size-xs);
+  font-weight: var(--omni-font-weight-semibold);
+  color: var(--omni-color-text-primary);
+}
+
+.trustDesc {
+  font-size: 11px;
+  color: var(--omni-color-text-muted);
+  line-height: var(--omni-line-height-tight);
+}
+
+@media (max-width: 900px) {
   .page {
     grid-template-columns: 1fr;
   }
 
   .brandPanel {
     display: none;
+  }
+
+  .trustRow {
+    flex-wrap: wrap;
   }
 }

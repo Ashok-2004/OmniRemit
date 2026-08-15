@@ -23,6 +23,7 @@ export function RemoteAppFormPage() {
   const [displayName, setDisplayName] = useState('')
   const [iconKey, setIconKey] = useState('')
   const [manifestUrl, setManifestUrl] = useState('')
+  const [permissionsSourceUrl, setPermissionsSourceUrl] = useState('')
   const [sidebarOrder, setSidebarOrder] = useState(100)
 
   useEffect(() => {
@@ -38,6 +39,7 @@ export function RemoteAppFormPage() {
         setDisplayName(app.displayName)
         setIconKey(app.iconKey ?? '')
         setManifestUrl(app.manifestUrl)
+        setPermissionsSourceUrl(app.permissionsSourceUrl ?? '')
         setSidebarOrder(app.sidebarOrder)
       })
       .catch((err) => {
@@ -60,11 +62,24 @@ export function RemoteAppFormPage() {
       const token = await ensureFreshAccessToken()
 
       if (isEdit && id) {
-        await remoteAppsApi.update(token, id, { displayName, iconKey: iconKey || null, manifestUrl, sidebarOrder })
+        await remoteAppsApi.update(token, id, {
+          displayName,
+          iconKey: iconKey || null,
+          manifestUrl,
+          permissionsSourceUrl: permissionsSourceUrl || null,
+          sidebarOrder,
+        })
       } else {
-        await remoteAppsApi.create(token, { key, displayName, iconKey: iconKey || null, manifestUrl, sidebarOrder })
+        await remoteAppsApi.create(token, {
+          key,
+          displayName,
+          iconKey: iconKey || null,
+          manifestUrl,
+          permissionsSourceUrl: permissionsSourceUrl || null,
+          sidebarOrder,
+        })
       }
-      navigate('/settings/maintenance')
+      navigate('/settings/applications')
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not save this app.')
     } finally {
@@ -80,7 +95,7 @@ export function RemoteAppFormPage() {
     <div className={styles.page}>
       <div className={styles.header}>
         <h1>{isEdit ? 'Edit Remote App' : 'Register Remote App'}</h1>
-        <Button variant="ghost" onClick={() => navigate('/settings/maintenance')}>
+        <Button variant="ghost" onClick={() => navigate('/settings/applications')}>
           Cancel
         </Button>
       </div>
@@ -122,6 +137,15 @@ export function RemoteAppFormPage() {
           onChange={(e) => setIconKey(e.target.value)}
           placeholder="chat-bubble"
           helperText="Optional — an identifier from the host's built-in icon set."
+        />
+
+        <Input
+          label="Permissions source URL"
+          type="url"
+          value={permissionsSourceUrl}
+          onChange={(e) => setPermissionsSourceUrl(e.target.value)}
+          placeholder="https://apps.example.com/employee-service/api/employee-service/permissions"
+          helperText="Optional — a discovery endpoint this app's own backend exposes declaring its current capabilities (e.g. Create, Edit, Delete). Fetched on save and on Resync — add a new capability there and it appears here automatically, nothing to hand-edit."
         />
 
         <Input

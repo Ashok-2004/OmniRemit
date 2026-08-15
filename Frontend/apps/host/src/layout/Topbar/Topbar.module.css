@@ -118,3 +118,12 @@
 .menuItem:hover {
   background: var(--omni-color-surface-alt);
 }
+
+.menuLabel {
+  padding: var(--omni-space-2) var(--omni-space-3) var(--omni-space-1);
+  font-size: var(--omni-font-size-xs);
+  font-weight: var(--omni-font-weight-semibold);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--omni-color-text-muted);
+}

@@ -105,6 +105,39 @@
   box-shadow: 0 6px 8px -1px rgba(79, 70, 229, 0.3);
 }
 
+.temp-password-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-radius: 10px;
+  background: var(--primary-light);
+  border: 1px solid var(--primary);
+  color: var(--text-h);
+  font-size: 14px;
+  margin-bottom: 24px;
+}
+
+.temp-password-value {
+  font-family: var(--mono);
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: white;
+  border: 1px solid var(--border);
+}
+
+.load-error-banner {
+  padding: 14px 18px;
+  border-radius: 10px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid var(--danger);
+  color: var(--danger-hover);
+  font-size: 14px;
+  margin-bottom: 24px;
+}
+
 .empty-state {
   display: flex;
   flex-direction: column;

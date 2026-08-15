@@ -3,24 +3,24 @@
  * allowed to live. Every component styles itself with these custom properties via its own
  * *.module.css file; nothing outside this file may use a raw hex value or an inline style color.
  *
- * Palette derived from the "Omni Suite" reference (green brand accent, white surfaces, soft
+ * Palette derived from the "OmniRemit CRM" reference (blue brand accent, white surfaces, soft
  * neutral grays, pill status badges). Token *names* are semantic, not literal ("primary", not
- * "green"), so a future `[data-theme="dark"]` block can override just the values without any
+ * "blue"), so a future `[data-theme="dark"]` block can override just the values without any
  * component needing to change.
  */
 
 :root {
-  /* ---- Brand scale (teal-green) ---- */
-  --omni-color-primary-50: #ecfdf5;
-  --omni-color-primary-100: #d1fae5;
-  --omni-color-primary-200: #a7f3d0;
-  --omni-color-primary-300: #6ee7b7;
-  --omni-color-primary-400: #34d399;
-  --omni-color-primary-500: #10b981;
-  --omni-color-primary-600: #059669;
-  --omni-color-primary-700: #047857;
-  --omni-color-primary-800: #065f46;
-  --omni-color-primary-900: #064e3b;
+  /* ---- Brand scale (blue) ---- */
+  --omni-color-primary-50: #eff6ff;
+  --omni-color-primary-100: #dbeafe;
+  --omni-color-primary-200: #bfdbfe;
+  --omni-color-primary-300: #93c5fd;
+  --omni-color-primary-400: #60a5fa;
+  --omni-color-primary-500: #3b82f6;
+  --omni-color-primary-600: #2563eb;
+  --omni-color-primary-700: #1d4ed8;
+  --omni-color-primary-800: #1e3a8a;
+  --omni-color-primary-900: #172554;
 
   /* ---- Neutrals ---- */
   --omni-color-surface: #ffffff;

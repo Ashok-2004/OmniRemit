@@ -13,7 +13,7 @@ export interface SidebarAppDto {
   maintenanceMessage: string | null
 }
 
-/** Raw calls against ModuleRegistry's public surface. Admin CRUD calls (Setup > Maintenance) live in features/settings-maintenance/api. */
+/** Raw calls against ModuleRegistry's public surface. Admin CRUD calls (Setup > Applications) live in features/settings-applications/api. */
 export const moduleRegistryClient = {
   forSidebar: (accessToken: string) => apiFetch<SidebarAppDto[]>(`${base}/api/remote-apps/for-sidebar`, { accessToken }),
 }

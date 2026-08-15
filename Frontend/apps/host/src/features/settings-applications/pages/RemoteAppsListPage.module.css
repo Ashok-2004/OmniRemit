@@ -53,6 +53,13 @@
   color: var(--omni-color-text-muted);
 }
 
+.capabilityList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--omni-space-1);
+  max-width: 220px;
+}
+
 .manifestUrl {
   max-width: 280px;
   overflow: hidden;

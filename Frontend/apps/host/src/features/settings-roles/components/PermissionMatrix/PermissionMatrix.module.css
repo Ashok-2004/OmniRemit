@@ -53,6 +53,12 @@
   gap: var(--omni-space-4);
 }
 
+.noCapabilities {
+  font-size: var(--omni-font-size-xs);
+  font-style: italic;
+  color: var(--omni-color-text-muted);
+}
+
 .emptyState {
   padding: var(--omni-space-6);
   text-align: center;

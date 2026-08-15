@@ -26,7 +26,6 @@ export function UserFormPage() {
 
   const [roles, setRoles] = useState<RoleListItemDto[]>([])
   const [catalog, setCatalog] = useState<PermissionFeatureDto[]>([])
-  const [capabilities, setCapabilities] = useState<string[]>([])
   const [roleGrants, setRoleGrants] = useState<Set<string>>(new Set())
 
   const [name, setName] = useState('')
@@ -43,15 +42,13 @@ export function UserFormPage() {
 
     async function bootstrap(token: string) {
       try {
-        const [roleList, catalogList, capabilityList] = await Promise.all([
+        const [roleList, catalogList] = await Promise.all([
           rolesApi.list(token, { pageSize: 100 }),
           permissionsApi.catalog(token),
-          permissionsApi.capabilities(token),
         ])
         if (cancelled) return
         setRoles(roleList.items)
         setCatalog(catalogList)
-        setCapabilities(capabilityList)
 
         if (id) {
           const user = await usersApi.get(token, id)
@@ -207,7 +204,6 @@ export function UserFormPage() {
           <div className={`${styles.panel} ${styles.fullWidthPanel}`}>
             <PermissionOverrideGrid
               catalog={catalog}
-              capabilities={capabilities}
               roleGrants={roleGrants}
               overrides={overrides}
               onChange={setOverrides}

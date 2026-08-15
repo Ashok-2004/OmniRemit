@@ -6,10 +6,11 @@ export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string
   helperText?: string
   errorText?: string
+  leading?: ReactNode
   trailing?: ReactNode
 }
 
-export function Input({ label, helperText, errorText, trailing, required, id, className, ...rest }: InputProps) {
+export function Input({ label, helperText, errorText, leading, trailing, required, id, className, ...rest }: InputProps) {
   const generatedId = useId()
   const inputId = id ?? generatedId
   const hasError = Boolean(errorText)
@@ -23,9 +24,10 @@ export function Input({ label, helperText, errorText, trailing, required, id, cl
         </label>
       )}
       <div className={styles.inputWrapper}>
+        {leading && <span className={styles.leading}>{leading}</span>}
         <input
           id={inputId}
-          className={styles.input}
+          className={classNames(styles.input, Boolean(leading) && styles.inputWithLeading)}
           required={required}
           aria-invalid={hasError || undefined}
           aria-describedby={errorText ? `${inputId}-error` : helperText ? `${inputId}-helper` : undefined}

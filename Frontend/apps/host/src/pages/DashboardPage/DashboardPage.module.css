@@ -35,8 +35,27 @@
   box-shadow: var(--omni-shadow-sm);
   padding: var(--omni-space-5);
   display: flex;
+  align-items: center;
+  gap: var(--omni-space-4);
+}
+
+.statIcon {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--omni-color-primary-100);
+  color: var(--omni-color-primary-700);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.statText {
+  display: flex;
   flex-direction: column;
-  gap: var(--omni-space-2);
+  gap: var(--omni-space-1);
+  min-width: 0;
 }
 
 .statLabel {

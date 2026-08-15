@@ -2,46 +2,31 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { federation } from "@module-federation/vite";
 
-
-
+// Real registered remote app — see the root README's "Contract for future remote apps". Exposes
+// ./App (the contract every remote must satisfy; the host always calls loadRemote(`${key}/App`)),
+// shares react/react-dom as singletons matching the host's versions exactly.
 export default defineConfig({
-
-  base: "/mf/employee_mf/",
-  optimizeDeps: {
-    exclude: ['@myorg/shared']
-  },
-
-
   plugins: [
-
     react(),
 
     federation({
-
       name: "employee_mf",
       filename: "remoteEntry.js",
       manifest: true,
       dts: false,
 
       exposes: {
-        "./EmployeeApp": "./src/App.jsx",
+        "./App": "./src/App.jsx",
       },
 
       shared: {
         react: {
           singleton: true,
-          requiredVersion: false,
+          requiredVersion: "^19.2.0",
         },
-
         "react-dom": {
           singleton: true,
-          requiredVersion: false,
-        },
-
-
-        "react-router-dom": {
-          singleton: true,
-          requiredVersion: false,
+          requiredVersion: "^19.2.0",
         },
       },
     }),
@@ -61,16 +46,12 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 5001,
     cors: true,
-    watch: {
-      ignored: ['!**/node_modules/@myorg/shared/**']
-    }
   },
 
- preview: {
-  host: "0.0.0.0",
-  port: 5001,
-  strictPort: true,
-  cors: true,
+  preview: {
+    host: "0.0.0.0",
+    port: 5001,
+    strictPort: true,
+    cors: true,
   },
-  
 });

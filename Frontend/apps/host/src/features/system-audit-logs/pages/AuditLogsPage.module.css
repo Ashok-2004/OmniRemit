@@ -1,0 +1,74 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--omni-space-5);
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--omni-space-1);
+}
+
+.header p {
+  color: var(--omni-color-text-secondary);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--omni-space-3);
+  flex-wrap: wrap;
+}
+
+.filterInput {
+  max-width: 280px;
+}
+
+.timeCell {
+  white-space: nowrap;
+  color: var(--omni-color-text-secondary);
+  font-size: var(--omni-font-size-xs);
+}
+
+.actionCell {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--omni-font-size-xs);
+}
+
+.mutedText {
+  color: var(--omni-color-text-muted);
+  font-size: var(--omni-font-size-xs);
+}
+
+.detailsCell {
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--omni-color-text-secondary);
+  font-size: var(--omni-font-size-sm);
+}
+
+.emptyCell {
+  text-align: center;
+  color: var(--omni-color-text-muted);
+  padding: var(--omni-space-7);
+}
+
+.errorBanner {
+  padding: var(--omni-space-3) var(--omni-space-4);
+  border-radius: var(--omni-radius-md);
+  background: var(--omni-color-danger-bg);
+  color: var(--omni-color-danger-text);
+  font-size: var(--omni-font-size-sm);
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: var(--omni-space-3);
+  justify-content: center;
+  color: var(--omni-color-text-secondary);
+  font-size: var(--omni-font-size-sm);
+}

@@ -25,7 +25,6 @@ export function RoleFormPage() {
   const [isSystemRole, setIsSystemRole] = useState(false)
 
   const [catalog, setCatalog] = useState<PermissionFeatureDto[]>([])
-  const [capabilities, setCapabilities] = useState<string[]>([])
   const [roleUsers, setRoleUsers] = useState<RoleUserDto[] | undefined>(undefined)
 
   const [name, setName] = useState('')
@@ -40,13 +39,9 @@ export function RoleFormPage() {
 
     async function bootstrap(token: string) {
       try {
-        const [catalogList, capabilityList] = await Promise.all([
-          permissionsApi.catalog(token),
-          permissionsApi.capabilities(token),
-        ])
+        const catalogList = await permissionsApi.catalog(token)
         if (cancelled) return
         setCatalog(catalogList)
-        setCapabilities(capabilityList)
 
         if (id) {
           const role = await rolesApi.get(token, id)
@@ -136,7 +131,6 @@ export function RoleFormPage() {
 
             <PermissionMatrix
               catalog={catalog}
-              capabilities={capabilities}
               permissions={permissions}
               onChange={setPermissions}
               disabled={isAdministrator}

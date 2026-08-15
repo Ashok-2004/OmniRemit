@@ -5,14 +5,20 @@ import styles from './PermissionMatrix.module.css'
 
 export interface PermissionMatrixProps {
   catalog: PermissionFeatureDto[]
-  capabilities: string[]
   permissions: RolePermissionGrantDto[]
   onChange: (permissions: RolePermissionGrantDto[]) => void
   disabled?: boolean
 }
 
-/** Defines what a role grants outright — every checked cell becomes a RolePermission row. Grouped by catalog source, each group has a "Select all" toggle. */
-export function PermissionMatrix({ catalog, capabilities, permissions, onChange, disabled }: PermissionMatrixProps) {
+/**
+ * Defines what a role grants outright — every checked cell becomes a RolePermission row. Grouped
+ * by catalog source, each group has a "Select all" toggle. Each feature renders ONLY its own
+ * declared capabilities (feature.capabilities) — not a shared global column list — so a feature
+ * that only declares Create+Edit shows exactly those two checkboxes, and a newly-added capability
+ * on any feature (host or remote) shows up here the next time the catalog is fetched, with nothing
+ * to hand-edit on this side.
+ */
+export function PermissionMatrix({ catalog, permissions, onChange, disabled }: PermissionMatrixProps) {
   const grouped = groupBy(catalog, (f) => f.source)
   const has = (featureKey: string, capability: string) =>
     permissions.some((p) => p.featureKey === featureKey && p.capability === capability)
@@ -26,8 +32,8 @@ export function PermissionMatrix({ catalog, capabilities, permissions, onChange,
   }
 
   function toggleGroup(features: PermissionFeatureDto[]) {
-    const groupKeys = features.flatMap((f) => capabilities.map((c) => ({ featureKey: f.key, capability: c })))
-    const allSelected = groupKeys.every((g) => has(g.featureKey, g.capability))
+    const groupKeys = features.flatMap((f) => f.capabilities.map((c) => ({ featureKey: f.key, capability: c.key })))
+    const allSelected = groupKeys.length > 0 && groupKeys.every((g) => has(g.featureKey, g.capability))
 
     if (allSelected) {
       onChange(permissions.filter((p) => !features.some((f) => f.key === p.featureKey)))
@@ -57,15 +63,19 @@ export function PermissionMatrix({ catalog, capabilities, permissions, onChange,
             <div className={styles.row} key={feature.key}>
               <span className={styles.featureName}>{feature.displayName}</span>
               <div className={styles.capabilities}>
-                {capabilities.map((capability) => (
-                  <Checkbox
-                    key={capability}
-                    label={capability}
-                    checked={has(feature.key, capability)}
-                    disabled={disabled}
-                    onChange={() => toggle(feature.key, capability)}
-                  />
-                ))}
+                {feature.capabilities.length === 0 ? (
+                  <span className={styles.noCapabilities}>No actions declared yet</span>
+                ) : (
+                  feature.capabilities.map((capability) => (
+                    <Checkbox
+                      key={capability.key}
+                      label={capability.displayName}
+                      checked={has(feature.key, capability.key)}
+                      disabled={disabled}
+                      onChange={() => toggle(feature.key, capability.key)}
+                    />
+                  ))
+                )}
               </div>
             </div>
           ))}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { createUser, deleteUser, getCurrentUser, getUserPermissions, verifyBackendPermission } from "../services/authService";
+import { createUser, deleteUser } from "../services/authService";
+import { EMPLOYEE_FEATURE_KEY, USERS_FEATURE_KEY, hasCapability } from "../api/hostBridge";
 import EmployeeTable from "../components/EmployeeTable";
 import EmployeeModal from "../components/EmployeeModal";
 import {
@@ -10,53 +11,49 @@ import {
 } from "../services/employeeService";
 import "../styles/dashboard.css";
 
+function extractErrorMessage(error, fallback) {
+  return (
+    error?.response?.data?.message ??
+    error?.response?.data?.title ??
+    error?.message ??
+    fallback
+  );
+}
+
 function Dashboard() {
   const [employees, setEmployees] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
-  
-  const [canCreate, setCanCreate] = useState(false);
-  const [canEdit, setCanEdit] = useState(false);
-  const [canDelete, setCanDelete] = useState(false);
+  const [loadError, setLoadError] = useState(null);
+  const [tempPassword, setTempPassword] = useState(null);
+
+  // Read straight from the host's own decoded JWT claims (see hostBridge.js) — no network round
+  // trip, and it re-evaluates on every render so a role change takes effect on the next interaction
+  // without a page reload. "Add Member" needs BOTH capabilities because it also provisions a
+  // platform login for the new hire (see handleSubmit).
+  const canCreate = hasCapability(EMPLOYEE_FEATURE_KEY, "Create") && hasCapability(USERS_FEATURE_KEY, "Create");
+  const canEdit = hasCapability(EMPLOYEE_FEATURE_KEY, "Edit");
+  const canDelete = hasCapability(EMPLOYEE_FEATURE_KEY, "Delete");
 
   const loadEmployees = async () => {
+    setLoadError(null);
     try {
       const data = await getEmployees();
       setEmployees(data);
     } catch (error) {
       console.error("Failed to load employees:", error);
-    }
-  };
-
-  const loadPermissions = async () => {
-    try {
-      const user = await getCurrentUser();
-      if (!user) return;
-      
-      const permissions = await getUserPermissions(user.id);
-      
-      // Look for permissions under EmployeeModule
-      const employeePerms = permissions.filter(p => p.moduleName.toLowerCase() === "employeemodule" || p.moduleName === "*");
-      
-      const hasWildcardAction = employeePerms.some(p => p.action === "*");
-      
-      setCanCreate(hasWildcardAction || employeePerms.some(p => p.action.toLowerCase() === "create_employee"));
-      setCanEdit(hasWildcardAction || employeePerms.some(p => p.action.toLowerCase() === "edit_employee"));
-      setCanDelete(hasWildcardAction || employeePerms.some(p => p.action.toLowerCase() === "delete_employee"));
-      
-    } catch (error) {
-      console.error("Failed to load permissions:", error);
+      setLoadError(extractErrorMessage(error, "Could not load employees."));
     }
   };
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadEmployees();
-    loadPermissions();
   }, []);
 
   const handleCreate = () => {
     setSelectedEmployee(null);
+    setTempPassword(null);
     setIsModalOpen(true);
   };
 
@@ -66,70 +63,45 @@ function Dashboard() {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm("Are you sure you want to delete this employee?")) {
-      const user = await getCurrentUser();
-      if (!user) {
-        alert("Authentication required.");
-        return;
-      }
-      
-      const hasPermission = await verifyBackendPermission(user.id, "EmployeeModule", "delete_employee");
-      if (!hasPermission) {
-        alert("Backend Verification Failed: You do not have permission to delete employees.");
-        return;
-      }
-      
+    if (!window.confirm("Are you sure you want to delete this employee?")) return;
+
+    try {
       await deleteEmployee(id);
-      loadEmployees();
+      await loadEmployees();
+    } catch (error) {
+      console.error("Failed to delete employee:", error);
+      window.alert(extractErrorMessage(error, "Failed to delete this employee."));
     }
   };
 
   const handleSubmit = async (payload) => {
     try {
-      const user = await getCurrentUser();
-      if (!user) {
-        alert("Authentication required.");
-        return;
-      }
-
       if (selectedEmployee) {
-        const hasPermission = await verifyBackendPermission(user.id, "EmployeeModule", "edit_employee");
-        if (!hasPermission) {
-          alert("Backend Verification Failed: You do not have permission to edit employees.");
-          return;
-        }
         await updateEmployee(selectedEmployee.id, payload);
       } else {
-        const hasPermission = await verifyBackendPermission(user.id, "EmployeeModule", "create_employee");
-        if (!hasPermission) {
-          alert("Backend Verification Failed: You do not have permission to create employees.");
-          return;
-        }
+        // Onboard: create the platform login first (AuthService generates the one-time password),
+        // then the HR record. If the second call fails, roll back the first — a compensating
+        // transaction across the two services' own databases, since there's no shared transaction
+        // to rely on.
+        const userRes = await createUser({ name: payload.name, email: payload.email, roleId: payload.roleId });
 
-        // First create user in Auth Service
-        const userRes = await createUser({
-          email: payload.email,
-          password: "Password@123", // Default password
-          roleId: payload.roleId
-        });
-        
         try {
-          // Then create employee in Employee Service
           await createEmployee(payload);
         } catch (employeeError) {
-          // Compensating transaction: roll back user creation if employee creation fails
-          if (userRes && userRes.userId) {
-            console.warn("Employee creation failed, rolling back user creation...");
-            await deleteUser(userRes.userId);
-          }
+          console.warn("Employee creation failed, rolling back user creation...");
+          await deleteUser(userRes.user.id).catch((rollbackError) => {
+            console.error("Rollback failed — a user account may be orphaned:", rollbackError);
+          });
           throw employeeError;
         }
+
+        setTempPassword(userRes.temporaryPassword);
       }
       setIsModalOpen(false);
-      loadEmployees();
+      await loadEmployees();
     } catch (error) {
       console.error("Error saving employee/user:", error);
-      alert("Failed to save. Please ensure the email is unique or check the server logs.");
+      window.alert(extractErrorMessage(error, "Failed to save. Please ensure the email is unique."));
     }
   };
 
@@ -151,6 +123,15 @@ function Dashboard() {
             </button>
           )}
         </div>
+
+        {tempPassword && (
+          <div className="temp-password-banner">
+            <span>Member created. Share this temporary password securely — it won&apos;t be shown again:</span>
+            <span className="temp-password-value">{tempPassword}</span>
+          </div>
+        )}
+
+        {loadError && <div className="load-error-banner">{loadError}</div>}
 
         <div className="metrics-overview">
           <div className="metric-card">

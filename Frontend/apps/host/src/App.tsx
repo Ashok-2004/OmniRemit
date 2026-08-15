@@ -16,10 +16,16 @@ import { UsersListPage } from './features/settings-users/pages/UsersListPage'
 import { UserFormPage } from './features/settings-users/pages/UserFormPage'
 import { RolesListPage } from './features/settings-roles/pages/RolesListPage'
 import { RoleFormPage } from './features/settings-roles/pages/RoleFormPage'
-import { RemoteAppsListPage } from './features/settings-maintenance/pages/RemoteAppsListPage'
-import { RemoteAppFormPage } from './features/settings-maintenance/pages/RemoteAppFormPage'
+import { RemoteAppsListPage } from './features/settings-applications/pages/RemoteAppsListPage'
+import { RemoteAppFormPage } from './features/settings-applications/pages/RemoteAppFormPage'
+import { AuditLogsPage } from './features/system-audit-logs/pages/AuditLogsPage'
 
-const SETTINGS_FEATURES = ['host.settings.users', 'host.settings.roles', 'host.settings.maintenance']
+const FEATURE_KEYS = {
+  users: 'host.settings.users',
+  roles: 'host.settings.roles',
+  applications: 'host.settings.applications',
+  auditLogs: 'host.system.audit-logs',
+} as const
 
 function LoginRoute() {
   const status = useAuthStore((s) => s.status)
@@ -60,14 +66,20 @@ function AuthenticatedShell() {
       })
   }, [accessToken, registryStatus, ensureFreshAccessToken, fetchForSidebar])
 
-  const canAccessSettings =
-    Boolean(user?.isAdministrator) || SETTINGS_FEATURES.some((key) => hasCapability(key, 'View'))
+  const isAdministrator = Boolean(user?.isAdministrator)
+  const settingsAccess = {
+    users: isAdministrator || hasCapability(FEATURE_KEYS.users, 'View'),
+    roles: isAdministrator || hasCapability(FEATURE_KEYS.roles, 'View'),
+    applications: isAdministrator || hasCapability(FEATURE_KEYS.applications, 'View'),
+  }
+  const canAccessAuditLogs = isAdministrator || hasCapability(FEATURE_KEYS.auditLogs, 'View')
 
   return (
     <AppShell
       apps={registryStatus === 'idle' || registryStatus === 'loading' ? undefined : registryApps}
       userName={user?.name}
-      canAccessSettings={canAccessSettings}
+      settingsAccess={settingsAccess}
+      canAccessAuditLogs={canAccessAuditLogs}
       onLogout={() => {
         void logout().then(() => navigate('/login', { replace: true }))
       }}
@@ -97,12 +109,21 @@ function AppRoutes() {
         <Route index element={<DashboardPage />} />
         <Route path="apps/:appKey" element={<RemoteAppPage />} />
 
+        <Route
+          path="system/audit-logs"
+          element={
+            <RequireCapability featureKey={FEATURE_KEYS.auditLogs}>
+              <AuditLogsPage />
+            </RequireCapability>
+          }
+        />
+
         <Route path="settings" element={<SetupPanel />}>
           <Route index element={<Navigate to="users" replace />} />
           <Route
             path="users"
             element={
-              <RequireCapability featureKey="host.settings.users">
+              <RequireCapability featureKey={FEATURE_KEYS.users}>
                 <UsersListPage />
               </RequireCapability>
             }
@@ -110,7 +131,7 @@ function AppRoutes() {
           <Route
             path="users/new"
             element={
-              <RequireCapability featureKey="host.settings.users" capability="Create">
+              <RequireCapability featureKey={FEATURE_KEYS.users} capability="Create">
                 <UserFormPage />
               </RequireCapability>
             }
@@ -118,7 +139,7 @@ function AppRoutes() {
           <Route
             path="users/:id"
             element={
-              <RequireCapability featureKey="host.settings.users" capability="Edit">
+              <RequireCapability featureKey={FEATURE_KEYS.users} capability="Edit">
                 <UserFormPage />
               </RequireCapability>
             }
@@ -126,7 +147,7 @@ function AppRoutes() {
           <Route
             path="roles"
             element={
-              <RequireCapability featureKey="host.settings.roles">
+              <RequireCapability featureKey={FEATURE_KEYS.roles}>
                 <RolesListPage />
               </RequireCapability>
             }
@@ -134,7 +155,7 @@ function AppRoutes() {
           <Route
             path="roles/new"
             element={
-              <RequireCapability featureKey="host.settings.roles" capability="Create">
+              <RequireCapability featureKey={FEATURE_KEYS.roles} capability="Create">
                 <RoleFormPage />
               </RequireCapability>
             }
@@ -142,31 +163,31 @@ function AppRoutes() {
           <Route
             path="roles/:id"
             element={
-              <RequireCapability featureKey="host.settings.roles" capability="Edit">
+              <RequireCapability featureKey={FEATURE_KEYS.roles} capability="Edit">
                 <RoleFormPage />
               </RequireCapability>
             }
           />
           <Route
-            path="maintenance"
+            path="applications"
             element={
-              <RequireCapability featureKey="host.settings.maintenance">
+              <RequireCapability featureKey={FEATURE_KEYS.applications}>
                 <RemoteAppsListPage />
               </RequireCapability>
             }
           />
           <Route
-            path="maintenance/new"
+            path="applications/new"
             element={
-              <RequireCapability featureKey="host.settings.maintenance" capability="Create">
+              <RequireCapability featureKey={FEATURE_KEYS.applications} capability="Create">
                 <RemoteAppFormPage />
               </RequireCapability>
             }
           />
           <Route
-            path="maintenance/:id"
+            path="applications/:id"
             element={
-              <RequireCapability featureKey="host.settings.maintenance" capability="Edit">
+              <RequireCapability featureKey={FEATURE_KEYS.applications} capability="Edit">
                 <RemoteAppFormPage />
               </RequireCapability>
             }

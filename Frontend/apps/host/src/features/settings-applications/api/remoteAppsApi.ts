@@ -6,6 +6,11 @@ const base = env.moduleRegistryUrl
 
 export type RemoteAppStatus = 'Active' | 'Maintenance' | 'Disabled'
 
+export interface CapabilityDto {
+  key: string
+  displayName: string
+}
+
 export interface RemoteAppDto {
   id: string
   key: string
@@ -16,6 +21,8 @@ export interface RemoteAppDto {
   status: RemoteAppStatus
   maintenanceMessage: string | null
   permissionFeatureKey: string
+  permissionsSourceUrl: string | null
+  capabilities: CapabilityDto[]
   createdAt: string
   updatedAt: string
 }
@@ -25,6 +32,7 @@ export interface CreateRemoteAppRequest {
   displayName: string
   iconKey?: string | null
   manifestUrl: string
+  permissionsSourceUrl?: string | null
   sidebarOrder?: number
 }
 
@@ -32,6 +40,7 @@ export interface UpdateRemoteAppRequest {
   displayName: string
   iconKey?: string | null
   manifestUrl: string
+  permissionsSourceUrl?: string | null
   sidebarOrder: number
 }
 

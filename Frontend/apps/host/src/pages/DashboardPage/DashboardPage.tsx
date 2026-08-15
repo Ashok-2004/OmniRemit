@@ -1,14 +1,16 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactElement } from 'react'
 import { useAuthStore } from '../../features/auth/store/authStore'
 import { usersApi } from '../../features/settings-users/api/usersApi'
 import { rolesApi } from '../../features/settings-roles/api/rolesApi'
-import { remoteAppsApi } from '../../features/settings-maintenance/api/remoteAppsApi'
+import { remoteAppsApi } from '../../features/settings-applications/api/remoteAppsApi'
 import { SkeletonBlock } from '../../shared/components/Skeleton'
+import { Icon, type IconProps } from '../../shared/components/Icon/Icon'
 import styles from './DashboardPage.module.css'
 
 interface Stat {
   label: string
   value: number
+  Icon: (props: IconProps) => ReactElement
 }
 
 /**
@@ -24,7 +26,7 @@ export function DashboardPage() {
 
   const canViewUsers = Boolean(user?.isAdministrator) || hasCapability('host.settings.users', 'View')
   const canViewRoles = Boolean(user?.isAdministrator) || hasCapability('host.settings.roles', 'View')
-  const canViewApps = Boolean(user?.isAdministrator) || hasCapability('host.settings.maintenance', 'View')
+  const canViewApps = Boolean(user?.isAdministrator) || hasCapability('host.settings.applications', 'View')
 
   useEffect(() => {
     const token = accessToken
@@ -33,10 +35,14 @@ export function DashboardPage() {
 
     async function load(token: string) {
       const requests: Promise<Stat>[] = []
-      if (canViewUsers) requests.push(usersApi.list(token, { pageSize: 1 }).then((r) => ({ label: 'Users', value: r.total })))
-      if (canViewRoles) requests.push(rolesApi.list(token, { pageSize: 1 }).then((r) => ({ label: 'Roles', value: r.total })))
+      if (canViewUsers)
+        requests.push(usersApi.list(token, { pageSize: 1 }).then((r) => ({ label: 'Users', value: r.total, Icon: Icon.Users })))
+      if (canViewRoles)
+        requests.push(rolesApi.list(token, { pageSize: 1 }).then((r) => ({ label: 'Roles', value: r.total, Icon: Icon.ShieldCheck })))
       if (canViewApps)
-        requests.push(remoteAppsApi.list(token, { pageSize: 1 }).then((r) => ({ label: 'Registered apps', value: r.total })))
+        requests.push(
+          remoteAppsApi.list(token, { pageSize: 1 }).then((r) => ({ label: 'Registered apps', value: r.total, Icon: Icon.Grid })),
+        )
 
       try {
         const results = await Promise.all(requests)
@@ -67,13 +73,21 @@ export function DashboardPage() {
               <div className={styles.statCard} key={stat && 'label' in stat ? stat.label : i}>
                 {stat && 'label' in stat ? (
                   <>
-                    <span className={styles.statLabel}>{stat.label}</span>
-                    <span className={styles.statValue}>{stat.value}</span>
+                    <span className={styles.statIcon} aria-hidden="true">
+                      <stat.Icon width={20} height={20} />
+                    </span>
+                    <div className={styles.statText}>
+                      <span className={styles.statLabel}>{stat.label}</span>
+                      <span className={styles.statValue}>{stat.value}</span>
+                    </div>
                   </>
                 ) : (
                   <>
-                    <SkeletonBlock height={14} width="60%" />
-                    <SkeletonBlock height={28} width="40%" />
+                    <SkeletonBlock height={40} width={40} />
+                    <div className={styles.statText}>
+                      <SkeletonBlock height={14} width="60%" />
+                      <SkeletonBlock height={28} width="40%" />
+                    </div>
                   </>
                 )}
               </div>
@@ -86,7 +100,7 @@ export function DashboardPage() {
         <h2>Getting started</h2>
         <p>
           Remote apps you have access to appear in the sidebar once an administrator registers them
-          in Setup &gt; Maintenance. If you don't see anything there yet, ask an administrator to
+          in Setup &gt; Applications. If you don't see anything there yet, ask an administrator to
           register your first app.
         </p>
       </div>

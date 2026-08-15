@@ -5,7 +5,6 @@ import styles from './PermissionOverrideGrid.module.css'
 
 export interface PermissionOverrideGridProps {
   catalog: PermissionFeatureDto[]
-  capabilities: string[]
   /** "featureKey:Capability" strings the currently-selected role grants — the baseline overrides are layered on top of. */
   roleGrants: Set<string>
   overrides: PermissionOverrideDto[]
@@ -16,11 +15,11 @@ export interface PermissionOverrideGridProps {
 /**
  * Tri-state per cell: role-default (no override row), Grant (adds a capability the role doesn't
  * have), Revoke (removes one it does) — see AuthService's PermissionClaimsBuilder for the same
- * logic applied server-side at login.
+ * logic applied server-side at login. Each feature renders only its own declared capabilities
+ * (feature.capabilities), matching PermissionMatrix — no shared global column list.
  */
 export function PermissionOverrideGrid({
   catalog,
-  capabilities,
   roleGrants,
   overrides,
   onChange,
@@ -48,28 +47,32 @@ export function PermissionOverrideGrid({
             <div className={styles.row} key={feature.key}>
               <span className={styles.featureName}>{feature.displayName}</span>
               <div className={styles.capabilities}>
-                {capabilities.map((capability) => {
-                  const key = `${feature.key}:${capability}`
-                  const roleGrantsIt = roleGrants.has(key)
-                  const override = overrides.find((o) => o.featureKey === feature.key && o.capability === capability)
-                  const checked = override ? override.effect === 'Grant' : roleGrantsIt
+                {feature.capabilities.length === 0 ? (
+                  <span className={styles.noCapabilities}>No actions declared yet</span>
+                ) : (
+                  feature.capabilities.map((capability) => {
+                    const key = `${feature.key}:${capability.key}`
+                    const roleGrantsIt = roleGrants.has(key)
+                    const override = overrides.find((o) => o.featureKey === feature.key && o.capability === capability.key)
+                    const checked = override ? override.effect === 'Grant' : roleGrantsIt
 
-                  return (
-                    <span
-                      className={styles.cell}
-                      key={capability}
-                      title={override ? `Overrides the role's default (${roleGrantsIt ? 'granted' : 'not granted'})` : undefined}
-                    >
-                      <Checkbox
-                        label={capability}
-                        checked={checked}
-                        disabled={disabled}
-                        onChange={() => toggle(feature.key, capability, roleGrantsIt)}
-                      />
-                      {override && <span className={styles.overrideDot} aria-hidden="true" />}
-                    </span>
-                  )
-                })}
+                    return (
+                      <span
+                        className={styles.cell}
+                        key={capability.key}
+                        title={override ? `Overrides the role's default (${roleGrantsIt ? 'granted' : 'not granted'})` : undefined}
+                      >
+                        <Checkbox
+                          label={capability.displayName}
+                          checked={checked}
+                          disabled={disabled}
+                          onChange={() => toggle(feature.key, capability.key, roleGrantsIt)}
+                        />
+                        {override && <span className={styles.overrideDot} aria-hidden="true" />}
+                      </span>
+                    )
+                  })
+                )}
               </div>
             </div>
           ))}

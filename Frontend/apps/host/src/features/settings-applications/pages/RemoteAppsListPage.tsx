@@ -6,12 +6,13 @@ import { Input } from '../../../shared/components/Input/Input'
 import { Table } from '../../../shared/components/Table/Table'
 import { SkeletonTable } from '../../../shared/components/Skeleton'
 import { Modal } from '../../../shared/components/Modal/Modal'
+import { Badge } from '../../../shared/components/Badge/Badge'
 import { ApiError } from '../../../shared/api/httpClient'
 import { remoteAppsApi, type RemoteAppDto } from '../api/remoteAppsApi'
 import { StatusToggle } from '../components/StatusToggle/StatusToggle'
 import styles from './RemoteAppsListPage.module.css'
 
-const FEATURE = 'host.settings.maintenance'
+const FEATURE = 'host.settings.applications'
 const PAGE_SIZE = 20
 
 export function RemoteAppsListPage() {
@@ -79,14 +80,14 @@ export function RemoteAppsListPage() {
   return (
     <div className={styles.page}>
       <div className={styles.header}>
-        <h1>Maintenance</h1>
+        <h1>Applications</h1>
         <p>Register remote apps, control what's visible in the sidebar, and set maintenance messages.</p>
       </div>
 
       <div className={styles.toolbar}>
         <div className={styles.toolbarActions}>
           {canCreate && (
-            <Link to="/settings/maintenance/new">
+            <Link to="/settings/applications/new">
               <Button>+ Register App</Button>
             </Link>
           )}
@@ -114,6 +115,7 @@ export function RemoteAppsListPage() {
           <thead>
             <tr>
               <th>App</th>
+              <th>Capabilities</th>
               <th>Order</th>
               <th>Manifest URL</th>
               <th>Status</th>
@@ -123,7 +125,7 @@ export function RemoteAppsListPage() {
           <tbody>
             {apps.length === 0 && (
               <tr>
-                <td colSpan={5} className={styles.emptyCell}>
+                <td colSpan={6} className={styles.emptyCell}>
                   No remote apps registered yet.
                 </td>
               </tr>
@@ -134,7 +136,7 @@ export function RemoteAppsListPage() {
                   <div className={styles.nameCell}>
                     <div>
                       {canEdit ? (
-                        <Link to={`/settings/maintenance/${app.id}`} className={styles.nameLink}>
+                        <Link to={`/settings/applications/${app.id}`} className={styles.nameLink}>
                           {app.displayName}
                         </Link>
                       ) : (
@@ -143,6 +145,19 @@ export function RemoteAppsListPage() {
                       <div className={styles.keyText}>{app.key}</div>
                     </div>
                   </div>
+                </td>
+                <td>
+                  {app.capabilities.length === 0 ? (
+                    <span className={styles.keyText}>None declared</span>
+                  ) : (
+                    <div className={styles.capabilityList}>
+                      {app.capabilities.map((cap) => (
+                        <Badge key={cap.key} tone="info">
+                          {cap.displayName}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
                 </td>
                 <td>{app.sidebarOrder}</td>
                 <td className={styles.manifestUrl} title={app.manifestUrl}>

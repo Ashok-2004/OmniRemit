@@ -37,6 +37,12 @@
   gap: var(--omni-space-4);
 }
 
+.noCapabilities {
+  font-size: var(--omni-font-size-xs);
+  font-style: italic;
+  color: var(--omni-color-text-muted);
+}
+
 .cell {
   display: inline-flex;
   align-items: center;

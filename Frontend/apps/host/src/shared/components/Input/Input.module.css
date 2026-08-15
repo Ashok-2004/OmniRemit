@@ -69,6 +69,19 @@
   align-items: center;
 }
 
+.leading {
+  position: absolute;
+  left: var(--omni-space-3);
+  display: flex;
+  align-items: center;
+  color: var(--omni-color-text-muted);
+  pointer-events: none;
+}
+
+.inputWithLeading {
+  padding-left: calc(var(--omni-space-3) + 20px + var(--omni-space-2));
+}
+
 .helperText {
   font-size: var(--omni-font-size-xs);
   color: var(--omni-color-text-muted);

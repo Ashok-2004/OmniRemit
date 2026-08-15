@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import { classNames } from '../../shared/utils/classNames'
 import { SkeletonBlock } from '../../shared/components/Skeleton'
+import { Icon } from '../../shared/components/Icon/Icon'
 import styles from './Sidebar.module.css'
 
 export interface SidebarAppItem {
@@ -12,13 +13,15 @@ export interface SidebarAppItem {
 export interface SidebarProps {
   /** undefined while the registry is still loading, [] once loaded with nothing registered/visible. */
   apps?: SidebarAppItem[]
+  /** Gates the System section — currently just Audit Logs, deliberately the only System item (no Security/Integrations/System Settings). */
+  canAccessAuditLogs?: boolean
 }
 
 function navItemClass({ isActive }: { isActive: boolean }) {
   return classNames(styles.navItem, isActive && styles.navItemActive)
 }
 
-export function Sidebar({ apps }: SidebarProps) {
+export function Sidebar({ apps, canAccessAuditLogs }: SidebarProps) {
   return (
     <aside className={styles.sidebar}>
       <div className={styles.brand}>
@@ -31,7 +34,7 @@ export function Sidebar({ apps }: SidebarProps) {
       <nav className={styles.nav} aria-label="Primary">
         <NavLink to="/" end className={navItemClass}>
           <span className={styles.navIcon} aria-hidden="true">
-            ⌂
+            <Icon.Home width={18} height={18} />
           </span>
           <span className={styles.navLabel}>Dashboard</span>
         </NavLink>
@@ -55,6 +58,18 @@ export function Sidebar({ apps }: SidebarProps) {
             <span className={styles.navLabel}>{app.displayName}</span>
           </NavLink>
         ))}
+
+        {canAccessAuditLogs && (
+          <>
+            <div className={styles.sectionLabel}>System</div>
+            <NavLink to="/system/audit-logs" className={navItemClass}>
+              <span className={styles.navIcon} aria-hidden="true">
+                <Icon.FileText width={18} height={18} />
+              </span>
+              <span className={styles.navLabel}>Audit Logs</span>
+            </NavLink>
+          </>
+        )}
       </nav>
     </aside>
   )
