@@ -29,20 +29,20 @@ public class RolesController(RoleAppService roles) : ControllerBase
     [RequirePermission(Feature, "Create")]
     public async Task<ActionResult<RoleDetailDto>> Create([FromBody] UpsertRoleRequest request, CancellationToken ct)
     {
-        var result = await roles.CreateAsync(request, ct);
+        var result = await roles.CreateAsync(request, CurrentUserId(), ct);
         return CreatedAtAction(nameof(Get), new { id = result.Id }, result);
     }
 
     [HttpPut("{id:guid}")]
     [RequirePermission(Feature, "Edit")]
     public async Task<ActionResult<RoleDetailDto>> Update(Guid id, [FromBody] UpsertRoleRequest request, CancellationToken ct)
-        => Ok(await roles.UpdateAsync(id, request, ct));
+        => Ok(await roles.UpdateAsync(id, request, CurrentUserId(), ct));
 
     [HttpDelete("{id:guid}")]
     [RequirePermission(Feature, "Delete")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
-        await roles.DeleteAsync(id, ct);
+        await roles.DeleteAsync(id, CurrentUserId(), ct);
         return NoContent();
     }
 
@@ -50,4 +50,10 @@ public class RolesController(RoleAppService roles) : ControllerBase
     [RequirePermission(Feature, "View")]
     public async Task<ActionResult<IReadOnlyList<RoleUserDto>>> GetUsers(Guid id, CancellationToken ct)
         => Ok(await roles.GetUsersAsync(id, ct));
+
+    private Guid? CurrentUserId()
+    {
+        var sub = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
+        return Guid.TryParse(sub, out var id) ? id : null;
+    }
 }

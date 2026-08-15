@@ -9,9 +9,9 @@ public interface IEmployeeService
 
     Task<EmployeeResponse?> GetByIdAsync(Guid id);
 
-    Task<EmployeeResponse> CreateAsync(CreateEmployeeRequest request);
+    Task<EmployeeResponse> CreateAsync(CreateEmployeeRequest request, Guid? actorUserId, string? actorName);
 
-    Task<EmployeeResponse?> UpdateAsync(Guid id, UpdateEmployeeRequest request);
+    Task<EmployeeResponse?> UpdateAsync(Guid id, UpdateEmployeeRequest request, Guid? actorUserId, string? actorName);
 
-    Task<bool> DeleteAsync(Guid id);
+    Task<bool> DeleteAsync(Guid id, Guid? actorUserId, string? actorName);
 }

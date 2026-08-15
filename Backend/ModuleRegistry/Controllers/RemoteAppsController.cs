@@ -12,9 +12,9 @@ namespace ModuleRegistry.Controllers;
 [Authorize]
 public class RemoteAppsController(RemoteAppAppService remoteApps) : ControllerBase
 {
-    // Must match AuthService.Infrastructure.Seed.AuthDbSeeder.HostFeatureKeys.SettingsMaintenance —
+    // Must match AuthService.Infrastructure.Seed.AuthDbSeeder.HostFeatureKeys.SettingsApplications —
     // the two services don't share a code package, so this string is kept in sync by hand.
-    private const string Feature = "host.settings.maintenance";
+    private const string Feature = "host.settings.applications";
 
     [HttpGet]
     [RequirePermission(Feature, "View")]
@@ -31,25 +31,25 @@ public class RemoteAppsController(RemoteAppAppService remoteApps) : ControllerBa
     [RequirePermission(Feature, "Create")]
     public async Task<ActionResult<RemoteAppDto>> Create([FromBody] CreateRemoteAppRequest request, CancellationToken ct)
     {
-        var result = await remoteApps.CreateAsync(request, CurrentUserId(), ct);
+        var result = await remoteApps.CreateAsync(request, CurrentUserId(), CurrentUserName(), ct);
         return CreatedAtAction(nameof(Get), new { id = result.Id }, result);
     }
 
     [HttpPut("{id:guid}")]
     [RequirePermission(Feature, "Edit")]
     public async Task<ActionResult<RemoteAppDto>> Update(Guid id, [FromBody] UpdateRemoteAppRequest request, CancellationToken ct)
-        => Ok(await remoteApps.UpdateAsync(id, request, CurrentUserId(), ct));
+        => Ok(await remoteApps.UpdateAsync(id, request, CurrentUserId(), CurrentUserName(), ct));
 
     [HttpPatch("{id:guid}/status")]
     [RequirePermission(Feature, "Edit")]
     public async Task<ActionResult<RemoteAppDto>> UpdateStatus(Guid id, [FromBody] UpdateRemoteAppStatusRequest request, CancellationToken ct)
-        => Ok(await remoteApps.UpdateStatusAsync(id, request.Status, request.MaintenanceMessage, CurrentUserId(), ct));
+        => Ok(await remoteApps.UpdateStatusAsync(id, request.Status, request.MaintenanceMessage, CurrentUserId(), CurrentUserName(), ct));
 
     [HttpDelete("{id:guid}")]
     [RequirePermission(Feature, "Delete")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
-        await remoteApps.DeleteAsync(id, ct);
+        await remoteApps.DeleteAsync(id, CurrentUserId(), CurrentUserName(), ct);
         return NoContent();
     }
 
@@ -79,4 +79,7 @@ public class RemoteAppsController(RemoteAppAppService remoteApps) : ControllerBa
         var sub = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
         return Guid.TryParse(sub, out var id) ? id : null;
     }
+
+    private string? CurrentUserName() =>
+        User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Name)?.Value;
 }

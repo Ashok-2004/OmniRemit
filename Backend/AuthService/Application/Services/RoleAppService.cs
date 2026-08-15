@@ -1,14 +1,14 @@
 using AuthService.Application.DTOs;
 using AuthService.Application.Exceptions;
 using AuthService.Domain.Entities;
-using AuthService.Domain.Enums;
 using AuthService.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 
 namespace AuthService.Application.Services;
 
-public class RoleAppService(AuthDbContext db)
+public class RoleAppService(AuthDbContext db, AuditLogAppService auditLog)
 {
+    private const string ServiceName = "AuthService";
     public async Task<PagedResult<RoleListItemDto>> ListAsync(int page, int pageSize, string? search, CancellationToken ct = default)
     {
         var query = db.Roles.AsNoTracking().AsQueryable();
@@ -41,7 +41,7 @@ public class RoleAppService(AuthDbContext db)
         return ToDetailDto(role, permissions);
     }
 
-    public async Task<RoleDetailDto> CreateAsync(UpsertRoleRequest request, CancellationToken ct = default)
+    public async Task<RoleDetailDto> CreateAsync(UpsertRoleRequest request, Guid? actingUserId, CancellationToken ct = default)
     {
         var name = request.Name.Trim();
         if (await db.Roles.AnyAsync(r => r.Name == name, ct))
@@ -65,11 +65,13 @@ public class RoleAppService(AuthDbContext db)
         await ApplyPermissionsAsync(role.Id, request.Permissions, ct);
         await db.SaveChangesAsync(ct);
 
+        await WriteAuditAsync(actingUserId, "role.created", role.Id, $"Created role '{role.Name}'", ct);
+
         var permissions = await LoadPermissionsAsync(role.Id, ct);
         return ToDetailDto(role, permissions);
     }
 
-    public async Task<RoleDetailDto> UpdateAsync(Guid id, UpsertRoleRequest request, CancellationToken ct = default)
+    public async Task<RoleDetailDto> UpdateAsync(Guid id, UpsertRoleRequest request, Guid? actingUserId, CancellationToken ct = default)
     {
         var role = await db.Roles.FirstOrDefaultAsync(r => r.Id == id, ct) ?? throw NotFound(id);
 
@@ -90,11 +92,13 @@ public class RoleAppService(AuthDbContext db)
 
         await db.SaveChangesAsync(ct);
 
+        await WriteAuditAsync(actingUserId, "role.updated", role.Id, $"Updated role '{role.Name}' — permissions modified", ct);
+
         var permissions = await LoadPermissionsAsync(id, ct);
         return ToDetailDto(role, permissions);
     }
 
-    public async Task DeleteAsync(Guid id, CancellationToken ct = default)
+    public async Task DeleteAsync(Guid id, Guid? actingUserId, CancellationToken ct = default)
     {
         var role = await db.Roles.FirstOrDefaultAsync(r => r.Id == id, ct) ?? throw NotFound(id);
 
@@ -113,6 +117,16 @@ public class RoleAppService(AuthDbContext db)
         db.RolePermissions.RemoveRange(grants);
         db.Roles.Remove(role);
         await db.SaveChangesAsync(ct);
+
+        await WriteAuditAsync(actingUserId, "role.deleted", id, $"Deleted role '{role.Name}'", ct);
+    }
+
+    private async Task WriteAuditAsync(Guid? actingUserId, string action, Guid roleId, string details, CancellationToken ct)
+    {
+        var actorName = actingUserId is null
+            ? null
+            : await db.Users.AsNoTracking().Where(u => u.Id == actingUserId).Select(u => u.Name).FirstOrDefaultAsync(ct);
+        await auditLog.WriteAsync(ServiceName, actingUserId, actorName, action, "Role", roleId.ToString(), details, ct: ct);
     }
 
     public async Task<IReadOnlyList<RoleUserDto>> GetUsersAsync(Guid id, CancellationToken ct = default)
@@ -138,6 +152,7 @@ public class RoleAppService(AuthDbContext db)
 
         var featureKeys = grants.Select(g => g.FeatureKey).Distinct().ToList();
         var features = await db.PermissionFeatures
+            .Include(f => f.Capabilities)
             .Where(f => featureKeys.Contains(f.Key) && f.IsActive)
             .ToDictionaryAsync(f => f.Key, ct);
 
@@ -148,9 +163,9 @@ public class RoleAppService(AuthDbContext db)
                 throw new NotFoundAppException($"Permission feature '{grant.FeatureKey}' was not found or is no longer active.");
             }
 
-            if (!Enum.TryParse<CapabilityType>(grant.Capability, out var capability))
+            if (!feature.Capabilities.Any(c => c.Key == grant.Capability))
             {
-                throw new ValidationAppException($"Unknown capability '{grant.Capability}'.");
+                throw new ValidationAppException($"'{feature.Key}' does not declare a '{grant.Capability}' capability.");
             }
 
             db.RolePermissions.Add(new RolePermission
@@ -158,7 +173,7 @@ public class RoleAppService(AuthDbContext db)
                 Id = Guid.NewGuid(),
                 RoleId = roleId,
                 FeatureId = feature.Id,
-                Capability = capability,
+                Capability = grant.Capability,
             });
         }
     }
@@ -167,7 +182,7 @@ public class RoleAppService(AuthDbContext db)
         await db.RolePermissions
             .Include(rp => rp.Feature)
             .Where(rp => rp.RoleId == roleId)
-            .Select(rp => new RolePermissionGrantDto(rp.Feature!.Key, rp.Capability.ToString()))
+            .Select(rp => new RolePermissionGrantDto(rp.Feature!.Key, rp.Capability))
             .ToListAsync(ct);
 
     private static RoleDetailDto ToDetailDto(Role r, IReadOnlyList<RolePermissionGrantDto> permissions) => new(

@@ -8,9 +8,11 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     public DbSet<User> Users => Set<User>();
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<PermissionFeature> PermissionFeatures => Set<PermissionFeature>();
+    public DbSet<PermissionFeatureCapability> PermissionFeatureCapabilities => Set<PermissionFeatureCapability>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<UserPermissionOverride> UserPermissionOverrides => Set<UserPermissionOverride>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -45,10 +47,22 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             entity.Property(f => f.Source).HasConversion<string>().HasMaxLength(20);
         });
 
+        modelBuilder.Entity<PermissionFeatureCapability>(entity =>
+        {
+            entity.HasIndex(c => new { c.FeatureId, c.Key }).IsUnique();
+            entity.Property(c => c.Key).HasMaxLength(50);
+            entity.Property(c => c.DisplayName).HasMaxLength(100);
+
+            entity.HasOne(c => c.Feature)
+                .WithMany(f => f.Capabilities)
+                .HasForeignKey(c => c.FeatureId)
+                .OnDelete(DeleteBehavior.Cascade); // a feature's own capability rows are pure metadata about it, safe to cascade
+        });
+
         modelBuilder.Entity<RolePermission>(entity =>
         {
             entity.HasIndex(rp => new { rp.RoleId, rp.FeatureId, rp.Capability }).IsUnique();
-            entity.Property(rp => rp.Capability).HasConversion<string>().HasMaxLength(20);
+            entity.Property(rp => rp.Capability).HasMaxLength(50);
 
             entity.HasOne(rp => rp.Role)
                 .WithMany(r => r.RolePermissions)
@@ -64,7 +78,7 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
         modelBuilder.Entity<UserPermissionOverride>(entity =>
         {
             entity.HasIndex(o => new { o.UserId, o.FeatureId, o.Capability }).IsUnique();
-            entity.Property(o => o.Capability).HasConversion<string>().HasMaxLength(20);
+            entity.Property(o => o.Capability).HasMaxLength(50);
             entity.Property(o => o.Effect).HasConversion<string>().HasMaxLength(20);
 
             entity.HasOne(o => o.User)
@@ -88,6 +102,18 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
                 .WithMany(u => u.RefreshTokens)
                 .HasForeignKey(t => t.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AuditLog>(entity =>
+        {
+            entity.HasIndex(a => a.OccurredAt);
+            entity.HasIndex(a => a.ServiceName);
+            entity.Property(a => a.ServiceName).HasMaxLength(100);
+            entity.Property(a => a.Action).HasMaxLength(150);
+            entity.Property(a => a.ActorName).HasMaxLength(200);
+            entity.Property(a => a.EntityType).HasMaxLength(100);
+            entity.Property(a => a.EntityId).HasMaxLength(200);
+            entity.Property(a => a.SourceIp).HasMaxLength(64);
         });
     }
 }

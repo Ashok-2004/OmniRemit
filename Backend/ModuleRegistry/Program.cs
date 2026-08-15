@@ -65,6 +65,12 @@ builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
+        // Without this, the JWT handler silently remaps short claim names ("sub" in particular) to
+        // legacy long-form ClaimTypes URIs before they ever reach a controller — so every
+        // User.FindFirst(JwtRegisteredClaimNames.Sub) here and in every other service comes back
+        // null even though the token clearly has a "sub" claim. "name" happens not to be in that
+        // remap table, which is why actor *names* came through fine while actor *ids* silently didn't.
+        options.MapInboundClaims = false;
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,

@@ -8,8 +8,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AuthService.Application.Services;
 
-public class UserAppService(AuthDbContext db, PasswordHasher passwordHasher)
+public class UserAppService(AuthDbContext db, PasswordHasher passwordHasher, AuditLogAppService auditLog)
 {
+    private const string ServiceName = "AuthService";
     public async Task<PagedResult<UserListItemDto>> ListAsync(
         int page, int pageSize, string? search, bool? isActive, Guid? roleId, CancellationToken ct = default)
     {
@@ -90,6 +91,10 @@ public class UserAppService(AuthDbContext db, PasswordHasher passwordHasher)
         await db.SaveChangesAsync(ct);
 
         var saved = await FindWithRoleAsync(user.Id, ct) ?? throw NotFound(user.Id);
+
+        var actorName = await ResolveActorNameAsync(actingUserId, ct);
+        await auditLog.WriteAsync(ServiceName, actingUserId, actorName, "user.created", "User", user.Id.ToString(), $"Created {user.Email}", ct: ct);
+
         return new CreateUserResponse(ToDetailDto(saved, []), tempPassword);
     }
 
@@ -117,6 +122,9 @@ public class UserAppService(AuthDbContext db, PasswordHasher passwordHasher)
 
         await db.SaveChangesAsync(ct);
 
+        var actorName = await ResolveActorNameAsync(actingUserId, ct);
+        await auditLog.WriteAsync(ServiceName, actingUserId, actorName, "user.updated", "User", user.Id.ToString(), $"Updated {user.Email}", ct: ct);
+
         var overrides = await LoadOverridesAsync(id, ct);
         return ToDetailDto(user, overrides);
     }
@@ -128,6 +136,9 @@ public class UserAppService(AuthDbContext db, PasswordHasher passwordHasher)
         user.UpdatedAt = DateTimeOffset.UtcNow;
         user.UpdatedBy = actingUserId;
         await db.SaveChangesAsync(ct);
+
+        var actorName = await ResolveActorNameAsync(actingUserId, ct);
+        await auditLog.WriteAsync(ServiceName, actingUserId, actorName, isActive ? "user.activated" : "user.deactivated", "User", user.Id.ToString(), $"{(isActive ? "Activated" : "Deactivated")} {user.Email}", ct: ct);
 
         var overrides = await LoadOverridesAsync(id, ct);
         return ToDetailDto(user, overrides);
@@ -141,6 +152,15 @@ public class UserAppService(AuthDbContext db, PasswordHasher passwordHasher)
         user.UpdatedAt = DateTimeOffset.UtcNow;
         user.UpdatedBy = actingUserId;
         await db.SaveChangesAsync(ct);
+
+        var actorName = await ResolveActorNameAsync(actingUserId, ct);
+        await auditLog.WriteAsync(ServiceName, actingUserId, actorName, "user.deleted", "User", user.Id.ToString(), $"Deleted {user.Email}", ct: ct);
+    }
+
+    private async Task<string?> ResolveActorNameAsync(Guid? actingUserId, CancellationToken ct)
+    {
+        if (actingUserId is null) return null;
+        return await db.Users.AsNoTracking().Where(u => u.Id == actingUserId).Select(u => u.Name).FirstOrDefaultAsync(ct);
     }
 
     public async Task<IReadOnlyList<PermissionOverrideDto>> GetPermissionOverridesAsync(Guid userId, CancellationToken ct = default)
@@ -166,6 +186,7 @@ public class UserAppService(AuthDbContext db, PasswordHasher passwordHasher)
 
         var featureKeys = overrides.Select(o => o.FeatureKey).Distinct().ToList();
         var features = await db.PermissionFeatures
+            .Include(f => f.Capabilities)
             .Where(f => featureKeys.Contains(f.Key))
             .ToDictionaryAsync(f => f.Key, ct);
 
@@ -177,9 +198,9 @@ public class UserAppService(AuthDbContext db, PasswordHasher passwordHasher)
                 throw new NotFoundAppException($"Permission feature '{o.FeatureKey}' was not found.");
             }
 
-            if (!Enum.TryParse<CapabilityType>(o.Capability, out var capability))
+            if (!feature.Capabilities.Any(c => c.Key == o.Capability))
             {
-                throw new ValidationAppException($"Unknown capability '{o.Capability}'.");
+                throw new ValidationAppException($"'{feature.Key}' does not declare a '{o.Capability}' capability.");
             }
 
             if (!Enum.TryParse<PermissionEffect>(o.Effect, out var effect))
@@ -192,7 +213,7 @@ public class UserAppService(AuthDbContext db, PasswordHasher passwordHasher)
                 Id = Guid.NewGuid(),
                 UserId = userId,
                 FeatureId = feature.Id,
-                Capability = capability,
+                Capability = o.Capability,
                 Effect = effect,
                 CreatedAt = now,
                 CreatedBy = actingUserId,
@@ -210,7 +231,7 @@ public class UserAppService(AuthDbContext db, PasswordHasher passwordHasher)
         await db.UserPermissionOverrides
             .Include(o => o.Feature)
             .Where(o => o.UserId == userId)
-            .Select(o => new PermissionOverrideDto(o.Feature!.Key, o.Capability.ToString(), o.Effect.ToString()))
+            .Select(o => new PermissionOverrideDto(o.Feature!.Key, o.Capability, o.Effect.ToString()))
             .ToListAsync(ct);
 
     private static UserListItemDto ToListItemDto(User u) => new(

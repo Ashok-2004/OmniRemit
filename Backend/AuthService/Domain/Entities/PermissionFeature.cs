@@ -26,4 +26,13 @@ public class PermissionFeature
 
     public ICollection<RolePermission> RolePermissions { get; set; } = new List<RolePermission>();
     public ICollection<UserPermissionOverride> UserPermissionOverrides { get; set; } = new List<UserPermissionOverride>();
+
+    /// <summary>
+    /// The set of capabilities THIS feature actually grants — dynamic per feature, not a fixed
+    /// global list. Host features declare their own small fixed set at seed time; RemoteApp
+    /// features get theirs from whatever the remote's own discovery endpoint reports (see
+    /// ModuleRegistry's PermissionsSourceUrl), so a remote adding a new action just shows up here
+    /// next sync, nothing hardcoded on this side.
+    /// </summary>
+    public ICollection<PermissionFeatureCapability> Capabilities { get; set; } = new List<PermissionFeatureCapability>();
 }

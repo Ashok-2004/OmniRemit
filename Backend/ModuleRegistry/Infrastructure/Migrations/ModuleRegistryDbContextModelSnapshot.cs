@@ -62,6 +62,10 @@ namespace ModuleRegistry.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<string>("PermissionsSourceUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
                     b.Property<int>("SidebarOrder")
                         .HasColumnType("integer");
 
@@ -85,6 +89,52 @@ namespace ModuleRegistry.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("RemoteApps");
+                });
+
+            modelBuilder.Entity("ModuleRegistry.Domain.Entities.RemoteAppCapability", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid>("RemoteAppId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RemoteAppId", "Key")
+                        .IsUnique();
+
+                    b.ToTable("RemoteAppCapabilities");
+                });
+
+            modelBuilder.Entity("ModuleRegistry.Domain.Entities.RemoteAppCapability", b =>
+                {
+                    b.HasOne("ModuleRegistry.Domain.Entities.RemoteApp", "RemoteApp")
+                        .WithMany("Capabilities")
+                        .HasForeignKey("RemoteAppId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("RemoteApp");
+                });
+
+            modelBuilder.Entity("ModuleRegistry.Domain.Entities.RemoteApp", b =>
+                {
+                    b.Navigation("Capabilities");
                 });
 #pragma warning restore 612, 618
         }

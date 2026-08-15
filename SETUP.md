@@ -1,8 +1,9 @@
 # OmniRemit — Setup Guide for New Collaborators
 
-Follow this top-to-bottom to get all three services running locally: **AuthService** (`:5155`),
-**ModuleRegistry** (`:5200`), and the **host** frontend (`:5173`). For architecture, endpoints, and
-what's built so far, see [README.md](README.md) — this file is just the "get it running" runbook.
+Follow this top-to-bottom to get all five services running locally: **AuthService** (`:5155`),
+**ModuleRegistry** (`:5200`), **EmployeeService** (`:5285`), the **host** frontend (`:5173`), and the
+**employee_mf** remote micro-frontend (`:5001`). For architecture, endpoints, and what's built so
+far, see [README.md](README.md) — this file is just the "get it running" runbook.
 
 You'll provision your **own** Postgres databases and your **own** signing keys — nothing here is
 shared with anyone else on the team, and you'll never need anyone else's secrets to run the project.
@@ -43,16 +44,18 @@ cd ../Backend
 dotnet restore
 ```
 
-## 3. Provision your own two Neon Postgres databases
+## 3. Provision your own three Neon Postgres databases
 
 Each collaborator runs against their **own** databases — not a shared one. This keeps everyone's
-local test data (users, roles, etc.) independent, and means nobody has to hand you a password over
-chat.
+local test data (users, roles, employees, etc.) independent, and means nobody has to hand you a
+password over chat.
 
 1. Sign up at [neon.tech](https://neon.tech) (there's a free tier, more than enough for local dev).
-2. Create **two separate databases** — one for AuthService, one for ModuleRegistry. (Either two
-   databases in the same Neon project, or two separate projects — either works, they just need to be
-   two distinct databases, never the same one for both services.)
+2. Create **three separate databases** — one for AuthService, one for ModuleRegistry, one for
+   EmployeeService. (Either three databases in the same Neon project, or separate projects — either
+   works, they just need to be three distinct databases, never shared between services. This is a
+   deliberate architecture choice — see the README's note on why each service owns its own database
+   instead of depending on another service's, for both no-downtime and performance reasons.)
 3. For each, copy its connection string from the Neon dashboard. It'll look like:
    ```
    postgresql://neondb_owner:AbCdEf123456@ep-something-12345.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
@@ -62,8 +65,9 @@ chat.
 
 ## 4. Generate your own RS256 key pair
 
-AuthService signs login tokens with a private key; ModuleRegistry checks them with the matching
-public key. Generate your own pair — nobody else's key material is needed or should be reused:
+AuthService signs login tokens with a private key; ModuleRegistry and EmployeeService each check
+them with the matching public key (never the private key — only AuthService ever holds that).
+Generate your own pair — nobody else's key material is needed or should be reused:
 
 ```bash
 openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out private.pem
@@ -103,9 +107,9 @@ postgresql://neondb_owner:AbCdEf123456@ep-something-12345.us-east-2.aws.neon.tec
 Host=ep-something-12345.us-east-2.aws.neon.tech;Port=5432;Database=neondb;Username=neondb_owner;Password=AbCdEf123456;SSL Mode=Require;Trust Server Certificate=true
 ```
 
-Do this conversion for **both** of your Neon connection strings before pasting them into the `.env`
-files below. (The `channel_binding` parameter has no Npgsql equivalent and is safely dropped — TLS,
-via `SSL Mode=Require`, is still fully enforced.)
+Do this conversion for **all three** of your Neon connection strings before pasting them into the
+`.env` files below. (The `channel_binding` parameter has no Npgsql equivalent and is safely dropped
+— TLS, via `SSL Mode=Require`, is still fully enforced.)
 
 ## 6. Configure your `.env` files
 
@@ -121,8 +125,8 @@ Fill in:
 - `Jwt__SigningKeyPrivate` — your private key, single-line `\n`-escaped (step 4)
 - `Jwt__SigningKeyPublic` — your public key, single-line `\n`-escaped (step 4)
 - `Internal__ApiKey` — any long random string you make up, e.g. `openssl rand -base64 32`. **Must
-  match** `AuthService__InternalApiKey` in ModuleRegistry's `.env` below — copy the same value into
-  both.
+  match** `AuthService__InternalApiKey` in both ModuleRegistry's and EmployeeService's `.env` below —
+  copy the same value into all three.
 
 Everything else in this file already has a working default (`Cors__AllowedOrigins__0` is already set
 to `http://localhost:5173`, which is correct as long as you run the frontend on its default port).
@@ -139,16 +143,32 @@ Fill in:
 - `AuthService__InternalApiKey` — **the exact same value** as `Internal__ApiKey` in AuthService's
   `.env` above
 
+### `Backend/EmployeeService/.env`
+```bash
+cd ../EmployeeService
+cp .env.example .env
+```
+Fill in:
+- `ConnectionStrings__EmployeeDb` — your reformatted EmployeeService connection string (step 5)
+- `Jwt__SigningKeyPublic` — **the exact same public key** you put in the other two `.env` files
+- `AuthService__InternalApiKey` — **the exact same value** as `Internal__ApiKey` in AuthService's `.env`
+
 ### `Frontend/apps/host/.env`
 ```bash
 cd ../../Frontend/apps/host
 cp .env.example .env
 ```
 No changes needed — the defaults (`VITE_AUTH_SERVICE_URL=http://localhost:5155`,
-`VITE_MODULE_REGISTRY_URL=http://localhost:5200`) already point at the other two services' default
-ports.
+`VITE_MODULE_REGISTRY_URL=http://localhost:5200`) already point at the other services' default ports.
 
-## 7. Run all three services
+### `Frontend/apps/employee_mf/.env`
+```bash
+cd ../employee_mf
+cp .env.example .env
+```
+No changes needed — the defaults already point at EmployeeService (`:5285`) and AuthService (`:5155`).
+
+## 7. Run all five services
 
 Each in its own terminal, from the repo root:
 
@@ -159,9 +179,19 @@ dotnet run --project Backend/AuthService
 dotnet run --project Backend/ModuleRegistry
 ```
 ```bash
+dotnet run --project Backend/EmployeeService
+```
+```bash
 cd Frontend
 pnpm --filter host dev
 ```
+```bash
+cd Frontend
+pnpm --filter employee-mf preview
+```
+The last one first needs a build (`pnpm --filter employee-mf build`) if you haven't run one yet —
+`preview` serves the `dist/` output it produces, which is what publishes `mf-manifest.json` for the
+host to load at runtime. Re-run `build` after any change to `Frontend/apps/employee_mf/src`.
 
 Each backend **automatically applies its database migrations on first startup** — you don't need to
 run any `dotnet ef` commands yourself. Watch the AuthService terminal for a one-time line like:
@@ -181,17 +211,41 @@ Open **http://localhost:5173**, sign in with the email/password from the log lin
 land on the dashboard showing real counts (1 user, 6 roles, 0 registered apps) — that confirms the
 frontend, both backends, and your Neon databases are all talking to each other correctly.
 
+### Registering the Employee remote app
+
+The `employee_mf` server being up isn't enough on its own — like any remote app, it only appears once
+an administrator registers it in **Setup → Applications → + Register App**:
+
+| Field | Value |
+|---|---|
+| Key | `employee` |
+| Display name | `Employee Management` (or anything you like) |
+| Manifest URL | `http://localhost:5001/mf-manifest.json` |
+| Permissions source URL | `http://localhost:5285/api/employee-service/permissions` |
+
+The Permissions source URL is what makes this platform's permission system dynamic: ModuleRegistry
+fetches it on save (and on **Resync permissions**, from the same Applications page) to learn
+EmployeeService's current capabilities (Create/Edit/Delete today) and pushes them into AuthService's
+catalog automatically — nothing about the capability list is hand-typed anywhere. After registering,
+"Employee Management" appears in the sidebar, and its capabilities appear under a new "Remote apps"
+group in every role's permission editor (**Setup → Role**) — grant whichever ones a role should have.
+As the Super Admin, everything is already granted (administrators bypass per-capability checks).
+
 ## Troubleshooting
 
 - **A backend crashes immediately on startup** ("address already in use") — something else is already
-  running on that port. Stop it, or check nothing else on your machine uses 5155/5200/5173.
+  running on that port. Stop it, or check nothing else on your machine uses 5155/5200/5285/5173/5001.
 - **Frontend terminal says it can't bind to 5173** — same thing, one instance at a time; the dev
   server is configured to fail loudly here instead of silently switching ports (a silent port switch
   would break login with a confusing CORS error instead).
-- **Login fails with a CORS error in the browser console** — your `Cors__AllowedOrigins__0` in both
-  backend `.env` files must exactly match the URL the frontend is actually running at
+- **Login fails with a CORS error in the browser console** — your `Cors__AllowedOrigins__0` in every
+  backend `.env` file must exactly match the URL the frontend is actually running at
   (`http://localhost:5173` by default — no trailing slash, exact scheme/host/port).
 - **A backend crashes with an Npgsql/connection-string error** — you're probably still using Neon's
   raw `postgresql://...` URL; see step 5.
-- Anything else: check the terminal output of whichever service is failing — both backends log
-  clear error messages rather than crashing silently.
+- **Employee Management never appears in the sidebar after registering it** — its capabilities didn't
+  come back from `Permissions source URL`. Check EmployeeService is actually running on `:5285` and
+  that `http://localhost:5285/api/employee-service/permissions` returns JSON in a browser tab, then
+  hit **Resync permissions** on the Applications page.
+- Anything else: check the terminal output of whichever service is failing — every backend logs clear
+  error messages rather than crashing silently.

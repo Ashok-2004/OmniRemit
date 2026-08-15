@@ -17,7 +17,8 @@ public class UserPermissionOverride
     public Guid FeatureId { get; set; }
     public PermissionFeature? Feature { get; set; }
 
-    public CapabilityType Capability { get; set; }
+    /// <summary>Must match a PermissionFeatureCapability.Key declared by this same feature.</summary>
+    public required string Capability { get; set; }
     public PermissionEffect Effect { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }

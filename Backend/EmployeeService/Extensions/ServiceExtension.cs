@@ -15,10 +15,17 @@ public static class ServiceExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        var connectionString = configuration.GetConnectionString("EmployeeDb");
+        var isDbConfigured = !string.IsNullOrWhiteSpace(connectionString);
+
+        // Always register AppDbContext — even with a placeholder connection string — so the DI
+        // container can construct EmployeeService/EmployeeRepository at boot. With a placeholder,
+        // the app still starts (health checks and /permissions still work); anything that actually
+        // touches the database fails at request time with a clear error instead of crashing the
+        // whole process on startup. Mirrors AuthService/ModuleRegistry's identical pattern.
         services.AddDbContext<AppDbContext>(options =>
         {
-            options.UseNpgsql(
-                configuration.GetConnectionString("DefaultConnection"));
+            options.UseNpgsql(isDbConfigured ? connectionString : "Host=unconfigured;Database=unconfigured;Username=unconfigured;Password=unconfigured");
         });
 
         services.AddScoped<IEmployeeRepository, EmployeeRepository>();

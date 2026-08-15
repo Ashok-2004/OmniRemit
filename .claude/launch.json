@@ -1,0 +1,35 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "frontend-dev",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "host", "dev"],
+      "port": 5173
+    },
+    {
+      "name": "backend-dev",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "Backend/AuthService"],
+      "port": 5155
+    },
+    {
+      "name": "registry-dev",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "Backend/ModuleRegistry"],
+      "port": 5200
+    },
+    {
+      "name": "employee-service-dev",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "Backend/EmployeeService"],
+      "port": 5285
+    },
+    {
+      "name": "employee-mf-dev",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "employee-mf", "preview"],
+      "port": 5001
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 using AuthService.Domain.Entities;
 using AuthService.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
+// Capability is now a plain string per feature (see PermissionFeatureCapability) — no fixed enum.
 
 namespace AuthService.Infrastructure.Security;
 
@@ -44,7 +45,7 @@ public class PermissionClaimsBuilder(AuthDbContext db)
             .Select(o => new { o.Feature!.Key, o.Capability, o.Effect })
             .ToListAsync(ct);
 
-        var effective = new HashSet<(string Key, CapabilityType Capability)>(
+        var effective = new HashSet<(string Key, string Capability)>(
             roleGrants.Select(g => (g.Key, g.Capability)));
 
         foreach (var o in overrides)

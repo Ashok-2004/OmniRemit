@@ -31,8 +31,18 @@ public class RemoteApp
     /// <summary>Derived as "remote.{Key}" at creation — the PermissionFeature.Key this app is gated by in AuthDb. Loose reference only, no cross-database FK.</summary>
     public required string PermissionFeatureKey { get; set; }
 
+    /// <summary>
+    /// Optional URL this app's own backend exposes declaring its current capabilities (e.g.
+    /// EmployeeService's discovery endpoint, auto-generated from its [RequiresCapability]
+    /// attributes). Fetched on create/update and on manual resync — a remote adding a new action
+    /// just needs this endpoint to report it, nothing to hand-edit here or in AuthService.
+    /// </summary>
+    public string? PermissionsSourceUrl { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public Guid? CreatedBy { get; set; }
     public Guid? UpdatedBy { get; set; }
+
+    public ICollection<RemoteAppCapability> Capabilities { get; set; } = new List<RemoteAppCapability>();
 }
