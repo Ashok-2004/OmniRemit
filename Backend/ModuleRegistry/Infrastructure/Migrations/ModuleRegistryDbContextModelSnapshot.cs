@@ -17,7 +17,7 @@ namespace ModuleRegistry.Infrastructure.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.0")
+                .HasAnnotation("ProductVersion", "10.0.8")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -125,6 +125,16 @@ namespace ModuleRegistry.Infrastructure.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<string>("ModuleDisplayName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<string>("ModuleKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<Guid>("RemoteAppId")
                         .HasColumnType("uuid");
 
@@ -133,7 +143,7 @@ namespace ModuleRegistry.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("RemoteAppId", "Key")
+                    b.HasIndex("RemoteAppId", "ModuleKey", "Key")
                         .IsUnique();
 
                     b.ToTable("RemoteAppCapabilities");

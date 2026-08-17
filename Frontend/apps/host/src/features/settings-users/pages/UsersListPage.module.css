@@ -1,105 +1,130 @@
 .page {
   display: flex;
   flex-direction: column;
-  gap: var(--omni-space-5);
-}
-
-.header {
-  display: flex;
-  flex-direction: column;
-  gap: var(--omni-space-1);
-}
-
-.header p {
-  color: var(--omni-color-text-secondary);
+  gap: var(--omni-space-6);
 }
 
 .statGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
   gap: var(--omni-space-4);
 }
 
-.statCard {
-  background: var(--omni-color-surface);
-  border: 1px solid var(--omni-color-border);
-  border-radius: var(--omni-radius-lg);
-  padding: var(--omni-space-4) var(--omni-space-5);
-  display: flex;
-  flex-direction: column;
-  gap: var(--omni-space-1);
-}
-
-.statLabel {
-  font-size: var(--omni-font-size-xs);
-  font-weight: var(--omni-font-weight-semibold);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--omni-color-text-muted);
-}
-
-.statValue {
-  font-size: var(--omni-font-size-xl);
-  font-weight: var(--omni-font-weight-bold);
-  color: var(--omni-color-text-primary);
-}
-
-.toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--omni-space-4);
-  flex-wrap: wrap;
-}
-
-.searchInput {
-  max-width: 320px;
-}
-
-.userCell {
+/* ---- Table cells ---- */
+.nameCell {
   display: flex;
   align-items: center;
   gap: var(--omni-space-3);
+  min-width: 0;
 }
 
-.nameLink {
+.nameText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.nameLink,
+.nameStatic {
   font-weight: var(--omni-font-weight-medium);
-  color: var(--omni-color-primary-700);
+  color: var(--omni-color-text-primary);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .nameLink:hover {
+  color: var(--omni-color-primary-600);
   text-decoration: underline;
 }
 
-.emailText {
-  color: var(--omni-color-text-secondary);
+.keyText {
+  font-family: var(--omni-font-family-mono);
+  font-size: var(--omni-font-size-xs);
+  color: var(--omni-color-text-muted);
 }
 
-.errorBanner {
-  padding: var(--omni-space-3) var(--omni-space-4);
-  border-radius: var(--omni-radius-md);
-  background: var(--omni-color-danger-bg);
-  color: var(--omni-color-danger-text);
+.mutedText {
   font-size: var(--omni-font-size-sm);
+  color: var(--omni-color-text-muted);
 }
 
 .actionsCell {
   display: flex;
-  gap: var(--omni-space-2);
-  justify-content: flex-end;
-}
-
-.emptyCell {
-  text-align: center;
-  color: var(--omni-color-text-muted);
-  padding: var(--omni-space-7);
-}
-
-.pagination {
-  display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--omni-space-3);
-  font-size: var(--omni-font-size-sm);
-  color: var(--omni-color-text-secondary);
+  gap: var(--omni-space-1);
 }
+
+.iconAction,
+.iconActionDanger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: var(--omni-radius-md);
+  cursor: pointer;
+  transition: background var(--omni-transition-fast), color var(--omni-transition-fast);
+}
+
+.iconAction {
+  color: var(--omni-color-primary-600);
+}
+
+.iconAction:hover {
+  background: var(--omni-color-primary-50);
+}
+
+.iconActionDanger {
+  color: var(--omni-color-danger);
+}
+
+.iconActionDanger:hover {
+  background: var(--omni-color-danger-bg);
+}
+
+.iconAction:focus-visible,
+.iconActionDanger:focus-visible {
+  outline: 2px solid var(--omni-color-primary-500);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .iconAction,
+  .iconActionDanger {
+    transition: none;
+  }
+}
+
+
+
+.emailText {
+  color: var(--omni-color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Deterministic per-name tint so a user keeps the same avatar colour everywhere. */
+.avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: var(--omni-radius-full);
+  font-size: var(--omni-font-size-sm);
+  font-weight: var(--omni-font-weight-semibold);
+  color: var(--omni-color-text-on-primary);
+}
+
+.avatar_a { background: var(--omni-color-primary-600); }
+.avatar_b { background: #7c3aed; }
+.avatar_c { background: var(--omni-color-success); }
+.avatar_d { background: var(--omni-color-warning); }
+.avatar_e { background: #0891b2; }

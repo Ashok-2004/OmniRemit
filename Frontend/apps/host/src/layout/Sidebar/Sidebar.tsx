@@ -24,13 +24,18 @@ export interface SidebarProps {
    * misinforming the user about why their apps had vanished.
    */
   error?: string | null
+  /** Signed-in user, shown in the card pinned to the bottom of the sidebar. */
+  user?: { name?: string; email?: string }
 }
+
 
 function navItemClass({ isActive }: { isActive: boolean }) {
   return classNames(styles.navItem, isActive && styles.navItemActive)
 }
 
-export function Sidebar({ apps, canAccessAuditLogs, error }: SidebarProps) {
+export function Sidebar({ apps, canAccessAuditLogs, error, user }: SidebarProps) {
+  const initial = user?.name?.trim().charAt(0).toUpperCase() || '?'
+
   return (
     <aside className={styles.sidebar}>
       <div className={styles.brand}>
@@ -78,7 +83,9 @@ export function Sidebar({ apps, canAccessAuditLogs, error }: SidebarProps) {
               title={isUnreachable ? `${app.displayName} is not responding` : undefined}
             >
               <span className={styles.navIcon} aria-hidden="true">
-                {app.iconKey ?? '▢'}
+                {/* Falls back to a real icon rather than the literal "▢" glyph, which picked up the
+                    text font and sat at a different weight and size to every other nav icon. */}
+                {app.iconKey ?? <Icon.Grid width={18} height={18} />}
               </span>
               <span className={styles.navLabel}>{app.displayName}</span>
               {isUnreachable && (
@@ -90,6 +97,7 @@ export function Sidebar({ apps, canAccessAuditLogs, error }: SidebarProps) {
             </NavLink>
           )
         })}
+
 
         {canAccessAuditLogs && (
           <>
@@ -103,6 +111,23 @@ export function Sidebar({ apps, canAccessAuditLogs, error }: SidebarProps) {
           </>
         )}
       </nav>
+
+      {/* Pinned to the bottom because .nav above is flex: 1. Identity previously lived only in the
+          topbar avatar, which is easy to miss when several environments are open at once. */}
+      {user?.name && (
+        <NavLink to="/profile" className={styles.userCard}>
+          <span className={styles.userAvatar} aria-hidden="true">
+            {initial}
+          </span>
+          <span className={styles.userText}>
+            <span className={styles.userName}>{user.name}</span>
+            {user.email && <span className={styles.userEmail}>{user.email}</span>}
+          </span>
+          <span className={styles.userChevron} aria-hidden="true">
+            <Icon.ChevronRight width={16} height={16} />
+          </span>
+        </NavLink>
+      )}
     </aside>
   )
 }

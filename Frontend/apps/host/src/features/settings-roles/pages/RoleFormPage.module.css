@@ -1,65 +1,199 @@
-.page {
+.section {
   display: flex;
   flex-direction: column;
   gap: var(--omni-space-5);
 }
 
-.header {
+.sectionHint {
+  margin: 0;
+  font-size: var(--omni-font-size-sm);
+  color: var(--omni-color-text-secondary);
+}
+
+.fieldLabel {
+  font-size: var(--omni-font-size-sm);
+  font-weight: var(--omni-font-weight-medium);
+  color: var(--omni-color-text-primary);
+}
+
+.backButton {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--omni-space-4);
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border: 1px solid var(--omni-color-border);
+  background: var(--omni-color-surface);
+  border-radius: var(--omni-radius-md);
+  color: var(--omni-color-text-secondary);
+  cursor: pointer;
+  transition: border-color var(--omni-transition-fast), color var(--omni-transition-fast);
 }
 
-.mainPanel {
-  background: var(--omni-color-surface);
-  border: 1px solid var(--omni-color-border);
-  border-radius: var(--omni-radius-lg);
-  padding: var(--omni-space-5);
+.backButton:hover {
+  border-color: var(--omni-color-border-strong);
+  color: var(--omni-color-text-primary);
+}
+
+.backButton:focus-visible {
+  outline: 2px solid var(--omni-color-primary-500);
+  outline-offset: 2px;
+}
+
+/* ---- Role type ---- */
+.roleTypeBlock {
   display: flex;
   flex-direction: column;
-  gap: var(--omni-space-4);
+  gap: var(--omni-space-2);
 }
 
+.roleTypeCards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--omni-space-3);
+}
+
+.roleTypeCardActive,
+.roleTypeCardDisabled {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--omni-space-3) var(--omni-space-4);
+  border-radius: var(--omni-radius-md);
+  border: 1px solid var(--omni-color-border);
+}
+
+.roleTypeCardActive {
+  border-color: var(--omni-color-primary-500);
+  background: var(--omni-color-primary-50);
+}
+
+/* Not a disabled control — a statement of fact. Muted so it reads as context, not as something
+   the user failed to select. */
+.roleTypeCardDisabled {
+  background: var(--omni-color-surface-alt);
+  opacity: 0.65;
+}
+
+.roleTypeName {
+  display: flex;
+  align-items: center;
+  gap: var(--omni-space-2);
+  font-size: var(--omni-font-size-sm);
+  font-weight: var(--omni-font-weight-semibold);
+  color: var(--omni-color-text-primary);
+}
+
+.roleTypeHint {
+  font-size: var(--omni-font-size-xs);
+  color: var(--omni-color-text-secondary);
+}
+
+.roleTypeNote {
+  margin: 0;
+  font-size: var(--omni-font-size-xs);
+  color: var(--omni-color-text-muted);
+  text-wrap: pretty;
+}
+
+/* ---- Administrator toggle ---- */
 .toggleRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--omni-space-4);
-  padding: var(--omni-space-3) var(--omni-space-4);
+  padding: var(--omni-space-4);
   border: 1px solid var(--omni-color-border);
   border-radius: var(--omni-radius-md);
-  background: var(--omni-color-surface-alt);
+  background: var(--omni-color-surface);
 }
 
 .toggleLabel {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
 }
 
 .toggleTitle {
   font-size: var(--omni-font-size-sm);
-  font-weight: var(--omni-font-weight-medium);
+  font-weight: var(--omni-font-weight-semibold);
   color: var(--omni-color-text-primary);
 }
 
 .toggleHint {
   font-size: var(--omni-font-size-xs);
-  color: var(--omni-color-text-muted);
+  color: var(--omni-color-text-secondary);
+  text-wrap: pretty;
 }
 
-.errorBanner {
+.adminNotice {
+  margin: 0;
   padding: var(--omni-space-3) var(--omni-space-4);
+  background: var(--omni-color-info-bg);
+  color: var(--omni-color-info-text);
   border-radius: var(--omni-radius-md);
-  background: var(--omni-color-danger-bg);
-  color: var(--omni-color-danger-text);
   font-size: var(--omni-font-size-sm);
 }
 
-.actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--omni-space-3);
-  margin-top: var(--omni-space-5);
+.errorBanner {
+  margin-bottom: var(--omni-space-4);
+  padding: var(--omni-space-3) var(--omni-space-4);
+  background: var(--omni-color-danger-bg);
+  color: var(--omni-color-danger-text);
+  border-radius: var(--omni-radius-md);
+  font-size: var(--omni-font-size-sm);
+}
+
+/* ---- Review step ---- */
+.reviewHeading {
+  margin: 0;
+  font-size: var(--omni-font-size-lg);
+  font-weight: var(--omni-font-weight-semibold);
+}
+
+.reviewList {
+  display: grid;
+  grid-template-columns: minmax(140px, auto) 1fr;
+  gap: var(--omni-space-3) var(--omni-space-4);
+  margin: 0;
+  padding: var(--omni-space-4);
+  border: 1px solid var(--omni-color-border);
+  border-radius: var(--omni-radius-md);
+  background: var(--omni-color-surface-alt);
+}
+
+.reviewList dt {
+  font-size: var(--omni-font-size-sm);
+  color: var(--omni-color-text-secondary);
+}
+
+.reviewList dd {
+  margin: 0;
+  font-size: var(--omni-font-size-sm);
+  font-weight: var(--omni-font-weight-medium);
+  color: var(--omni-color-text-primary);
+  word-break: break-word;
+}
+
+@media (max-width: 560px) {
+  .roleTypeCards {
+    grid-template-columns: 1fr;
+  }
+
+  .reviewList {
+    grid-template-columns: 1fr;
+    gap: var(--omni-space-1) 0;
+  }
+
+  .reviewList dd {
+    margin-bottom: var(--omni-space-2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .backButton {
+    transition: none;
+  }
 }

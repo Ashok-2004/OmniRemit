@@ -4,9 +4,10 @@ import { AppShell } from './layout/AppShell/AppShell'
 import { RequireAuth } from './features/auth/components/RequireAuth'
 import { RequireCapability } from './features/auth/components/RequireCapability'
 import { useSilentRefresh } from './features/auth/hooks/useSilentRefresh'
+import { useIdleTimeout } from './features/auth/hooks/useIdleTimeout'
+import { IdleWarningModal } from './features/auth/components/IdleWarningModal'
 import { useAuthStore } from './features/auth/store/authStore'
 import { useModuleRegistryStore } from './shared/stores/moduleRegistryStore'
-import { SetupPanel } from './layout/SetupPanel/SetupPanel'
 import { RouteFallback } from './shared/components/RouteFallback/RouteFallback'
 
 /**
@@ -17,7 +18,7 @@ import { RouteFallback } from './shared/components/RouteFallback/RouteFallback'
  * screen was downloading and parsing the audit-logs page, the permission matrix, and all three
  * settings CRUD flows before they had typed a password.
  *
- * AppShell / SetupPanel / the route guards stay eager: they are the frame around every authenticated
+ * AppShell and the route guards stay eager: they are the frame around every authenticated
  * route, so splitting them would only add a waterfall.
  */
 const DashboardPage = lazy(() => import('./pages/DashboardPage/DashboardPage').then((m) => ({ default: m.DashboardPage })))
@@ -32,6 +33,7 @@ const RoleFormPage = lazy(() => import('./features/settings-roles/pages/RoleForm
 const RemoteAppsListPage = lazy(() => import('./features/settings-applications/pages/RemoteAppsListPage').then((m) => ({ default: m.RemoteAppsListPage })))
 const RemoteAppFormPage = lazy(() => import('./features/settings-applications/pages/RemoteAppFormPage').then((m) => ({ default: m.RemoteAppFormPage })))
 const AuditLogsPage = lazy(() => import('./features/system-audit-logs/pages/AuditLogsPage').then((m) => ({ default: m.AuditLogsPage })))
+const SettingsOverviewPage = lazy(() => import('./features/settings-overview/pages/SettingsOverviewPage').then((m) => ({ default: m.SettingsOverviewPage })))
 const ProfilePage = lazy(() => import('./features/profile/pages/ProfilePage').then((m) => ({ default: m.ProfilePage })))
 
 const FEATURE_KEYS = {
@@ -47,6 +49,9 @@ function LoginRoute() {
   const loginWithGoogle = useAuthStore((s) => s.loginWithGoogle)
   const loginLoading = useAuthStore((s) => s.loginLoading)
   const loginError = useAuthStore((s) => s.loginError)
+  // Why the previous session ended (idle timeout, expiry, another tab signing out) — shown so the
+  // user isn't dumped on the login screen with no explanation. A real login error takes precedence.
+  const sessionExpiredReason = useAuthStore((s) => s.sessionExpiredReason)
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -62,7 +67,7 @@ function LoginRoute() {
       onSubmit={login}
       onGoogleCredential={loginWithGoogle}
       loading={loginLoading}
-      errorMessage={loginError}
+      errorMessage={loginError ?? sessionExpiredReason}
     />
   )
 }
@@ -89,6 +94,20 @@ function AuthenticatedShell() {
       })
   }, [accessToken, registryStatus, ensureFreshAccessToken, fetchForSidebar])
 
+  // 30 minutes of genuine inactivity, then a 60-second countdown before sign-out. An unattended
+  // workstation previously stayed signed in indefinitely — the refresh timer renewed the session
+  // forever as long as the tab stayed open.
+  const idle = useIdleTimeout({
+    enabled: true,
+    idleMs: 30 * 60_000,
+    warningMs: 60_000,
+    onTimeout: () => {
+      void logout('You were signed out after a period of inactivity.').then(() =>
+        navigate('/login', { replace: true }),
+      )
+    },
+  })
+
   const isAdministrator = Boolean(user?.isAdministrator)
   const settingsAccess = {
     users: isAdministrator || hasCapability(FEATURE_KEYS.users, 'View'),
@@ -98,16 +117,27 @@ function AuthenticatedShell() {
   const canAccessAuditLogs = isAdministrator || hasCapability(FEATURE_KEYS.auditLogs, 'View')
 
   return (
-    <AppShell
-      apps={registryStatus === 'idle' || registryStatus === 'loading' ? undefined : registryApps}
-      appsError={registryError}
-      userName={user?.name}
-      settingsAccess={settingsAccess}
-      canAccessAuditLogs={canAccessAuditLogs}
-      onLogout={() => {
-        void logout().then(() => navigate('/login', { replace: true }))
-      }}
-    />
+    <>
+      <AppShell
+        apps={registryStatus === 'idle' || registryStatus === 'loading' ? undefined : registryApps}
+        appsError={registryError}
+        userName={user?.name}
+        userEmail={user?.email}
+        settingsAccess={settingsAccess}
+        canAccessAuditLogs={canAccessAuditLogs}
+        onLogout={() => {
+          void logout().then(() => navigate('/login', { replace: true }))
+        }}
+      />
+      <IdleWarningModal
+        open={idle.warning}
+        secondsRemaining={idle.secondsRemaining}
+        onStaySignedIn={idle.stayActive}
+        onSignOut={() => {
+          void logout().then(() => navigate('/login', { replace: true }))
+        }}
+      />
+    </>
   )
 }
 
@@ -144,8 +174,14 @@ function AppRoutes() {
           }
         />
 
-        <Route path="settings" element={<SetupPanel />}>
-          <Route index element={<Navigate to="users" replace />} />
+        {/*
+          SetupPanel removed. It rendered a THIRD navigation layer — a nested 220px "Setup" nav
+          inside the content area, listing the same Users/Roles/Applications links the topbar gear
+          menu already showed, on top of the main sidebar. Those destinations are now first-class
+          sidebar entries, so the settings routes need no layout wrapper of their own.
+        */}
+        <Route path="settings">
+          <Route index element={<SettingsOverviewPage />} />
           <Route
             path="users"
             element={
@@ -153,23 +189,30 @@ function AppRoutes() {
                 <UsersListPage />
               </RequireCapability>
             }
-          />
-          <Route
-            path="users/new"
-            element={
-              <RequireCapability featureKey={FEATURE_KEYS.users} capability="Create">
-                <UserFormPage />
-              </RequireCapability>
-            }
-          />
-          <Route
-            path="users/:id"
-            element={
-              <RequireCapability featureKey={FEATURE_KEYS.users} capability="Edit">
-                <UserFormPage />
-              </RequireCapability>
-            }
-          />
+          >
+            <Route
+              path="new"
+              element={
+                <RequireCapability featureKey={FEATURE_KEYS.users} capability="Create">
+                  <UserFormPage />
+                </RequireCapability>
+              }
+            />
+            <Route
+              path=":id"
+              element={
+                <RequireCapability featureKey={FEATURE_KEYS.users} capability="Edit">
+                  <UserFormPage />
+                </RequireCapability>
+              }
+            />
+          </Route>
+          {/*
+            The form routes are NESTED inside the list route and rendered through the list page's
+            <Outlet />, so /settings/roles/:id shows the drawer OVER the list rather than on a blank
+            page. The URLs are unchanged, so deep links still work and Back closes the drawer by
+            returning to the list route.
+          */}
           <Route
             path="roles"
             element={
@@ -177,23 +220,24 @@ function AppRoutes() {
                 <RolesListPage />
               </RequireCapability>
             }
-          />
-          <Route
-            path="roles/new"
-            element={
-              <RequireCapability featureKey={FEATURE_KEYS.roles} capability="Create">
-                <RoleFormPage />
-              </RequireCapability>
-            }
-          />
-          <Route
-            path="roles/:id"
-            element={
-              <RequireCapability featureKey={FEATURE_KEYS.roles} capability="Edit">
-                <RoleFormPage />
-              </RequireCapability>
-            }
-          />
+          >
+            <Route
+              path="new"
+              element={
+                <RequireCapability featureKey={FEATURE_KEYS.roles} capability="Create">
+                  <RoleFormPage />
+                </RequireCapability>
+              }
+            />
+            <Route
+              path=":id"
+              element={
+                <RequireCapability featureKey={FEATURE_KEYS.roles} capability="Edit">
+                  <RoleFormPage />
+                </RequireCapability>
+              }
+            />
+          </Route>
           <Route
             path="applications"
             element={
@@ -201,23 +245,24 @@ function AppRoutes() {
                 <RemoteAppsListPage />
               </RequireCapability>
             }
-          />
-          <Route
-            path="applications/new"
-            element={
-              <RequireCapability featureKey={FEATURE_KEYS.applications} capability="Create">
-                <RemoteAppFormPage />
-              </RequireCapability>
-            }
-          />
-          <Route
-            path="applications/:id"
-            element={
-              <RequireCapability featureKey={FEATURE_KEYS.applications} capability="Edit">
-                <RemoteAppFormPage />
-              </RequireCapability>
-            }
-          />
+          >
+            <Route
+              path="new"
+              element={
+                <RequireCapability featureKey={FEATURE_KEYS.applications} capability="Register">
+                  <RemoteAppFormPage />
+                </RequireCapability>
+              }
+            />
+            <Route
+              path=":id"
+              element={
+                <RequireCapability featureKey={FEATURE_KEYS.applications} capability="Edit">
+                  <RemoteAppFormPage />
+                </RequireCapability>
+              }
+            />
+          </Route>
         </Route>
       </Route>
 

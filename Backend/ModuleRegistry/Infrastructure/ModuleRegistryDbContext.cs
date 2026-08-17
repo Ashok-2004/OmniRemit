@@ -32,7 +32,11 @@ public class ModuleRegistryDbContext(DbContextOptions<ModuleRegistryDbContext> o
 
         modelBuilder.Entity<RemoteAppCapability>(entity =>
         {
-            entity.HasIndex(c => new { c.RemoteAppId, c.Key }).IsUnique();
+            // Uniqueness is now per (app, module, capability) — "View" can legitimately exist under
+            // both the Employee and Department sub-modules of the same app.
+            entity.HasIndex(c => new { c.RemoteAppId, c.ModuleKey, c.Key }).IsUnique();
+            entity.Property(c => c.ModuleKey).HasMaxLength(100);
+            entity.Property(c => c.ModuleDisplayName).HasMaxLength(150);
             entity.Property(c => c.Key).HasMaxLength(50);
             entity.Property(c => c.DisplayName).HasMaxLength(100);
 

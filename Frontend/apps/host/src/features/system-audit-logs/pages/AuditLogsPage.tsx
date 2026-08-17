@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '../../auth/store/authStore'
+import { useDebouncedValue } from '../../../shared/hooks/useDebouncedValue'
+import { queryKeys } from '../../../shared/query/queryKeys'
 import { Input } from '../../../shared/components/Input/Input'
 import { Button } from '../../../shared/components/Button/Button'
 import { Badge, type BadgeTone } from '../../../shared/components/Badge/Badge'
 import { Table } from '../../../shared/components/Table/Table'
-import { SkeletonTable } from '../../../shared/components/Skeleton'
+import { SkeletonBlock, SkeletonTable } from '../../../shared/components/Skeleton'
 import { Tabs, TabPanel } from '../../../shared/components/Tabs/Tabs'
 import { Modal } from '../../../shared/components/Modal/Modal'
 import { PermissionGate } from '../../../shared/components/PermissionGate/PermissionGate'
@@ -23,6 +26,10 @@ const SERVICE_TONES: Record<string, BadgeTone> = {
 
 function serviceTone(serviceName: string): BadgeTone {
   return SERVICE_TONES[serviceName] ?? 'neutral'
+}
+
+function toMessage(error: unknown) {
+  return error instanceof ApiError ? error.message : 'Could not load audit logs.'
 }
 
 function formatTimestamp(iso: string) {
@@ -97,64 +104,88 @@ const TAB_ACTION_FILTER: Record<TabId, string | undefined> = {
 export function AuditLogsPage() {
   const accessToken = useAuthStore((s) => s.accessToken)
 
+  const [exportError, setExportError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<TabId>(TAB_IDS.loginErrors)
   const [dateRange, setDateRange] = useState<DateRangePreset>('week')
   const [page, setPage] = useState(1)
   const [service, setService] = useState('')
 
-  const [summary, setSummary] = useState<AuditLogSummaryDto | null>(null)
-  const [logs, setLogs] = useState<AuditLogDto[] | null>(null)
-  const [total, setTotal] = useState(0)
-  const [error, setError] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const [selectedFailure, setSelectedFailure] = useState<AuditLogDto | null>(null)
 
   const range = useMemo(() => computeRange(dateRange), [dateRange])
 
-  const loadSummary = useCallback(async () => {
-    if (!accessToken) return
-    try {
-      const result = await auditLogsApi.summary(accessToken, range)
-      setSummary(result)
-    } catch {
-      // summary cards are a nice-to-have — leave them blank rather than blocking the table
-    }
-  }, [accessToken, range])
+  // Debounced so typing a service name doesn't fire one request per keystroke. The input stays fully
+  // controlled by `service`, so it never feels laggy — only the query is delayed.
+  const debouncedService = useDebouncedValue(service, 300)
 
-  const loadLogs = useCallback(async () => {
-    if (!accessToken) return
-    setError(null)
-    try {
-      const result = await auditLogsApi.list(accessToken, {
+  const summaryQuery = useQuery({
+    queryKey: queryKeys.auditLogs.summary(range),
+    queryFn: () => auditLogsApi.summary(accessToken!, range),
+    enabled: Boolean(accessToken),
+  })
+
+  /**
+   * THE FIX for the reported "wrong tab's rows flash before the right ones" bug.
+   *
+   * `tab` is part of the query key, so each tab reads its OWN cache entry. Previously all three tabs
+   * shared a single `logs` state that was only ever written, never reset — so switching tab
+   * re-rendered instantly with the PREVIOUS tab's rows underneath the NEW tab's column headers, and
+   * only corrected itself when the network came back. That was deterministic, not a race.
+   *
+   * `placeholderData` is deliberately NOT set: keeping previous data is exactly the behaviour that
+   * caused the bug. An unfetched tab shows its skeleton, which is honest.
+   */
+  const logsQuery = useQuery({
+    queryKey: queryKeys.auditLogs.list({
+      tab: activeTab,
+      page,
+      pageSize: PAGE_SIZE,
+      service: debouncedService || undefined,
+      ...range,
+    }),
+    queryFn: () =>
+      auditLogsApi.list(accessToken!, {
         page,
         pageSize: PAGE_SIZE,
-        service: service || undefined,
+        service: debouncedService || undefined,
         action: TAB_ACTION_FILTER[activeTab],
         ...range,
-      })
-      setLogs(result.items)
-      setTotal(result.total)
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not load audit logs.')
-    }
-  }, [accessToken, page, service, activeTab, range])
+      }),
+    enabled: Boolean(accessToken),
+  })
 
-  useEffect(() => {
-    void loadSummary()
-  }, [loadSummary])
+  const summary: AuditLogSummaryDto | undefined = summaryQuery.data
+  const logs = logsQuery.data?.items
+  const total = logsQuery.data?.total ?? 0
+  const error = exportError ?? (logsQuery.isError ? toMessage(logsQuery.error) : null)
 
-  useEffect(() => {
-    void loadLogs()
-  }, [loadLogs])
-
-  useEffect(() => {
+  /**
+   * Page is reset here, in the handlers, rather than in an effect.
+   *
+   * The old code reset it in a `useEffect` registered AFTER the fetch effect, so every tab/filter
+   * change fired TWO requests — one with the stale page, then one with page 1 — and with no
+   * cancellation the stale-page response could land second and win.
+   */
+  function selectTab(key: TabId) {
+    setActiveTab(key)
     setPage(1)
-  }, [activeTab, dateRange, service])
+  }
+
+  function selectDateRange(key: DateRangePreset) {
+    setDateRange(key)
+    setPage(1)
+  }
+
+  function updateServiceFilter(value: string) {
+    setService(value)
+    setPage(1)
+  }
 
   async function handleExport() {
     if (!accessToken) return
     setExporting(true)
-    setError(null)
+    setExportError(null)
     try {
       await auditLogsApi.exportCsv(accessToken, {
         service: service || undefined,
@@ -162,7 +193,7 @@ export function AuditLogsPage() {
         ...range,
       })
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not export audit logs.')
+      setExportError(err instanceof ApiError ? err.message : 'Could not export audit logs.')
     } finally {
       setExporting(false)
     }
@@ -190,7 +221,7 @@ export function AuditLogsPage() {
               key={r.key}
               type="button"
               className={r.key === dateRange ? styles.dateRangeActive : styles.dateRangeButton}
-              onClick={() => setDateRange(r.key)}
+              onClick={() => selectDateRange(r.key)}
             >
               {r.label}
             </button>
@@ -203,43 +234,50 @@ export function AuditLogsPage() {
           <span className={styles.summaryIcon} aria-hidden="true">✓</span>
           <div>
             <span className={styles.summaryLabel}>Login Successes</span>
-            <span className={styles.summaryValue}>{summary?.loginSuccesses ?? '—'}</span>
+            <span className={styles.summaryValue}>{summaryQuery.isPending ? <SkeletonBlock height={28} width={60} /> : (summary?.loginSuccesses?.toLocaleString() ?? "—")}</span>
           </div>
         </div>
         <div className={styles.summaryCard}>
           <span className={styles.summaryIcon} aria-hidden="true">⚠</span>
           <div>
             <span className={styles.summaryLabel}>Login Errors</span>
-            <span className={styles.summaryValue}>{summary?.loginErrors ?? '—'}</span>
+            <span className={styles.summaryValue}>{summaryQuery.isPending ? <SkeletonBlock height={28} width={60} /> : (summary?.loginErrors?.toLocaleString() ?? "—")}</span>
           </div>
         </div>
         <div className={styles.summaryCard}>
           <span className={styles.summaryIcon} aria-hidden="true">📄</span>
           <div>
             <span className={styles.summaryLabel}>Audit Events</span>
-            <span className={styles.summaryValue}>{summary?.totalAuditEvents ?? '—'}</span>
+            <span className={styles.summaryValue}>{summaryQuery.isPending ? <SkeletonBlock height={28} width={60} /> : (summary?.totalAuditEvents?.toLocaleString() ?? "—")}</span>
           </div>
         </div>
         <div className={styles.summaryCard}>
           <span className={styles.summaryIcon} aria-hidden="true">👥</span>
           <div>
             <span className={styles.summaryLabel}>Active Users</span>
-            <span className={styles.summaryValue}>{summary?.activeUsers ?? '—'}</span>
+            <span className={styles.summaryValue}>{summaryQuery.isPending ? <SkeletonBlock height={28} width={60} /> : (summary?.activeUsers?.toLocaleString() ?? "—")}</span>
           </div>
         </div>
       </div>
 
-      <Tabs id="audit-logs-tabs" tabs={tabs} activeKey={activeTab} onChange={(key) => setActiveTab(key as TabId)} />
+      <Tabs id="audit-logs-tabs" tabs={tabs} activeKey={activeTab} onChange={(key) => selectTab(key as TabId)} />
 
       <div className={styles.toolbar}>
         <Input
           className={styles.filterInput}
           placeholder="Filter by service (e.g. AuthService)…"
           value={service}
-          onChange={(e) => setService(e.target.value)}
+          onChange={(e) => updateServiceFilter(e.target.value)}
         />
         <div className={styles.toolbarActions}>
-          <Button variant="secondary" onClick={() => void loadLogs()}>
+          <Button
+            variant="secondary"
+            loading={logsQuery.isFetching}
+            onClick={() => {
+              void logsQuery.refetch()
+              void summaryQuery.refetch()
+            }}
+          >
             Refresh
           </Button>
           <PermissionGate featureKey={FEATURE} capability="Export">
@@ -254,8 +292,13 @@ export function AuditLogsPage() {
 
       {[TAB_IDS.loginErrors, TAB_IDS.loginSuccesses, TAB_IDS.auditEvents].map((tabId) => (
         <TabPanel key={tabId} id="audit-logs-tabs" tabId={tabId} active={activeTab === tabId}>
-          {logs === null ? (
-            <SkeletonTable rows={8} columns={isLoginTab ? 6 : 6} />
+          {/*
+            Skeleton whenever this tab's own data isn't loaded yet — including the very first visit
+            to a tab. There is no shared `logs` slot any more, so another tab's rows can never appear
+            here while this one loads.
+          */}
+          {logs === undefined ? (
+            <SkeletonTable rows={8} columns={isLoginTab ? 7 : 6} />
           ) : (
             <Table>
               <thead>
@@ -283,7 +326,8 @@ export function AuditLogsPage() {
               <tbody>
                 {logs.length === 0 && (
                   <tr>
-                    <td colSpan={7} className={styles.emptyCell}>
+                    {/* Must match the header count for this tab, or the empty row spills past the table. */}
+                    <td colSpan={activeTab === TAB_IDS.loginErrors ? 7 : 6} className={styles.emptyCell}>
                       No entries match these filters.
                     </td>
                   </tr>

@@ -23,6 +23,15 @@ export interface RemoteAppDto {
   permissionFeatureKey: string
   permissionsSourceUrl: string | null
   capabilities: CapabilityDto[]
+  /**
+   * Last observed reachability from ModuleRegistry's background manifest probe. 'Unknown' means not
+   * probed yet and is rendered neutrally — never as a failure.
+   */
+  health: 'Unknown' | 'Healthy' | 'Unreachable'
+  lastHealthCheckAt: string | null
+  lastHealthError: string | null
+  /** Module Federation container name read from the built manifest. Null until first probed. */
+  containerName: string | null
   createdAt: string
   updatedAt: string
 }

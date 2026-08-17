@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using ModuleRegistry.Application.DTOs;
 using ModuleRegistry.Application.Exceptions;
+using ModuleRegistry.Domain;
 using ModuleRegistry.Domain.Entities;
 using ModuleRegistry.Domain.Enums;
 using ModuleRegistry.Infrastructure;
@@ -303,7 +304,7 @@ public partial class RemoteAppAppService(
 
         var visible = isAdministrator
             ? apps
-            : apps.Where(a => permissions.Any(p => p.StartsWith($"{a.PermissionFeatureKey}:", StringComparison.Ordinal))).ToList();
+            : apps.Where(a => HasAnyPermissionFor(permissions, a.PermissionFeatureKey)).ToList();
 
         return visible
             .Select(a => new SidebarAppDto(
@@ -329,7 +330,7 @@ public partial class RemoteAppAppService(
         // an app the caller has no capability on.
         var visible = isAdministrator
             ? apps
-            : apps.Where(a => permissions.Any(p => p.StartsWith($"{a.PermissionFeatureKey}:", StringComparison.Ordinal))).ToList();
+            : apps.Where(a => HasAnyPermissionFor(permissions, a.PermissionFeatureKey)).ToList();
 
         return visible
             .Select(a => new HealthEntryDto(a.Key, a.DisplayName, a.Health.ToString(), a.LastHealthCheckAt, a.LastHealthError))
@@ -355,7 +356,7 @@ public partial class RemoteAppAppService(
     /// many apps into a single SaveChanges. Returns the staged rows, or null when the fetch failed
     /// (in which case the last-known set is deliberately left untouched).
     /// </summary>
-    private List<RemoteAppCapability>? ApplyFetchedCapabilities(RemoteApp app, IReadOnlyList<(string Key, string DisplayName)>? fetched)
+    private List<RemoteAppCapability>? ApplyFetchedCapabilities(RemoteApp app, IReadOnlyList<RemoteCapability>? fetched)
     {
         if (fetched is null)
         {
@@ -371,6 +372,8 @@ public partial class RemoteAppAppService(
             {
                 Id = Guid.NewGuid(),
                 RemoteAppId = app.Id,
+                ModuleKey = cap.ModuleKey,
+                ModuleDisplayName = cap.ModuleDisplayName,
                 Key = cap.Key,
                 DisplayName = cap.DisplayName,
                 SortOrder = i * 10,
@@ -403,8 +406,26 @@ public partial class RemoteAppAppService(
         }
     }
 
-    private static IReadOnlyList<(string Key, string DisplayName)> ToCapabilityTuples(RemoteApp app) =>
-        app.Capabilities.OrderBy(c => c.SortOrder).Select(c => (c.Key, c.DisplayName)).ToList();
+    private static IReadOnlyList<RemoteCapability> ToCapabilityTuples(RemoteApp app) =>
+        app.Capabilities
+            .OrderBy(c => c.ModuleKey).ThenBy(c => c.SortOrder)
+            .Select(c => new RemoteCapability(c.ModuleKey, c.ModuleDisplayName, c.Key, c.DisplayName))
+            .ToList();
+
+    /// <summary>
+    /// True when the caller holds ANY permission on an app — on the app itself OR on one of its
+    /// sub-modules.
+    /// <para>
+    /// The second clause is essential and easy to miss. Sub-module permissions are keyed
+    /// "remote.employee.department:Edit", which does NOT start with "remote.employee:" — so a
+    /// prefix check on the colon form alone would hide the app entirely from a user whose only
+    /// grants happen to be on its sub-modules. That is most users, once roles are scoped properly.
+    /// </para>
+    /// </summary>
+    private static bool HasAnyPermissionFor(IReadOnlySet<string> permissions, string featureKey) =>
+        permissions.Any(p =>
+            p.StartsWith($"{featureKey}:", StringComparison.Ordinal) ||
+            p.StartsWith($"{featureKey}.", StringComparison.Ordinal));
 
     private static string ToFeatureKey(string key) => $"remote.{key}";
 

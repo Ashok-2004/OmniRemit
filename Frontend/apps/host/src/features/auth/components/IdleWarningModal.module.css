@@ -1,0 +1,22 @@
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--omni-space-5);
+}
+
+.message {
+  margin: 0;
+  font-size: var(--omni-font-size-md);
+  color: var(--omni-color-text-secondary);
+}
+
+.count {
+  color: var(--omni-color-danger-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--omni-space-3);
+}

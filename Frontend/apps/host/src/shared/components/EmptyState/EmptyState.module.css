@@ -1,0 +1,41 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--omni-space-2);
+  /* Bottom padding is deliberately larger than top — an optically centred block sits slightly high. */
+  padding: var(--omni-space-8) var(--omni-space-6) calc(var(--omni-space-8) + var(--omni-space-2));
+}
+
+.icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: var(--omni-space-2);
+  border-radius: var(--omni-radius-lg);
+  background: var(--omni-color-primary-50);
+  color: var(--omni-color-primary-600);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--omni-font-size-lg);
+  font-weight: var(--omni-font-weight-semibold);
+  color: var(--omni-color-text-primary);
+}
+
+.description {
+  margin: 0;
+  font-size: var(--omni-font-size-sm);
+  color: var(--omni-color-text-secondary);
+  /* Roughly 65 characters — past that the eye loses the line when it wraps. */
+  max-width: 44ch;
+  text-wrap: pretty;
+}
+
+.action {
+  margin-top: var(--omni-space-3);
+}

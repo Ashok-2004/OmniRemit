@@ -11,7 +11,7 @@ export interface RequireCapabilityProps {
 }
 
 /**
- * Route-level permission gate — SetupPanel already hides links the user can't use, this stops
+ * Route-level permission gate — the sidebar already hides links the user cannot use, this stops
  * direct URL access too. Defensive `status === 'hydrating'` guard mirrors RequireAuth's own: in
  * today's route tree this component is always nested inside RequireAuth (which already blocks
  * rendering until hydration finishes), so `user` is never actually null by the time this evaluates

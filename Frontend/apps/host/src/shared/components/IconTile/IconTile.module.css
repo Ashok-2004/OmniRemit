@@ -1,0 +1,56 @@
+.tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Radius scales with the tile so the corners stay optically consistent rather than
+   proportionally tighter as the box grows. */
+.sm {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--omni-radius-md);
+}
+
+.md {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--omni-radius-lg);
+}
+
+.lg {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--omni-radius-xl);
+}
+
+.primary {
+  background: var(--omni-color-primary-50);
+  color: var(--omni-color-primary-600);
+}
+
+.success {
+  background: var(--omni-color-success-bg);
+  color: var(--omni-color-success-text);
+}
+
+.warning {
+  background: var(--omni-color-warning-bg);
+  color: var(--omni-color-warning-text);
+}
+
+.danger {
+  background: var(--omni-color-danger-bg);
+  color: var(--omni-color-danger-text);
+}
+
+.info {
+  background: var(--omni-color-info-bg);
+  color: var(--omni-color-info-text);
+}
+
+.neutral {
+  background: var(--omni-color-surface-sunken);
+  color: var(--omni-color-text-secondary);
+}

@@ -3,6 +3,9 @@ import { Link } from 'react-router-dom'
 import { useClickOutside } from '../../shared/hooks/useClickOutside'
 import { useMenuKeyboardNav } from '../../shared/hooks/useMenuKeyboardNav'
 import { Icon } from '../../shared/components/Icon/Icon'
+import { SecurityAlertsMenu } from '../../features/notifications/components/SecurityAlertsMenu/SecurityAlertsMenu'
+import { GlobalSearch } from '../../features/search/components/GlobalSearch/GlobalSearch'
+import { SettingsDrawer } from '../SettingsDrawer/SettingsDrawer'
 import styles from './Topbar.module.css'
 
 export interface TopbarSettingsAccess {
@@ -14,84 +17,58 @@ export interface TopbarSettingsAccess {
 export interface TopbarProps {
   userName?: string
   settingsAccess?: TopbarSettingsAccess
+  /** Gates the security-alerts bell, whose contents are audit-log rows. */
+  canAccessAuditLogs?: boolean
   onLogout?: () => void
 }
 
 /**
- * Gear icon → grouped popover menu, not a page nav — the same pattern GitHub's org gear, Vercel's
- * project settings button, and most other multi-tenant admin dashboards use: the entry point stays
- * a single lightweight icon in the topbar, and only the items the caller can actually use appear
- * inside. Each item still routes into the existing SetupPanel sub-nav, so nothing about the
- * destination pages changes — only how you get there.
+ * Gear icon opens the Settings drawer (see layout/SettingsDrawer).
+ *
+ * It was previously a small popover listing Users/Roles/Applications, and those same three also sat
+ * in the sidebar — two simultaneous routes to the same pages. The sidebar entries are gone; this is
+ * now the single entry point, and the drawer adds a live summary of whichever area you are in.
  */
-const SETTINGS_LINKS = [
-  { key: 'users' as const, label: 'Users', path: '/settings/users', Icon: Icon.Users },
-  { key: 'roles' as const, label: 'Roles', path: '/settings/roles', Icon: Icon.ShieldCheck },
-  { key: 'applications' as const, label: 'Applications', path: '/settings/applications', Icon: Icon.Grid },
-]
 
-export function Topbar({ userName, settingsAccess, onLogout }: TopbarProps) {
+export function Topbar({ userName, settingsAccess, canAccessAuditLogs, onLogout }: TopbarProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
-  const settingsRef = useRef<HTMLDivElement>(null)
   const userTriggerRef = useRef<HTMLButtonElement>(null)
   const settingsTriggerRef = useRef<HTMLButtonElement>(null)
 
   useClickOutside([menuRef], () => setMenuOpen(false), menuOpen)
-  useClickOutside([settingsRef], () => setSettingsOpen(false), settingsOpen)
 
   const handleUserMenuKeyDown = useMenuKeyboardNav(menuRef, () => setMenuOpen(false), userTriggerRef)
-  const handleSettingsMenuKeyDown = useMenuKeyboardNav(settingsRef, () => setSettingsOpen(false), settingsTriggerRef)
 
   const initial = userName?.trim().charAt(0).toUpperCase() || '?'
-  const visibleSettingsLinks = SETTINGS_LINKS.filter((link) => settingsAccess?.[link.key])
+  const hasAnySettingsAccess = Boolean(settingsAccess && (settingsAccess.users || settingsAccess.roles || settingsAccess.applications))
 
   return (
     <header className={styles.topbar}>
-      <div className={styles.search} aria-hidden="true">
-        <Icon.Search width={16} height={16} />
-        <span>Search…</span>
-      </div>
+      <GlobalSearch />
 
       <div className={styles.actions}>
-        {visibleSettingsLinks.length > 0 && (
-          <div className={styles.menuWrapper} ref={settingsRef} onKeyDown={handleSettingsMenuKeyDown}>
-            <button
-              ref={settingsTriggerRef}
-              type="button"
-              className={styles.iconButton}
-              aria-label="Settings"
-              aria-haspopup="menu"
-              aria-expanded={settingsOpen}
-              onClick={() => setSettingsOpen((open) => !open)}
-            >
-              <Icon.Settings width={18} height={18} />
-            </button>
-
-            {settingsOpen && (
-              <div className={styles.menu} role="menu">
-                <div className={styles.menuLabel}>Setup</div>
-                {visibleSettingsLinks.map((link) => (
-                  <Link
-                    key={link.key}
-                    to={link.path}
-                    role="menuitem"
-                    className={styles.menuItem}
-                    onClick={() => setSettingsOpen(false)}
-                  >
-                    <link.Icon width={16} height={16} />
-                    <span>{link.label}</span>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
+        {hasAnySettingsAccess && (
+          <button
+            ref={settingsTriggerRef}
+            type="button"
+            className={styles.iconButton}
+            aria-label="Settings"
+            aria-haspopup="dialog"
+            aria-expanded={settingsOpen}
+            onClick={() => setSettingsOpen(true)}
+          >
+            <Icon.Settings width={18} height={18} />
+          </button>
         )}
 
-        <button type="button" className={styles.iconButton} aria-label="Notifications">
-          <Icon.Bell width={18} height={18} />
-        </button>
+        {/*
+          Gated on the audit-log View capability: the alerts are audit rows, so someone who cannot
+          read the audit log must not see a bell at all — an empty bell would be worse than none,
+          and a populated one would leak data they aren't entitled to.
+        */}
+        {canAccessAuditLogs && <SecurityAlertsMenu />}
 
         <div className={styles.menuWrapper} ref={menuRef} onKeyDown={handleUserMenuKeyDown}>
           <button
@@ -129,6 +106,16 @@ export function Topbar({ userName, settingsAccess, onLogout }: TopbarProps) {
           )}
         </div>
       </div>
+
+      {/* Rendered here rather than in AppShell so the gear's own focus-restore target is the trigger
+          that opened it — Drawer returns focus to whatever was focused when it mounted. */}
+      {settingsAccess && (
+        <SettingsDrawer
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          access={settingsAccess}
+        />
+      )}
     </header>
   )
 }

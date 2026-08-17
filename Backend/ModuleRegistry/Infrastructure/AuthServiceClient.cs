@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using System.Net.Http.Json;
 using Microsoft.Extensions.Options;
+using ModuleRegistry.Domain;
 using ModuleRegistry.Options;
 
 namespace ModuleRegistry.Infrastructure;
@@ -26,29 +27,38 @@ public class AuthServiceClient(HttpClient httpClient, IOptions<AuthIntegrationOp
     private readonly AuthIntegrationOptions _options = options.Value;
 
     private record UpsertCapabilityRequest(string Key, string DisplayName, int SortOrder = 100);
-    private record UpsertFeatureRequest(string Key, string DisplayName, int SortOrder, IReadOnlyList<UpsertCapabilityRequest> Capabilities);
+
+    /// <summary>One sub-module of a feature, with its own capabilities. AuthService turns each into a child PermissionFeature.</summary>
+    private record UpsertModuleRequest(string Key, string DisplayName, int SortOrder, IReadOnlyList<UpsertCapabilityRequest> Capabilities);
+
+    private record UpsertFeatureRequest(
+        string Key,
+        string DisplayName,
+        int SortOrder,
+        IReadOnlyList<UpsertCapabilityRequest> Capabilities,
+        IReadOnlyList<UpsertModuleRequest> Modules);
     private record DeactivateFeatureRequest(string Key);
     private record ResyncFeaturesRequest(IReadOnlyList<UpsertFeatureRequest> Features);
     private record RecordAuditLogRequest(string ServiceName, Guid? ActorUserId, string? ActorName, string Action, string? EntityType, string? EntityId, string? Details);
 
     public Task<bool> UpsertAsync(
         string featureKey, string displayName, int sortOrder,
-        IReadOnlyList<(string Key, string DisplayName)> capabilities, CancellationToken ct = default) =>
+        IReadOnlyList<RemoteCapability> capabilities, CancellationToken ct = default) =>
         PostAsync(
             "internal/permission-features/upsert",
-            new UpsertFeatureRequest(featureKey, displayName, sortOrder, ToCapabilityRequests(capabilities)),
+            BuildFeatureRequest(featureKey, displayName, sortOrder, capabilities),
             ct);
 
     public Task<bool> DeactivateAsync(string featureKey, CancellationToken ct = default) =>
         PostAsync("internal/permission-features/deactivate", new DeactivateFeatureRequest(featureKey), ct);
 
     public Task<bool> ResyncAsync(
-        IReadOnlyList<(string Key, string DisplayName, int SortOrder, IReadOnlyList<(string Key, string DisplayName)> Capabilities)> features,
+        IReadOnlyList<(string Key, string DisplayName, int SortOrder, IReadOnlyList<RemoteCapability> Capabilities)> features,
         CancellationToken ct = default) =>
         PostAsync(
             "internal/permission-features/resync",
             new ResyncFeaturesRequest(features
-                .Select(f => new UpsertFeatureRequest(f.Key, f.DisplayName, f.SortOrder, ToCapabilityRequests(f.Capabilities)))
+                .Select(f => BuildFeatureRequest(f.Key, f.DisplayName, f.SortOrder, f.Capabilities))
                 .ToList()),
             ct);
 
@@ -58,16 +68,32 @@ public class AuthServiceClient(HttpClient httpClient, IOptions<AuthIntegrationOp
             new RecordAuditLogRequest("ModuleRegistry", actorUserId, actorName, action, entityType, entityId, details),
             ct);
 
-    private record RemoteCapabilitiesResponse(List<RemoteCapabilityEntry>? Capabilities);
+    private record RemoteCapabilitiesResponse(
+        [property: JsonPropertyName("modules")] List<RemoteModuleEntry>? Modules,
+        [property: JsonPropertyName("capabilities")] List<RemoteCapabilityEntry>? Capabilities);
+
+    private record RemoteModuleEntry(
+        [property: JsonPropertyName("key")] string Key,
+        [property: JsonPropertyName("displayName")] string DisplayName,
+        [property: JsonPropertyName("capabilities")] List<RemoteCapabilityEntry>? Capabilities);
+
     private record RemoteCapabilityEntry([property: JsonPropertyName("key")] string Key, [property: JsonPropertyName("displayName")] string DisplayName);
 
     /// <summary>
-    /// GETs a remote app's own PermissionsSourceUrl, expecting `{ "capabilities": [{ "key",
-    /// "displayName" }] }`. Returns null (never an empty list) on any failure so callers can tell
-    /// "unreachable, keep the last-known set" apart from "reachable and genuinely declares zero
-    /// capabilities".
+    /// GETs a remote app's own PermissionsSourceUrl.
+    /// <para>
+    /// Prefers the v2 shape — <c>{ "modules": [{ "key", "displayName", "capabilities": [...] }] }</c> —
+    /// and falls back to the original flat <c>{ "capabilities": [...] }</c>, which is treated as one
+    /// unnamed module. That fallback is what lets a remote app built against the older contract keep
+    /// working untouched instead of suddenly reporting zero permissions and revoking everyone's
+    /// access to it.
+    /// </para>
+    /// <para>
+    /// Returns null (never an empty list) on any failure so callers can tell "unreachable, keep the
+    /// last-known set" apart from "reachable and genuinely declares zero capabilities".
+    /// </para>
     /// </summary>
-    public async Task<IReadOnlyList<(string Key, string DisplayName)>?> FetchRemoteCapabilitiesAsync(string sourceUrl, CancellationToken ct = default)
+    public async Task<IReadOnlyList<RemoteCapability>?> FetchRemoteCapabilitiesAsync(string sourceUrl, CancellationToken ct = default)
     {
         try
         {
@@ -79,13 +105,30 @@ public class AuthServiceClient(HttpClient httpClient, IOptions<AuthIntegrationOp
             }
 
             var body = await response.Content.ReadFromJsonAsync<RemoteCapabilitiesResponse>(cancellationToken: ct);
-            if (body?.Capabilities is null)
+
+            if (body?.Modules is { Count: > 0 })
             {
-                logger.LogWarning("Remote app permissions source {Url} returned an unexpected shape. Keeping last-known capability set.", sourceUrl);
-                return null;
+                return body.Modules
+                    .SelectMany(m => (m.Capabilities ?? [])
+                        .Select(c => new RemoteCapability(m.Key, m.DisplayName, c.Key, c.DisplayName)))
+                    .ToList();
             }
 
-            return body.Capabilities.Select(c => (c.Key, c.DisplayName)).ToList();
+            if (body?.Capabilities is not null)
+            {
+                logger.LogInformation(
+                    "Remote app permissions source {Url} uses the flat (v1) contract. Treating its capabilities as one implicit module.",
+                    sourceUrl);
+
+                // Empty ModuleKey means "no sub-module" — AuthService hangs these capabilities
+                // directly off the app's own feature, exactly as before.
+                return body.Capabilities
+                    .Select(c => new RemoteCapability(string.Empty, string.Empty, c.Key, c.DisplayName))
+                    .ToList();
+            }
+
+            logger.LogWarning("Remote app permissions source {Url} returned an unexpected shape. Keeping last-known capability set.", sourceUrl);
+            return null;
         }
         catch (Exception ex)
         {
@@ -94,8 +137,28 @@ public class AuthServiceClient(HttpClient httpClient, IOptions<AuthIntegrationOp
         }
     }
 
-    private static IReadOnlyList<UpsertCapabilityRequest> ToCapabilityRequests(IReadOnlyList<(string Key, string DisplayName)> capabilities) =>
-        capabilities.Select((c, i) => new UpsertCapabilityRequest(c.Key, c.DisplayName, i * 10)).ToList();
+    /// <summary>Groups the flat capability rows back into the nested module shape AuthService expects.</summary>
+    private static UpsertFeatureRequest BuildFeatureRequest(
+        string featureKey, string displayName, int sortOrder, IReadOnlyList<RemoteCapability> capabilities)
+    {
+        // Capabilities with no module hang directly off the feature; the rest become child features.
+        var rootCapabilities = capabilities
+            .Where(c => string.IsNullOrEmpty(c.ModuleKey))
+            .Select((c, i) => new UpsertCapabilityRequest(c.Key, c.DisplayName, i * 10))
+            .ToList();
+
+        var modules = capabilities
+            .Where(c => !string.IsNullOrEmpty(c.ModuleKey))
+            .GroupBy(c => (c.ModuleKey, c.ModuleDisplayName))
+            .Select((g, moduleIndex) => new UpsertModuleRequest(
+                g.Key.ModuleKey,
+                g.Key.ModuleDisplayName,
+                moduleIndex * 10,
+                g.Select((c, i) => new UpsertCapabilityRequest(c.Key, c.DisplayName, i * 10)).ToList()))
+            .ToList();
+
+        return new UpsertFeatureRequest(featureKey, displayName, sortOrder, rootCapabilities, modules);
+    }
 
     private async Task<bool> PostAsync<TBody>(string path, TBody body, CancellationToken ct)
     {

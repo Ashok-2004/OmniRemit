@@ -21,6 +21,25 @@ public class PermissionFeature
 
     public int SortOrder { get; set; }
 
+    /// <summary>
+    /// Set when this feature is a SUB-MODULE of another (e.g. "remote.employee.department" under
+    /// "remote.employee"). Null for top-level modules.
+    /// <para>
+    /// Making sub-modules first-class features — rather than encoding them into the capability
+    /// string as "Department.Edit" — is what keeps everything else untouched: the JWT stays
+    /// "&lt;featureKey&gt;:&lt;capability&gt;", RolePermission and UserPermissionOverride are unchanged, and
+    /// both enforcement attributes keep doing a plain string match. It also gives each sub-module a
+    /// real DisplayName, which a composite capability key has nowhere to store (every DTO hop is a
+    /// bare Key/DisplayName pair, and the capability columns are capped at 50 chars).
+    /// </para>
+    /// </summary>
+    public Guid? ParentFeatureId { get; set; }
+
+    public PermissionFeature? ParentFeature { get; set; }
+
+    /// <summary>Sub-modules of this feature. Empty for a leaf or for a feature with no sub-modules.</summary>
+    public ICollection<PermissionFeature> Children { get; set; } = new List<PermissionFeature>();
+
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 

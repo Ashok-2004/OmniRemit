@@ -14,6 +14,22 @@ public class RefreshToken
 
     public required string TokenHash { get; set; }
     public DateTimeOffset ExpiresAt { get; set; }
+
+    /// <summary>
+    /// Hard end of the whole sign-in session, set once at login and copied forward unchanged through
+    /// every rotation.
+    /// <para>
+    /// Without this a session slid forever: each rotation issued a brand-new token with a fresh full
+    /// <c>RefreshTokenDays</c> window, so a client that refreshed periodically stayed authenticated
+    /// indefinitely and no amount of elapsed time ever forced a re-login.
+    /// </para>
+    /// <para>
+    /// Stored as an absolute instant rather than a session-start marker so <see cref="ExpiresAt"/>
+    /// remains the single authority on validity — it is clamped to never exceed this value, which
+    /// means the existing expiry check keeps working untouched.
+    /// </para>
+    /// </summary>
+    public DateTimeOffset AbsoluteExpiresAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? RevokedAt { get; set; }
     public Guid? ReplacedByTokenId { get; set; }

@@ -36,7 +36,7 @@ public class EmployeesController : ControllerBase
     /// </para>
     /// </summary>
     [HttpGet]
-    [RequiresCapability("View")]
+    [RequiresCapability("Employee", "View")]
     public async Task<IActionResult> GetEmployees([FromQuery] EmployeeQuery query)
     {
         var employees = await _service.GetPagedAsync(query);
@@ -50,7 +50,7 @@ public class EmployeesController : ControllerBase
     }
 
     [HttpPost]
-    [RequiresCapability("Create")]
+    [RequiresCapability("Employee", "Create")]
     public async Task<IActionResult> CreateEmployee(CreateEmployeeRequest request)
     {
         var employee = await _service.CreateAsync(request, CurrentUserId(), CurrentUserName());
@@ -64,7 +64,7 @@ public class EmployeesController : ControllerBase
     }
 
     [HttpPut("{id}")]
-    [RequiresCapability("Edit")]
+    [RequiresCapability("Employee", "Edit")]
     public async Task<IActionResult> UpdateEmployee(Guid id, UpdateEmployeeRequest request)
     {
         var employee = await _service.UpdateAsync(id, request, CurrentUserId(), CurrentUserName());
@@ -79,7 +79,7 @@ public class EmployeesController : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    [RequiresCapability("Delete")]
+    [RequiresCapability("Employee", "Delete")]
     public async Task<IActionResult> DeleteEmployee(Guid id)
     {
         var success = await _service.DeleteAsync(id, CurrentUserId(), CurrentUserName());

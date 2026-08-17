@@ -152,3 +152,117 @@
   white-space: nowrap;
   border: 0;
 }
+
+/* Visually hidden but announced — the badge's "!" glyph is decorative, this carries the meaning. */
+.omniVisuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---- User card (pinned bottom; .nav above is flex: 1) ---- */
+.userCard {
+  display: flex;
+  align-items: center;
+  gap: var(--omni-space-3);
+  margin: var(--omni-space-3);
+  padding: var(--omni-space-3);
+  border: 1px solid var(--omni-color-border);
+  border-radius: var(--omni-radius-lg);
+  background: var(--omni-color-surface);
+  text-decoration: none;
+  color: inherit;
+  flex-shrink: 0;
+  transition: background var(--omni-transition-fast), border-color var(--omni-transition-fast);
+}
+
+.userCard:hover {
+  background: var(--omni-sidebar-bg-hover);
+  border-color: var(--omni-color-border-strong);
+}
+
+.userCard:focus-visible {
+  outline: 2px solid var(--omni-color-primary-500);
+  outline-offset: 2px;
+}
+
+.userAvatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: var(--omni-radius-full);
+  background: var(--omni-color-primary-600);
+  color: var(--omni-color-text-on-primary);
+  font-size: var(--omni-font-size-sm);
+  font-weight: var(--omni-font-weight-semibold);
+}
+
+.userText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.userName {
+  font-size: var(--omni-font-size-sm);
+  font-weight: var(--omni-font-weight-medium);
+  color: var(--omni-color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.userEmail {
+  font-size: var(--omni-font-size-xs);
+  color: var(--omni-color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.userChevron {
+  display: flex;
+  color: var(--omni-color-text-muted);
+  flex-shrink: 0;
+}
+
+/* Below this the fixed 240px sidebar eats the content area with no way out. */
+@media (max-width: 900px) {
+  .sidebar {
+    width: 68px;
+  }
+
+  .navLabel,
+  .sectionLabel,
+  .brandName,
+  .userText,
+  .userChevron {
+    display: none;
+  }
+
+  .navItem,
+  .navItemActive {
+    justify-content: center;
+  }
+
+  .userCard {
+    justify-content: center;
+    padding: var(--omni-space-2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .userCard {
+    transition: none;
+  }
+}

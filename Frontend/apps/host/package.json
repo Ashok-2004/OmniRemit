@@ -11,6 +11,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fontsource-variable/geist": "5.3.0",
+    "@fontsource-variable/geist-mono": "5.3.0",
     "@module-federation/runtime": "^2.8.2",
     "@omniremit/federation-config": "workspace:*",
     "@tanstack/react-query": "^5.90.2",

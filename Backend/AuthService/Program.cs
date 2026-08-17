@@ -45,6 +45,7 @@ builder.Services.AddScoped<RoleAppService>();
 builder.Services.AddScoped<PermissionCatalogAppService>();
 builder.Services.AddScoped<AuditLogAppService>();
 builder.Services.AddScoped<DashboardAppService>();
+builder.Services.AddScoped<SearchAppService>();
 
 // Response compression. The audit-log list and the permission catalog are the two biggest JSON
 // payloads in the platform and both compress extremely well. Enabled for HTTPS too — the BREACH
@@ -56,6 +57,9 @@ builder.Services.AddResponseCompression(options => options.EnableForHttps = true
 // "ok" literal, so an orchestrator would happily route traffic to a service whose database was
 // unreachable — the check could never fail.
 builder.Services.AddHealthChecks().AddDbContextCheck<AuthDbContext>("database");
+
+builder.Services.Configure<RefreshTokenCleanupOptions>(builder.Configuration.GetSection(RefreshTokenCleanupOptions.SectionName));
+builder.Services.AddHostedService<RefreshTokenCleanupService>();
 
 builder.Services.AddCors(options =>
 {

@@ -56,6 +56,16 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             entity.HasIndex(f => f.Key).IsUnique();
             entity.Property(f => f.Key).HasMaxLength(200);
             entity.Property(f => f.DisplayName).HasMaxLength(200);
+
+            // Self-referencing hierarchy: a sub-module is a feature whose parent is its module.
+            // Restrict, not Cascade — a module must not silently take its sub-modules' grant history
+            // with it; deactivation (IsActive = false) is the intended removal path.
+            entity.HasOne(f => f.ParentFeature)
+                .WithMany(f => f.Children)
+                .HasForeignKey(f => f.ParentFeatureId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(f => f.ParentFeatureId);
             entity.Property(f => f.Source).HasConversion<string>().HasMaxLength(20);
         });
 
@@ -109,6 +119,10 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             entity.HasIndex(t => t.TokenHash).IsUnique();
             entity.Property(t => t.TokenHash).HasMaxLength(200);
             entity.Property(t => t.CreatedByIp).HasMaxLength(64);
+
+            // Serves the cleanup sweep, which filters on ExpiresAt and would otherwise scan a table
+            // that grows by ~96 rows per active user per day.
+            entity.HasIndex(t => t.ExpiresAt);
 
             entity.HasOne(t => t.User)
                 .WithMany(u => u.RefreshTokens)

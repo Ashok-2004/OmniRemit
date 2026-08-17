@@ -191,7 +191,10 @@ public class AuthAppService(
     {
         var permissions = await permissionClaimsBuilder.BuildAsync(user, ct);
         var access = jwtTokenService.CreateAccessToken(user, permissions);
-        var refresh = await refreshTokenService.IssueAsync(user.Id, clientIp, ct);
+        // Named `ct:` deliberately — IssueAsync gained an optional `parent` parameter before the
+        // cancellation token, so a positional call here would silently bind `ct` to `parent`.
+        // This is a fresh sign-in, so there is no parent: a new session deadline starts now.
+        var refresh = await refreshTokenService.IssueAsync(user.Id, clientIp, ct: ct);
 
         return new AuthResult(
             access.Token,

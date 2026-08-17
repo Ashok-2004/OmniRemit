@@ -121,6 +121,9 @@ namespace AuthService.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<Guid?>("ParentFeatureId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("SortOrder")
                         .HasColumnType("integer");
 
@@ -136,6 +139,8 @@ namespace AuthService.Infrastructure.Migrations
 
                     b.HasIndex("Key")
                         .IsUnique();
+
+                    b.HasIndex("ParentFeatureId");
 
                     b.ToTable("PermissionFeatures");
                 });
@@ -176,6 +181,9 @@ namespace AuthService.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset>("AbsoluteExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -201,6 +209,8 @@ namespace AuthService.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt");
 
                     b.HasIndex("TokenHash")
                         .IsUnique();
@@ -383,6 +393,16 @@ namespace AuthService.Infrastructure.Migrations
                     b.ToTable("UserPermissionOverrides");
                 });
 
+            modelBuilder.Entity("AuthService.Domain.Entities.PermissionFeature", b =>
+                {
+                    b.HasOne("AuthService.Domain.Entities.PermissionFeature", "ParentFeature")
+                        .WithMany("Children")
+                        .HasForeignKey("ParentFeatureId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ParentFeature");
+                });
+
             modelBuilder.Entity("AuthService.Domain.Entities.PermissionFeatureCapability", b =>
                 {
                     b.HasOne("AuthService.Domain.Entities.PermissionFeature", "Feature")
@@ -456,6 +476,8 @@ namespace AuthService.Infrastructure.Migrations
             modelBuilder.Entity("AuthService.Domain.Entities.PermissionFeature", b =>
                 {
                     b.Navigation("Capabilities");
+
+                    b.Navigation("Children");
 
                     b.Navigation("RolePermissions");
 

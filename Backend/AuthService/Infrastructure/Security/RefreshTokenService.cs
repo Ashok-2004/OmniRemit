@@ -17,10 +17,30 @@ public class RefreshTokenService(AuthDbContext db, IOptions<JwtOptions> jwtOptio
 {
     private readonly JwtOptions _jwtOptions = jwtOptions.Value;
 
-    public async Task<IssuedRefreshToken> IssueAsync(Guid userId, string? createdByIp, CancellationToken ct = default)
+    /// <summary>
+    /// Issues a refresh token. Pass <paramref name="parent"/> when rotating so the session's absolute
+    /// deadline is inherited; omit it for a fresh sign-in, which starts a new deadline.
+    /// </summary>
+    public async Task<IssuedRefreshToken> IssueAsync(
+        Guid userId,
+        string? createdByIp,
+        RefreshToken? parent = null,
+        CancellationToken ct = default)
     {
         var raw = GenerateRawToken();
-        var expiresAt = DateTimeOffset.UtcNow.AddDays(_jwtOptions.RefreshTokenDays);
+        var now = DateTimeOffset.UtcNow;
+
+        // Inherit the session deadline on rotation; start a new one on a fresh login. A configured 0
+        // disables the cap, in which case the deadline is pushed far enough out to never bind.
+        var absoluteExpiresAt = parent?.AbsoluteExpiresAt
+            ?? (_jwtOptions.AbsoluteSessionHours > 0
+                ? now.AddHours(_jwtOptions.AbsoluteSessionHours)
+                : DateTimeOffset.MaxValue);
+
+        // Clamp so ExpiresAt stays the single authority on validity — the existing expiry check in
+        // RotateAsync then enforces the cap for free, and a token can never outlive its session.
+        var slidingExpiresAt = now.AddDays(_jwtOptions.RefreshTokenDays);
+        var expiresAt = slidingExpiresAt < absoluteExpiresAt ? slidingExpiresAt : absoluteExpiresAt;
 
         db.RefreshTokens.Add(new RefreshToken
         {
@@ -28,7 +48,8 @@ public class RefreshTokenService(AuthDbContext db, IOptions<JwtOptions> jwtOptio
             UserId = userId,
             TokenHash = Hash(raw),
             ExpiresAt = expiresAt,
-            CreatedAt = DateTimeOffset.UtcNow,
+            AbsoluteExpiresAt = absoluteExpiresAt,
+            CreatedAt = now,
             CreatedByIp = createdByIp,
         });
         await db.SaveChangesAsync(ct);
@@ -67,7 +88,15 @@ public class RefreshTokenService(AuthDbContext db, IOptions<JwtOptions> jwtOptio
             return null;
         }
 
-        var next = await IssueAsync(existing.UserId, createdByIp, ct);
+        // The session's hard deadline. ExpiresAt is already clamped to never exceed this, so the
+        // check above normally catches it first — this is belt-and-braces for rows written before
+        // the cap existed, whose ExpiresAt was not clamped.
+        if (existing.AbsoluteExpiresAt <= DateTimeOffset.UtcNow)
+        {
+            return null;
+        }
+
+        var next = await IssueAsync(existing.UserId, createdByIp, existing, ct);
         var newTokenEntity = await db.RefreshTokens.FirstAsync(t => t.TokenHash == Hash(next.RawToken), ct);
 
         existing.RevokedAt = DateTimeOffset.UtcNow;

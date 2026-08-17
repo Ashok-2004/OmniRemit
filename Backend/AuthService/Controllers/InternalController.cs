@@ -20,7 +20,9 @@ public class InternalController(PermissionCatalogAppService catalog) : Controlle
     [HttpPost("upsert")]
     public async Task<IActionResult> Upsert([FromBody] UpsertPermissionFeatureRequest request, CancellationToken ct)
     {
-        await catalog.UpsertRemoteAppFeatureAsync(request.Key, request.DisplayName, request.SortOrder, request.Capabilities, ct);
+        // Named `ct:` — `modules` sits before the cancellation token, so a positional call would bind ct to it.
+        await catalog.UpsertRemoteAppFeatureAsync(
+            request.Key, request.DisplayName, request.SortOrder, request.Capabilities, request.Modules, ct: ct);
         return NoContent();
     }
 
