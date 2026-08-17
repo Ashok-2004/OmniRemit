@@ -8,6 +8,7 @@ import { Table } from '../../../shared/components/Table/Table'
 import { SkeletonTable } from '../../../shared/components/Skeleton'
 import { Modal } from '../../../shared/components/Modal/Modal'
 import { ApiError } from '../../../shared/api/httpClient'
+import { rolesApi, type RoleListItemDto } from '../../settings-roles/api/rolesApi'
 import { usersApi, type UserListItemDto } from '../api/usersApi'
 import styles from './UsersListPage.module.css'
 
@@ -20,11 +21,13 @@ export function UsersListPage() {
   const hasCapability = useAuthStore((s) => s.hasCapability)
 
   const [users, setUsers] = useState<UserListItemDto[] | null>(null)
+  const [roles, setRoles] = useState<RoleListItemDto[]>([])
   const [total, setTotal] = useState(0)
   const [activeCount, setActiveCount] = useState<number | null>(null)
   const [inactiveCount, setInactiveCount] = useState<number | null>(null)
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
+  const [selectedRoleId, setSelectedRoleId] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [pendingDelete, setPendingDelete] = useState<UserListItemDto | null>(null)
 
@@ -37,13 +40,18 @@ export function UsersListPage() {
     if (!accessToken) return
     setError(null)
     try {
-      const result = await usersApi.list(accessToken, { page, pageSize: PAGE_SIZE, search: search || undefined })
+      const result = await usersApi.list(accessToken, {
+        page,
+        pageSize: PAGE_SIZE,
+        search: search || undefined,
+        roleId: selectedRoleId || undefined,
+      })
       setUsers(result.items)
       setTotal(result.total)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not load users.')
     }
-  }, [accessToken, page, search])
+  }, [accessToken, page, search, selectedRoleId])
 
   useEffect(() => {
     void load()
@@ -51,13 +59,29 @@ export function UsersListPage() {
 
   useEffect(() => {
     if (!accessToken) return
-    void Promise.all([
-      usersApi.list(accessToken, { pageSize: 1, isActive: true }).then((r) => setActiveCount(r.total)),
-      usersApi.list(accessToken, { pageSize: 1, isActive: false }).then((r) => setInactiveCount(r.total)),
-    ]).catch(() => {
-      // stat cards are a nice-to-have — leave them blank rather than blocking the table on failure
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    let cancelled = false
+
+    async function bootstrap() {
+      try {
+        const [rolesRes, activeRes, inactiveRes] = await Promise.all([
+          rolesApi.list(accessToken!, { pageSize: 100 }),
+          usersApi.list(accessToken!, { pageSize: 1, isActive: true }),
+          usersApi.list(accessToken!, { pageSize: 1, isActive: false }),
+        ])
+        if (!cancelled) {
+          setRoles(rolesRes.items)
+          setActiveCount(activeRes.total)
+          setInactiveCount(inactiveRes.total)
+        }
+      } catch {
+        // ignore non-critical stat load failures
+      }
+    }
+
+    void bootstrap()
+    return () => {
+      cancelled = true
+    }
   }, [accessToken])
 
   async function toggleStatus(user: UserListItemDto) {
@@ -79,8 +103,15 @@ export function UsersListPage() {
   return (
     <div className={styles.page}>
       <div className={styles.header}>
-        <h1>User</h1>
-        <p>Manage staff accounts, their roles and what they can access.</p>
+        <div>
+          <h1>Users</h1>
+          <p>Manage staff accounts, their roles and what they can access.</p>
+        </div>
+        {canCreate && (
+          <Link to="/settings/users/new">
+            <Button>+ New User</Button>
+          </Link>
+        )}
       </div>
 
       <div className={styles.statGrid}>
@@ -98,21 +129,34 @@ export function UsersListPage() {
         </div>
       </div>
 
+      {/* Toolbar with Search and Role Filter */}
       <div className={styles.toolbar}>
-        {canCreate && (
-          <Link to="/settings/users/new">
-            <Button>+ New User</Button>
-          </Link>
-        )}
-        <Input
-          className={styles.searchInput}
-          placeholder="Search users…"
-          value={search}
-          onChange={(e) => {
-            setPage(1)
-            setSearch(e.target.value)
-          }}
-        />
+        <div className={styles.filtersGroup}>
+          <Input
+            className={styles.searchInput}
+            placeholder="Search users…"
+            value={search}
+            onChange={(e) => {
+              setPage(1)
+              setSearch(e.target.value)
+            }}
+          />
+          <select
+            className={styles.roleFilterSelect}
+            value={selectedRoleId}
+            onChange={(e) => {
+              setPage(1)
+              setSelectedRoleId(e.target.value)
+            }}
+          >
+            <option value="">All Roles</option>
+            {roles.map((role) => (
+              <option key={role.id} value={role.id}>
+                {role.name} {role.isAdministrator ? '(Admin)' : ''}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {error && <div className={styles.errorBanner}>{error}</div>}
@@ -134,7 +178,7 @@ export function UsersListPage() {
             {users.length === 0 && (
               <tr>
                 <td colSpan={5} className={styles.emptyCell}>
-                  No users found.
+                  No users found matching the selected filters.
                 </td>
               </tr>
             )}

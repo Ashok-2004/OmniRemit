@@ -1,15 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuthStore } from '../../auth/store/authStore'
-import { Input } from '../../../shared/components/Input/Input'
-import { Button } from '../../../shared/components/Button/Button'
 import { Badge, type BadgeTone } from '../../../shared/components/Badge/Badge'
-import { Table } from '../../../shared/components/Table/Table'
 import { SkeletonTable } from '../../../shared/components/Skeleton'
-import { Tabs, TabPanel } from '../../../shared/components/Tabs/Tabs'
 import { Modal } from '../../../shared/components/Modal/Modal'
 import { PermissionGate } from '../../../shared/components/PermissionGate/PermissionGate'
 import { ApiError } from '../../../shared/api/httpClient'
 import { auditLogsApi, type AuditLogDto, type AuditLogSummaryDto } from '../api/auditLogsApi'
+import { Icon } from '../../../shared/components/Icon/Icon'
 import styles from './AuditLogsPage.module.css'
 
 const FEATURE = 'host.system.audit-logs'
@@ -27,7 +24,15 @@ function serviceTone(serviceName: string): BadgeTone {
 
 function formatTimestamp(iso: string) {
   const date = new Date(iso)
-  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString()
+  if (Number.isNaN(date.getTime())) return iso
+
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 type DateRangePreset = 'today' | 'yesterday' | 'week' | 'month' | 'all'
@@ -37,10 +42,9 @@ const DATE_RANGES: { key: DateRangePreset; label: string }[] = [
   { key: 'yesterday', label: 'Yesterday' },
   { key: 'week', label: 'Week' },
   { key: 'month', label: 'Month' },
-  { key: 'all', label: 'All' },
+  { key: 'all', label: 'All Time' },
 ]
 
-/** Real from/to ISO bounds for a preset — never a fabricated range, just real Date arithmetic against "now". */
 function computeRange(preset: DateRangePreset): { from?: string; to?: string } {
   const now = new Date()
   switch (preset) {
@@ -87,13 +91,6 @@ const TAB_ACTION_FILTER: Record<TabId, string | undefined> = {
   [TAB_IDS.auditEvents]: undefined,
 }
 
-/**
- * Enterprise security & audit module — real login success/failure events (backed by
- * AuthAppService's login-audit writes, see Backend/AuthService) plus the platform-wide CRUD audit
- * trail (host and every remote), summary cards from a real backend aggregate, CSV export, and a
- * failure-details drill-down. Every field shown is real backend data — no fabricated location,
- * device, or failure detail anywhere on this page.
- */
 export function AuditLogsPage() {
   const accessToken = useAuthStore((s) => s.accessToken)
 
@@ -117,7 +114,7 @@ export function AuditLogsPage() {
       const result = await auditLogsApi.summary(accessToken, range)
       setSummary(result)
     } catch {
-      // summary cards are a nice-to-have — leave them blank rather than blocking the table
+      // Ignore
     }
   }, [accessToken, range])
 
@@ -171,19 +168,18 @@ export function AuditLogsPage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const isLoginTab = activeTab === TAB_IDS.loginErrors || activeTab === TAB_IDS.loginSuccesses
 
-  const tabs = [
-    { key: TAB_IDS.loginErrors, label: 'Login Errors' },
-    { key: TAB_IDS.loginSuccesses, label: 'Login Successes' },
-    { key: TAB_IDS.auditEvents, label: 'Audit Events' },
-  ]
-
   return (
     <div className={styles.page}>
+      {/* Header */}
       <div className={styles.header}>
-        <div>
-          <h1>Audit Logs</h1>
-          <p>Every login attempt and platform action — host and remotes alike.</p>
+        <div className={styles.titleGroup}>
+          <h1 className={styles.title}>Audit Logs</h1>
+          <p className={styles.subtitle}>
+            Comprehensive log of authentication events and administrative platform activities.
+          </p>
         </div>
+
+        {/* Date Filter Pills */}
         <div className={styles.dateRangeGroup} role="group" aria-label="Date range">
           {DATE_RANGES.map((r) => (
             <button
@@ -198,157 +194,243 @@ export function AuditLogsPage() {
         </div>
       </div>
 
+      {/* 4 Summary Stat Cards */}
       <div className={styles.summaryGrid}>
         <div className={styles.summaryCard}>
-          <span className={styles.summaryIcon} aria-hidden="true">✓</span>
-          <div>
+          <div className={`${styles.summaryIcon} ${styles.iconGreen}`}>
+            <Icon.CheckCircle width={20} height={20} />
+          </div>
+          <div className={styles.summaryContent}>
             <span className={styles.summaryLabel}>Login Successes</span>
-            <span className={styles.summaryValue}>{summary?.loginSuccesses ?? '—'}</span>
+            <span className={styles.summaryValue}>{summary?.loginSuccesses ?? '0'}</span>
           </div>
         </div>
+
         <div className={styles.summaryCard}>
-          <span className={styles.summaryIcon} aria-hidden="true">⚠</span>
-          <div>
+          <div className={`${styles.summaryIcon} ${styles.iconRed}`}>
+            <Icon.AlertCircle width={20} height={20} />
+          </div>
+          <div className={styles.summaryContent}>
             <span className={styles.summaryLabel}>Login Errors</span>
-            <span className={styles.summaryValue}>{summary?.loginErrors ?? '—'}</span>
+            <span className={styles.summaryValue}>{summary?.loginErrors ?? '0'}</span>
           </div>
         </div>
+
         <div className={styles.summaryCard}>
-          <span className={styles.summaryIcon} aria-hidden="true">📄</span>
-          <div>
+          <div className={`${styles.summaryIcon} ${styles.iconBlue}`}>
+            <Icon.FileText width={20} height={20} />
+          </div>
+          <div className={styles.summaryContent}>
             <span className={styles.summaryLabel}>Audit Events</span>
-            <span className={styles.summaryValue}>{summary?.totalAuditEvents ?? '—'}</span>
+            <span className={styles.summaryValue}>{summary?.totalAuditEvents ?? '0'}</span>
           </div>
         </div>
+
         <div className={styles.summaryCard}>
-          <span className={styles.summaryIcon} aria-hidden="true">👥</span>
-          <div>
+          <div className={`${styles.summaryIcon} ${styles.iconPurple}`}>
+            <Icon.Users width={20} height={20} />
+          </div>
+          <div className={styles.summaryContent}>
             <span className={styles.summaryLabel}>Active Users</span>
-            <span className={styles.summaryValue}>{summary?.activeUsers ?? '—'}</span>
+            <span className={styles.summaryValue}>{summary?.activeUsers ?? '0'}</span>
           </div>
         </div>
       </div>
 
-      <Tabs id="audit-logs-tabs" tabs={tabs} activeKey={activeTab} onChange={(key) => setActiveTab(key as TabId)} />
+      {/* Tabs & Filter Bar */}
+      <div className={styles.navBar}>
+        <div className={styles.tabsList}>
+          <button
+            type="button"
+            className={`${styles.tabBtn} ${activeTab === TAB_IDS.loginErrors ? styles.tabActive : ''}`}
+            onClick={() => setActiveTab(TAB_IDS.loginErrors)}
+          >
+            Login Errors
+          </button>
+          <button
+            type="button"
+            className={`${styles.tabBtn} ${activeTab === TAB_IDS.loginSuccesses ? styles.tabActive : ''}`}
+            onClick={() => setActiveTab(TAB_IDS.loginSuccesses)}
+          >
+            Login Successes
+          </button>
+          <button
+            type="button"
+            className={`${styles.tabBtn} ${activeTab === TAB_IDS.auditEvents ? styles.tabActive : ''}`}
+            onClick={() => setActiveTab(TAB_IDS.auditEvents)}
+          >
+            Audit Events
+          </button>
+        </div>
 
-      <div className={styles.toolbar}>
-        <Input
-          className={styles.filterInput}
-          placeholder="Filter by service (e.g. AuthService)…"
-          value={service}
-          onChange={(e) => setService(e.target.value)}
-        />
         <div className={styles.toolbarActions}>
-          <Button variant="secondary" onClick={() => void loadLogs()}>
-            Refresh
-          </Button>
+          <div className={styles.searchBox}>
+            <input
+              type="text"
+              className={styles.filterInput}
+              placeholder="Filter by service..."
+              value={service}
+              onChange={(e) => setService(e.target.value)}
+            />
+            <Icon.Search width={14} height={14} className={styles.searchIcon} />
+          </div>
+
+          <button
+            type="button"
+            className={styles.refreshBtn}
+            onClick={() => void loadLogs()}
+            title="Refresh Logs"
+          >
+            <Icon.Activity width={15} height={15} />
+            <span>Refresh</span>
+          </button>
+
           <PermissionGate featureKey={FEATURE} capability="Export">
-            <Button variant="secondary" onClick={() => void handleExport()} loading={exporting}>
-              Export CSV
-            </Button>
+            <button
+              type="button"
+              className={styles.exportBtn}
+              onClick={() => void handleExport()}
+              disabled={exporting}
+            >
+              <Icon.FileText width={15} height={15} />
+              <span>{exporting ? 'Exporting...' : 'Export CSV'}</span>
+            </button>
           </PermissionGate>
         </div>
       </div>
 
       {error && <div className={styles.errorBanner}>{error}</div>}
 
-      {[TAB_IDS.loginErrors, TAB_IDS.loginSuccesses, TAB_IDS.auditEvents].map((tabId) => (
-        <TabPanel key={tabId} id="audit-logs-tabs" tabId={tabId} active={activeTab === tabId}>
-          {logs === null ? (
-            <SkeletonTable rows={8} columns={isLoginTab ? 6 : 6} />
-          ) : (
-            <Table>
-              <thead>
-                {isLoginTab ? (
-                  <tr>
-                    <th>Time</th>
-                    <th>Actor / Email</th>
-                    <th>Auth Method</th>
-                    <th>IP Address</th>
-                    <th>Browser / Device</th>
-                    <th>Result</th>
-                    {activeTab === TAB_IDS.loginErrors && <th aria-label="Actions" />}
+      {/* Logs Table Container */}
+      <div className={styles.tableContainer}>
+        {logs === null ? (
+          <SkeletonTable rows={8} columns={isLoginTab ? 6 : 6} />
+        ) : (
+          <table className={styles.logTable}>
+            <thead>
+              {isLoginTab ? (
+                <tr>
+                  <th>TIME</th>
+                  <th>ACTOR / EMAIL</th>
+                  <th>AUTH METHOD</th>
+                  <th>IP ADDRESS</th>
+                  <th>BROWSER / DEVICE</th>
+                  <th>RESULT</th>
+                  {activeTab === TAB_IDS.loginErrors && <th aria-label="Actions" />}
+                </tr>
+              ) : (
+                <tr>
+                  <th>TIME</th>
+                  <th>SERVICE</th>
+                  <th>ACTOR</th>
+                  <th>ACTION</th>
+                  <th>ENTITY</th>
+                  <th>DETAILS</th>
+                </tr>
+              )}
+            </thead>
+            <tbody>
+              {logs.length === 0 && (
+                <tr>
+                  <td colSpan={7} className={styles.emptyCell}>
+                    No audit records found matching the selected filters.
+                  </td>
+                </tr>
+              )}
+              {logs.map((log) => {
+                const initial = (log.actorName || log.actorUserId || 'S').charAt(0).toUpperCase()
+
+                return isLoginTab ? (
+                  <tr key={log.id}>
+                    <td className={styles.timeCell}>{formatTimestamp(log.occurredAt)}</td>
+                    <td>
+                      <div className={styles.actorCell}>
+                        <span className={styles.actorAvatar}>{initial}</span>
+                        <span className={styles.actorName}>
+                          {log.actorName ?? <span className={styles.mutedText}>Unknown</span>}
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <span className={styles.authPill}>{log.authMethod ?? 'Local'}</span>
+                    </td>
+                    <td className={styles.monoText}>{log.sourceIp ?? '—'}</td>
+                    <td className={styles.deviceCell} title={log.userAgent ?? undefined}>
+                      {log.userAgent ?? '—'}
+                    </td>
+                    <td>
+                      <Badge tone={log.result === 'Success' ? 'success' : 'danger'} dot>
+                        {log.result}
+                      </Badge>
+                    </td>
+                    {activeTab === TAB_IDS.loginErrors && (
+                      <td>
+                        <button
+                          type="button"
+                          className={styles.viewDetailBtn}
+                          onClick={() => setSelectedFailure(log)}
+                        >
+                          Details
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ) : (
-                  <tr>
-                    <th>Time</th>
-                    <th>Service</th>
-                    <th>Actor</th>
-                    <th>Action</th>
-                    <th>Entity</th>
-                    <th>Details</th>
-                  </tr>
-                )}
-              </thead>
-              <tbody>
-                {logs.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className={styles.emptyCell}>
-                      No entries match these filters.
+                  <tr key={log.id}>
+                    <td className={styles.timeCell}>{formatTimestamp(log.occurredAt)}</td>
+                    <td>
+                      <Badge tone={serviceTone(log.serviceName)}>{log.serviceName}</Badge>
+                    </td>
+                    <td>
+                      <div className={styles.actorCell}>
+                        <span className={styles.actorAvatar}>{initial}</span>
+                        <span className={styles.actorName}>
+                          {log.actorName ?? <span className={styles.mutedText}>System</span>}
+                        </span>
+                      </div>
+                    </td>
+                    <td className={styles.actionCell}>{log.action}</td>
+                    <td className={styles.mutedText}>
+                      {log.entityType ? `${log.entityType}${log.entityId ? ` · ${log.entityId.slice(0, 8)}` : ''}` : '—'}
+                    </td>
+                    <td className={styles.detailsCell} title={log.details ?? undefined}>
+                      {log.details ?? '—'}
                     </td>
                   </tr>
-                )}
-                {logs.map((log) =>
-                  isLoginTab ? (
-                    <tr key={log.id}>
-                      <td className={styles.timeCell}>{formatTimestamp(log.occurredAt)}</td>
-                      <td>{log.actorName ?? <span className={styles.mutedText}>Unknown</span>}</td>
-                      <td>{log.authMethod ?? <span className={styles.mutedText}>—</span>}</td>
-                      <td className={styles.monoText}>{log.sourceIp ?? '—'}</td>
-                      <td className={styles.deviceCell} title={log.userAgent ?? undefined}>
-                        {log.userAgent ?? '—'}
-                      </td>
-                      <td>
-                        <Badge tone={log.result === 'Success' ? 'success' : 'danger'} dot>
-                          {log.result}
-                        </Badge>
-                      </td>
-                      {activeTab === TAB_IDS.loginErrors && (
-                        <td>
-                          <Button size="sm" variant="ghost" onClick={() => setSelectedFailure(log)}>
-                            View Details
-                          </Button>
-                        </td>
-                      )}
-                    </tr>
-                  ) : (
-                    <tr key={log.id}>
-                      <td className={styles.timeCell}>{formatTimestamp(log.occurredAt)}</td>
-                      <td>
-                        <Badge tone={serviceTone(log.serviceName)}>{log.serviceName}</Badge>
-                      </td>
-                      <td>{log.actorName ?? <span className={styles.mutedText}>System</span>}</td>
-                      <td className={styles.actionCell}>{log.action}</td>
-                      <td className={styles.mutedText}>
-                        {log.entityType ? `${log.entityType}${log.entityId ? ` · ${log.entityId.slice(0, 8)}` : ''}` : '—'}
-                      </td>
-                      <td className={styles.detailsCell} title={log.details ?? undefined}>
-                        {log.details ?? '—'}
-                      </td>
-                    </tr>
-                  ),
-                )}
-              </tbody>
-            </Table>
-          )}
-        </TabPanel>
-      ))}
+                )
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
 
+      {/* Pagination */}
       {total > PAGE_SIZE && (
         <div className={styles.pagination}>
-          <Button size="sm" variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-            Previous
-          </Button>
-          <span>
+          <button
+            type="button"
+            className={styles.pageBtn}
+            disabled={page <= 1}
+            onClick={() => setPage((p) => p - 1)}
+          >
+            &lt; Previous
+          </button>
+          <span className={styles.pageIndicator}>
             Page {page} of {totalPages}
           </span>
-          <Button size="sm" variant="secondary" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
-            Next
-          </Button>
+          <button
+            type="button"
+            className={styles.pageBtn}
+            disabled={page >= totalPages}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            Next &gt;
+          </button>
         </div>
       )}
 
-      <Modal open={Boolean(selectedFailure)} title="Login failure details" onClose={() => setSelectedFailure(null)}>
+      {/* Failure Drilldown Modal */}
+      <Modal open={Boolean(selectedFailure)} title="Login Failure Details" onClose={() => setSelectedFailure(null)}>
         {selectedFailure && (
           <dl className={styles.detailList}>
             <dt>Time</dt>

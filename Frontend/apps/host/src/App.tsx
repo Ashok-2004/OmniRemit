@@ -81,13 +81,15 @@ function AuthenticatedShell() {
   const fetchForSidebar = useModuleRegistryStore((s) => s.fetchForSidebar)
 
   useEffect(() => {
-    if (!accessToken || registryStatus !== 'idle') return
-    void ensureFreshAccessToken()
-      .then(fetchForSidebar)
-      .catch(() => {
-        // ensureFreshAccessToken already routes to /login via authStore on failure
-      })
-  }, [accessToken, registryStatus, ensureFreshAccessToken, fetchForSidebar])
+    if (!accessToken) return
+    if (registryStatus === 'idle' || (registryStatus === 'error' && registryApps.length === 0)) {
+      void ensureFreshAccessToken()
+        .then(fetchForSidebar)
+        .catch(() => {
+          // ensureFreshAccessToken already routes to /login via authStore on failure
+        })
+    }
+  }, [accessToken, registryStatus, registryApps.length, ensureFreshAccessToken, fetchForSidebar])
 
   const isAdministrator = Boolean(user?.isAdministrator)
   const settingsAccess = {

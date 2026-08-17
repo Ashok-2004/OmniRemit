@@ -3,7 +3,7 @@
  * allowed to live. Every component styles itself with these custom properties via its own
  * *.module.css file; nothing outside this file may use a raw hex value or an inline style color.
  *
- * Palette derived from the "OmniRemit CRM" reference (blue brand accent, white surfaces, soft
+ * Palette derived from the "OmniConnect CRM" reference (blue brand accent, white surfaces, soft
  * neutral grays, pill status badges). Token *names* are semantic, not literal ("primary", not
  * "blue"), so a future `[data-theme="dark"]` block can override just the values without any
  * component needing to change.
@@ -25,7 +25,7 @@
   /* ---- Neutrals ---- */
   --omni-color-surface: #ffffff;
   --omni-color-surface-alt: #f8fafc;
-  --omni-color-surface-sunken: #f1f5f9;
+  --omni-color-surface-sunken: #f8fafc;
   --omni-color-border: #e2e8f0;
   --omni-color-border-strong: #cbd5e1;
   --omni-color-text-primary: #0f172a;

@@ -53,7 +53,10 @@ export function RemoteAppsListPage() {
   async function saveStatus(app: RemoteAppDto, status: RemoteAppDto['status'], message: string | null) {
     const token = await ensureFreshAccessToken()
     await remoteAppsApi.updateStatus(token, app.id, status, message)
-    // Disabling/re-enabling an app changes what's assignable — see refreshSession's doc comment.
+    const { useModuleRegistryStore } = await import('../../../shared/stores/moduleRegistryStore')
+    const { useSettingsDrawerStore } = await import('../../../shared/stores/settingsDrawerStore')
+    void useModuleRegistryStore.getState().fetchForSidebar(token)
+    useSettingsDrawerStore.getState().notifyMutation()
     void refreshSession()
     void load()
   }
@@ -62,6 +65,10 @@ export function RemoteAppsListPage() {
     if (!pendingDelete) return
     const token = await ensureFreshAccessToken()
     await remoteAppsApi.remove(token, pendingDelete.id)
+    const { useModuleRegistryStore } = await import('../../../shared/stores/moduleRegistryStore')
+    const { useSettingsDrawerStore } = await import('../../../shared/stores/settingsDrawerStore')
+    void useModuleRegistryStore.getState().fetchForSidebar(token)
+    useSettingsDrawerStore.getState().notifyMutation()
     setPendingDelete(null)
     void load()
   }
@@ -173,6 +180,13 @@ export function RemoteAppsListPage() {
                 {(canEdit || canDelete) && (
                   <td>
                     <div className={styles.actionsCell}>
+                      {canEdit && (
+                        <Link to={`/settings/applications/${app.id}`}>
+                          <Button size="sm" variant="ghost">
+                            Edit
+                          </Button>
+                        </Link>
+                      )}
                       {canDelete && (
                         <Button size="sm" variant="ghost" onClick={() => setPendingDelete(app)}>
                           Delete

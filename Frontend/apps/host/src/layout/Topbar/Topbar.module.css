@@ -1,52 +1,81 @@
 .topbar {
-  height: 64px;
-  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--omni-space-4);
-  padding: 0 var(--omni-space-6);
-  background: var(--omni-color-surface);
+  padding: 12px 24px;
+  background: #ffffff;
   border-bottom: 1px solid var(--omni-color-border);
-  position: sticky;
-  top: 0;
-  z-index: var(--omni-z-sticky);
+  height: 64px;
 }
 
 .search {
-  flex: 1;
-  max-width: 360px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  gap: var(--omni-space-2);
-  padding: 0 var(--omni-space-3);
-  border-radius: var(--omni-radius-md);
-  background: var(--omni-color-surface-alt);
-  color: var(--omni-color-text-muted);
-  font-size: var(--omni-font-size-sm);
+  position: relative;
+  width: 260px;
+}
+
+.searchInput {
+  width: 100%;
+  padding: 8px 12px 8px 36px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #0f172a;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.searchInput:focus {
+  background: #ffffff;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+}
+
+.searchIcon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8;
+  pointer-events: none;
 }
 
 .actions {
   display: flex;
   align-items: center;
-  gap: var(--omni-space-3);
+  gap: 12px;
 }
 
 .iconButton {
+  position: relative;
   width: 36px;
   height: 36px;
-  border-radius: var(--omni-radius-md);
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--omni-color-text-secondary);
-  transition: background-color var(--omni-transition-fast);
+  cursor: pointer;
+  transition: all 0.15s ease;
 }
 
 .iconButton:hover {
-  background: var(--omni-color-surface-alt);
-  color: var(--omni-color-text-primary);
+  background: #f8fafc;
+  color: #0f172a;
+  border-color: #cbd5e1;
+}
+
+.notificationDot {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #4f46e5;
 }
 
 .menuWrapper {
@@ -56,74 +85,115 @@
 .userButton {
   display: flex;
   align-items: center;
-  gap: var(--omni-space-2);
-  padding: var(--omni-space-1) var(--omni-space-2) var(--omni-space-1) var(--omni-space-1);
-  border-radius: var(--omni-radius-pill);
-  transition: background-color var(--omni-transition-fast);
+  gap: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: 4px 12px 4px 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
 }
 
 .userButton:hover {
-  background: var(--omni-color-surface-alt);
+  background: #f1f5f9;
+  border-color: #cbd5e1;
 }
 
 .avatar {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: var(--omni-color-primary-100);
-  color: var(--omni-color-primary-800);
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: var(--omni-font-size-xs);
-  font-weight: var(--omni-font-weight-semibold);
-  flex-shrink: 0;
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.25);
 }
 
 .userName {
-  font-size: var(--omni-font-size-sm);
-  font-weight: var(--omni-font-weight-medium);
-  color: var(--omni-color-text-primary);
-  max-width: 140px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.userChevron {
+  color: #94a3b8;
 }
 
 .menu {
   position: absolute;
   right: 0;
-  top: calc(100% + var(--omni-space-2));
+  top: 100%;
+  margin-top: 6px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(15, 23, 42, 0.04);
+  padding: 6px;
   min-width: 200px;
-  background: var(--omni-color-surface);
-  border: 1px solid var(--omni-color-border);
-  border-radius: var(--omni-radius-md);
-  box-shadow: var(--omni-shadow-lg);
-  padding: var(--omni-space-2);
-  z-index: var(--omni-z-dropdown);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.menuUserHeader {
+  padding: 8px 12px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.menuUserHeaderName {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.menuUserHeaderRole {
+  font-size: 11px;
+  font-weight: 600;
+  color: #2563eb;
+}
+
+.menuDivider {
+  height: 1px;
+  background: #f1f5f9;
+  margin: 4px 0;
 }
 
 .menuItem {
   display: flex;
   align-items: center;
-  gap: var(--omni-space-2);
+  gap: 10px;
+  background: none;
+  border: none;
   width: 100%;
-  padding: var(--omni-space-2) var(--omni-space-3);
-  border-radius: var(--omni-radius-sm);
-  font-size: var(--omni-font-size-sm);
-  color: var(--omni-color-text-primary);
   text-align: left;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #334155;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.12s ease;
 }
 
 .menuItem:hover {
-  background: var(--omni-color-surface-alt);
+  background: #f8fafc;
+  color: #0f172a;
 }
 
-.menuLabel {
-  padding: var(--omni-space-2) var(--omni-space-3) var(--omni-space-1);
-  font-size: var(--omni-font-size-xs);
-  font-weight: var(--omni-font-weight-semibold);
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--omni-color-text-muted);
+.menuItemDanger {
+  color: #dc2626;
+}
+
+.menuItemDanger:hover {
+  background: #fef2f2;
+  color: #b91c1c;
 }

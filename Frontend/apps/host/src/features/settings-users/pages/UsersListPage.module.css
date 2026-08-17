@@ -6,12 +6,23 @@
 
 .header {
   display: flex;
-  flex-direction: column;
-  gap: var(--omni-space-1);
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--omni-color-border);
+  padding-bottom: 16px;
+}
+
+.header h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
 }
 
 .header p {
   color: var(--omni-color-text-secondary);
+  font-size: 13px;
+  margin: 2px 0 0;
 }
 
 .statGrid {
@@ -52,8 +63,29 @@
   flex-wrap: wrap;
 }
 
+.filtersGroup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .searchInput {
-  max-width: 320px;
+  width: 260px;
+}
+
+.roleFilterSelect {
+  padding: 8px 14px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #0f172a;
+  outline: none;
+  cursor: pointer;
+}
+
+.roleFilterSelect:focus {
+  border-color: #6366f1;
 }
 
 .userCell {
