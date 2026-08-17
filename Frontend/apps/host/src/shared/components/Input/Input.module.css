@@ -1,19 +1,20 @@
 .field {
   display: flex;
   flex-direction: column;
-  gap: var(--omni-space-2);
+  gap: 6px;
   width: 100%;
 }
 
 .label {
-  font-size: var(--omni-font-size-sm);
-  font-weight: var(--omni-font-weight-medium);
-  color: var(--omni-color-text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  color: #0f172a;
+  letter-spacing: -0.01em;
 }
 
 .required {
   color: var(--omni-color-danger);
-  margin-left: var(--omni-space-1);
+  margin-left: 3px;
 }
 
 .inputWrapper {
@@ -22,72 +23,95 @@
   align-items: center;
 }
 
+/* ── Base input ─────────────────────────────────────────────── */
 .input {
   width: 100%;
-  height: 40px;
-  padding: 0 var(--omni-space-3);
-  background: var(--omni-color-surface);
-  border: 1px solid var(--omni-color-border-strong);
-  border-radius: var(--omni-radius-md);
-  color: var(--omni-color-text-primary);
-  font-size: var(--omni-font-size-md);
-  transition: border-color var(--omni-transition-fast), box-shadow var(--omni-transition-fast);
+  height: 46px;
+  padding: 0 14px;
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  color: #0f172a;
+  font-size: 14px;
+  font-family: inherit;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  box-sizing: border-box;
+  transition:
+    border-color 160ms ease,
+    background   160ms ease,
+    box-shadow   160ms ease;
 }
 
 .input::placeholder {
-  color: var(--omni-color-text-muted);
+  color: #b0bfcc;
+  font-weight: 400;
 }
 
-.input:hover {
-  border-color: var(--omni-color-text-muted);
+.input:hover:not(:disabled):not(:focus) {
+  border-color: #c8d4e0;
+  background: #ffffff;
 }
 
 .input:focus {
   outline: none;
-  border-color: var(--omni-color-primary-500);
-  box-shadow: 0 0 0 3px var(--omni-color-primary-100);
+  border-color: #2563eb;
+  background: #ffffff;
+  box-shadow:
+    0 0 0 4px rgba(37,99,235,0.09),
+    0 1px 2px rgba(15,23,42,0.04);
+}
+
+/* Focus shifts the leading icon to brand blue */
+.inputWrapper:focus-within .leading {
+  color: #2563eb;
 }
 
 .input:disabled {
-  background: var(--omni-color-surface-sunken);
-  color: var(--omni-color-text-muted);
+  background: #f1f5f9;
+  color: #94a3b8;
+  border-color: #e2e8f0;
   cursor: not-allowed;
 }
 
+/* ── Error state ────────────────────────────────────────────── */
 .hasError .input {
-  border-color: var(--omni-color-danger);
+  border-color: #f43f5e;
+  background: #fff5f6;
+}
+.hasError .input:focus {
+  box-shadow: 0 0 0 4px rgba(244,63,94,0.1);
+  border-color: #f43f5e;
 }
 
-.hasError .input:focus {
-  box-shadow: 0 0 0 3px var(--omni-color-danger-bg);
+/* ── Adornments ─────────────────────────────────────────────── */
+.leading {
+  position: absolute;
+  left: 13px;
+  display: flex;
+  align-items: center;
+  color: #94a3b8;
+  pointer-events: none;
+  transition: color 160ms ease;
 }
 
 .trailing {
   position: absolute;
-  right: var(--omni-space-2);
+  right: 10px;
   display: flex;
   align-items: center;
 }
 
-.leading {
-  position: absolute;
-  left: var(--omni-space-3);
-  display: flex;
-  align-items: center;
-  color: var(--omni-color-text-muted);
-  pointer-events: none;
-}
+.inputWithLeading  { padding-left: 40px; }
+.inputWithTrailing { padding-right: 40px; }
 
-.inputWithLeading {
-  padding-left: calc(var(--omni-space-3) + 20px + var(--omni-space-2));
-}
-
+/* ── Helper / error text ────────────────────────────────────── */
 .helperText {
-  font-size: var(--omni-font-size-xs);
-  color: var(--omni-color-text-muted);
+  font-size: 12px;
+  color: #64748b;
 }
-
 .errorText {
-  font-size: var(--omni-font-size-xs);
-  color: var(--omni-color-danger);
+  font-size: 12px;
+  color: #f43f5e;
+  font-weight: 500;
 }

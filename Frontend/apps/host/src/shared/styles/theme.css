@@ -3,7 +3,7 @@
  * allowed to live. Every component styles itself with these custom properties via its own
  * *.module.css file; nothing outside this file may use a raw hex value or an inline style color.
  *
- * Palette derived from the "OmniConnect CRM" reference (blue brand accent, white surfaces, soft
+ * Palette derived from the "OmniConnect" reference (blue brand accent, white surfaces, soft
  * neutral grays, pill status badges). Token *names* are semantic, not literal ("primary", not
  * "blue"), so a future `[data-theme="dark"]` block can override just the values without any
  * component needing to change.
@@ -50,13 +50,15 @@
   --omni-color-info-bg: #dbeafe;
   --omni-color-info-text: #1e40af;
 
-  /* ---- Sidebar ---- */
+  /* ---- Sidebar (clean white) ---- */
   --omni-sidebar-bg: #ffffff;
-  --omni-sidebar-border: var(--omni-color-border);
-  --omni-sidebar-text: var(--omni-color-text-secondary);
-  --omni-sidebar-text-active: var(--omni-color-primary-800);
-  --omni-sidebar-bg-active: var(--omni-color-primary-50);
-  --omni-sidebar-bg-hover: var(--omni-color-surface-alt);
+  --omni-sidebar-border: #eaecf0;
+  --omni-sidebar-text: #475569;
+  --omni-sidebar-text-active: #1d4ed8;
+  --omni-sidebar-text-muted: #94a3b8;
+  --omni-sidebar-bg-active: #eff6ff;
+  --omni-sidebar-bg-hover: #f8fafc;
+  --omni-sidebar-accent: #2563eb;
 
   /* ---- Spacing scale ---- */
   --omni-space-1: 4px;

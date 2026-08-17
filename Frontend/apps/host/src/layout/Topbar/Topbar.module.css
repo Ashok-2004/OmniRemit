@@ -1,171 +1,272 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+/* ══════════════════════════════════════════════════════════════
+   TOPBAR — premium, well-proportioned navigation bar
+   ══════════════════════════════════════════════════════════════ */
+
 .topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--omni-space-4);
-  padding: 12px 24px;
+  gap: 20px;
+  padding: 0 28px;
   background: #ffffff;
-  border-bottom: 1px solid var(--omni-color-border);
+  border-bottom: 1px solid #eaecf0;
   height: 64px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
 }
 
+/* ── Search ─────────────────────────────────────────────────── */
 .search {
   position: relative;
-  width: 260px;
+  width: 300px;
+  max-width: 100%;
 }
 
 .searchInput {
   width: 100%;
-  padding: 8px 12px 8px 36px;
+  height: 38px;
+  padding: 0 14px 0 40px;
   background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  border: 1.5px solid #e8edf5;
+  border-radius: 10px;
   font-size: 13px;
+  font-family: 'Inter', -apple-system, sans-serif;
   color: #0f172a;
   outline: none;
-  transition: all 0.15s ease;
+  transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+  box-sizing: border-box;
+}
+
+.searchInput::placeholder {
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.searchInput:hover {
+  background: #f1f5f9;
+  border-color: #d4dbe8;
 }
 
 .searchInput:focus {
   background: #ffffff;
-  border-color: #6366f1;
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
 .searchIcon {
   position: absolute;
-  left: 12px;
+  left: 13px;
   top: 50%;
   transform: translateY(-50%);
   color: #94a3b8;
   pointer-events: none;
+  transition: color 150ms ease;
 }
 
+.search:focus-within .searchIcon { color: #2563eb; }
+
+/* ── Right actions ──────────────────────────────────────────── */
 .actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 6px;
 }
 
+/* ── Icon buttons ───────────────────────────────────────────── */
 .iconButton {
   position: relative;
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: transparent;
+  border: 1.5px solid transparent;
   color: #64748b;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
 }
 
 .iconButton:hover {
-  background: #f8fafc;
-  color: #0f172a;
-  border-color: #cbd5e1;
+  background: #f1f5f9;
+  color: #1e293b;
+  border-color: #e2e8f0;
 }
 
+.iconButton:focus-visible {
+  outline: none;
+  background: #eff6ff;
+  color: #2563eb;
+  border-color: #bfdbfe;
+}
+
+/* Notification dot */
 .notificationDot {
   position: absolute;
   top: 7px;
   right: 7px;
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background: #4f46e5;
+  background: #ef4444;
+  border: 1.5px solid #ffffff;
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.3);
 }
 
-.menuWrapper {
-  position: relative;
+/* Divider */
+.actionsDivider {
+  width: 1px;
+  height: 24px;
+  background: #e8edf5;
+  margin: 0 6px;
 }
+
+/* ── User pill ──────────────────────────────────────────────── */
+.menuWrapper { position: relative; }
 
 .userButton {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  border: 1.5px solid #e8edf5;
   border-radius: 999px;
-  padding: 4px 12px 4px 4px;
+  padding: 4px 14px 4px 4px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
 }
 
 .userButton:hover {
   background: #f1f5f9;
-  border-color: #cbd5e1;
+  border-color: #c8d4e4;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
 }
 
+.userButton:focus-visible {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+/* Avatar */
 .avatar {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
   color: #ffffff;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.02em;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.25);
+  flex-shrink: 0;
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.35);
 }
 
 .userName {
+  font-family: 'Inter', -apple-system, sans-serif;
   font-size: 13px;
   font-weight: 600;
-  color: #0f172a;
+  color: #1e293b;
+  letter-spacing: -0.01em;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .userChevron {
   color: #94a3b8;
+  transition: transform 150ms ease;
 }
 
+/* ── Dropdown menu ──────────────────────────────────────────── */
 .menu {
   position: absolute;
   right: 0;
-  top: 100%;
-  margin-top: 6px;
+  top: calc(100% + 8px);
   background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(15, 23, 42, 0.04);
+  border: 1px solid #e8edf5;
+  border-radius: 14px;
+  box-shadow:
+    0 0 0 1px rgba(15, 23, 42, 0.03),
+    0 4px 8px rgba(15, 23, 42, 0.05),
+    0 16px 32px rgba(15, 23, 42, 0.1);
   padding: 6px;
-  min-width: 200px;
+  min-width: 220px;
   z-index: 100;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
+  animation: menuIn 0.14s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+@keyframes menuIn {
+  from { opacity: 0; transform: translateY(-8px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);    }
+}
+
+/* User header in dropdown */
 .menuUserHeader {
-  padding: 8px 12px 6px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 12px 8px;
+}
+
+.menuUserHeaderAvatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+}
+
+.menuUserHeaderInfo {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
 }
 
 .menuUserHeaderName {
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 700;
   color: #0f172a;
+  letter-spacing: -0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .menuUserHeaderRole {
   font-size: 11px;
-  font-weight: 600;
-  color: #2563eb;
+  font-weight: 500;
+  color: #64748b;
 }
 
 .menuDivider {
   height: 1px;
   background: #f1f5f9;
-  margin: 4px 0;
+  margin: 3px 0;
 }
 
+/* Menu items */
 .menuItem {
   display: flex;
   align-items: center;
@@ -175,13 +276,14 @@
   width: 100%;
   text-align: left;
   padding: 8px 12px;
-  border-radius: 8px;
+  border-radius: 9px;
+  font-family: 'Inter', -apple-system, sans-serif;
   font-size: 13px;
   font-weight: 500;
   color: #334155;
   cursor: pointer;
   text-decoration: none;
-  transition: all 0.12s ease;
+  transition: background 100ms ease, color 100ms ease;
 }
 
 .menuItem:hover {
@@ -189,11 +291,11 @@
   color: #0f172a;
 }
 
-.menuItemDanger {
-  color: #dc2626;
+.menuItem:focus-visible {
+  outline: none;
+  background: #eff6ff;
+  color: #1d4ed8;
 }
 
-.menuItemDanger:hover {
-  background: #fef2f2;
-  color: #b91c1c;
-}
+.menuItemDanger { color: #dc2626; }
+.menuItemDanger:hover { background: #fef2f2; color: #b91c1c; }

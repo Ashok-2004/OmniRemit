@@ -16,20 +16,26 @@ export interface AppShellProps {
 export function AppShell({ apps, appsError, userName, settingsAccess, canAccessAuditLogs, onLogout }: AppShellProps) {
   return (
     <div className={styles.shell}>
+      {/* Sidebar — only receives app-list and system-access props; profile is in Topbar */}
       <Sidebar
         apps={apps}
         error={appsError}
         canAccessAuditLogs={canAccessAuditLogs}
-        userName={userName}
-        onLogout={onLogout}
       />
+
       <div className={styles.main}>
-        <Topbar userName={userName} settingsAccess={settingsAccess} onLogout={onLogout} />
+        {/* Topbar — single source of truth for user identity & profile actions */}
+        <Topbar
+          userName={userName}
+          settingsAccess={settingsAccess}
+          onLogout={onLogout}
+        />
         <div className={styles.content}>
           <Outlet />
         </div>
       </div>
-      {/* Global Right-Side Slide-Over Settings & Override Layers */}
+
+      {/* Global slide-over settings & override layers */}
       <SettingsDrawer />
     </div>
   )

@@ -1,3 +1,9 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+/* ══════════════════════════════════════════════════════════
+   SETTINGS DRAWER — shell, header, tabs
+   ══════════════════════════════════════════════════════════ */
+
 .overlayRoot {
   position: fixed;
   inset: 0;
@@ -9,118 +15,108 @@
 .backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.4);
+  background: rgba(15, 23, 42, 0.35);
   backdrop-filter: blur(3px);
   animation: fadeIn 0.2s ease-out;
 }
 
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 .drawerContainer {
   position: relative;
-  width: min(780px, 94vw);
+  width: min(800px, 96vw);
   height: 100vh;
   background: #ffffff;
-  box-shadow: -10px 0 40px rgba(15, 23, 42, 0.18);
+  box-shadow: -8px 0 40px rgba(15, 23, 42, 0.14);
   display: flex;
   flex-direction: column;
   z-index: 1000;
   animation: slideIn 0.26s cubic-bezier(0.16, 1, 0.3, 1);
   overflow: hidden;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 @keyframes slideIn {
-  from {
-    transform: translateX(100%);
-  }
-  to {
-    transform: translateX(0);
-  }
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0);   }
 }
 
-.rootPanel {
+.rootPanel,
+.overrideLayer {
   display: flex;
   flex-direction: column;
   height: 100%;
 }
 
 .overrideLayer {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
   animation: layerSlideIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes layerSlideIn {
-  from {
-    transform: translateX(60px);
-    opacity: 0.8;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
+  from { transform: translateX(50px); opacity: 0.7; }
+  to   { transform: translateX(0);    opacity: 1;   }
 }
 
+/* ── Drawer header ────────────────────────────────────────── */
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 18px 24px 16px;
-  border-bottom: 1px solid #f1f5f9;
+  padding: 20px 28px 18px;
+  border-bottom: 1px solid #eaecf0;
   background: #ffffff;
+  flex-shrink: 0;
 }
 
 .headerLeft {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
 
 .headerIcon {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  background: #ede9fe;
-  color: #6366f1;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  background: #eff6ff;
+  color: #2563eb;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.8), 0 1px 3px rgba(37,99,235,0.15);
 }
 
 .title {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
   color: #0f172a;
   margin: 0;
   line-height: 1.2;
+  letter-spacing: -0.02em;
 }
 
 .subtitle {
   font-size: 12px;
   color: #64748b;
   margin: 3px 0 0;
+  font-weight: 400;
 }
 
 .closeBtn {
   background: none;
   border: none;
   color: #94a3b8;
-  padding: 6px;
+  padding: 8px;
   cursor: pointer;
-  border-radius: 8px;
+  border-radius: 9px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s ease;
+  transition: background 130ms ease, color 130ms ease;
 }
 
 .closeBtn:hover {
@@ -128,20 +124,22 @@
   color: #0f172a;
 }
 
-/* Horizontal Tabs Nav */
+/* ── Tabs nav ────────────────────────────────────────────── */
 .tabsNav {
   display: flex;
   align-items: center;
-  gap: 24px;
-  padding: 0 24px;
-  border-bottom: 1px solid #f1f5f9;
+  gap: 0;
+  padding: 0 28px;
+  border-bottom: 1px solid #eaecf0;
   background: #ffffff;
+  flex-shrink: 0;
 }
 
 .tabBtn {
   background: none;
   border: none;
-  padding: 12px 0;
+  padding: 13px 4px;
+  margin-right: 22px;
   font-size: 13px;
   font-weight: 600;
   color: #64748b;
@@ -150,16 +148,13 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  transition: color 0.15s ease;
+  transition: color 140ms ease;
+  white-space: nowrap;
 }
 
-.tabBtn:hover {
-  color: #0f172a;
-}
+.tabBtn:hover { color: #0f172a; }
 
-.tabBtnActive {
-  color: #4f46e5;
-}
+.tabBtnActive { color: #2563eb; }
 
 .tabBtnActive::after {
   content: '';
@@ -167,15 +162,20 @@
   bottom: -1px;
   left: 0;
   right: 0;
-  height: 2px;
-  background: #4f46e5;
+  height: 2.5px;
+  background: linear-gradient(90deg, #2563eb, #60a5fa);
   border-radius: 2px;
 }
 
-/* Tab Body */
+/* ── Tab body ────────────────────────────────────────────── */
 .tabBody {
   flex: 1;
   overflow-y: auto;
-  padding: 20px 24px 24px;
-  background: #ffffff;
+  padding: 24px 28px 28px;
+  background: #f8fafc;
+  scrollbar-width: thin;
+  scrollbar-color: #d1d9e6 transparent;
 }
+
+.tabBody::-webkit-scrollbar       { width: 5px; }
+.tabBody::-webkit-scrollbar-thumb { background: #d1d9e6; border-radius: 5px; }
