@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '../../features/auth/store/authStore'
-import { usersApi, type UserListItemDto } from '../../features/settings-users/api/usersApi'
-import { rolesApi, type RoleListItemDto } from '../../features/settings-roles/api/rolesApi'
 import { remoteAppsApi, type RemoteAppDto } from '../../features/settings-applications/api/remoteAppsApi'
 import { auditLogsApi, type AuditLogDto } from '../../features/system-audit-logs/api/auditLogsApi'
+import { dashboardApi, type DashboardStatsDto } from '../../features/dashboard/api/dashboardApi'
+import { ApiError } from '../../shared/api/httpClient'
 import { useSettingsDrawerStore } from '../../shared/stores/settingsDrawerStore'
 import { SkeletonBlock } from '../../shared/components/Skeleton'
 import { Icon } from '../../shared/components/Icon/Icon'
 import styles from './DashboardPage.module.css'
+import { APP_NAME, COPYRIGHT_YEAR } from '../../shared/config/branding'
 
 interface RoleDistribution {
   name: string
@@ -67,7 +68,8 @@ function formatActionText(log: AuditLogDto): string {
 }
 
 function getUserInitials(name?: string | null): string {
-  if (!name) return 'SA'
+  // '?' rather than 'SA' — inventing Super Admin initials shows an identity that may not be theirs.
+  if (!name) return '?'
   const parts = name.trim().split(/\s+/)
   if (parts.length >= 2) {
     return `${parts[0][0]}${parts[1][0]}`.toUpperCase()
@@ -87,9 +89,9 @@ export function DashboardPage() {
   const [totalRoles, setTotalRoles] = useState(0)
   const [totalApps, setTotalApps] = useState(0)
 
-  const [users, setUsers] = useState<UserListItemDto[]>([])
-  const [roles, setRoles] = useState<RoleListItemDto[]>([])
+  const [stats, setStats] = useState<DashboardStatsDto | null>(null)
   const [apps, setApps] = useState<RemoteAppDto[]>([])
+  const [error, setError] = useState<string | null>(null)
   const [recentLogs, setRecentLogs] = useState<AuditLogDto[]>([])
 
   useEffect(() => {
@@ -98,25 +100,39 @@ export function DashboardPage() {
 
     async function loadDashboardData() {
       try {
-        const [usersRes, rolesRes, appsRes, logsRes] = await Promise.all([
-          usersApi.list(accessToken!, { pageSize: 100 }),
-          rolesApi.list(accessToken!, { pageSize: 100 }),
-          remoteAppsApi.list(accessToken!, { pageSize: 100 }),
+        /*
+         * Counts, trends and the role breakdown come from ONE aggregate endpoint that computes them in
+         * SQL over the whole table.
+         *
+         * This replaces three list calls at pageSize:100 whose items were then counted in the browser.
+         * That was wrong the moment the platform had more than 100 users: the donut showed the role
+         * split of the first hundred rows while the centre showed the real total, so the slices did not
+         * add up to it — and it shipped 100 full user records, 100 roles and 100 applications across
+         * the wire purely to compute a handful of numbers.
+         *
+         * Applications and the audit tail are still fetched because the page renders those rows
+         * individually; they are genuinely row-level data, not aggregates.
+         */
+        const [statsRes, appsRes, logsRes] = await Promise.all([
+          dashboardApi.stats(accessToken!),
+          remoteAppsApi.list(accessToken!, { pageSize: 12 }),
           auditLogsApi.list(accessToken!, { pageSize: 6 }).catch(() => ({ items: [], total: 0 })),
         ])
 
         if (!cancelled) {
-          setTotalUsers(usersRes.total)
-          setTotalRoles(rolesRes.total)
+          setStats(statsRes)
+          setTotalUsers(statsRes.users ?? 0)
+          setTotalRoles(statsRes.roles ?? 0)
           setTotalApps(appsRes.total)
-
-          setUsers(usersRes.items)
-          setRoles(rolesRes.items)
           setApps(appsRes.items)
           setRecentLogs(logsRes.items)
+          setError(null)
         }
       } catch (err) {
-        console.error('Failed to load dashboard metrics:', err)
+        if (cancelled) return
+        // Surfaced instead of console-only: the page otherwise rendered zeroes, which reads as "the
+        // platform has no users" rather than "the request failed".
+        setError(err instanceof ApiError ? err.message : 'Could not load dashboard metrics.')
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -128,47 +144,31 @@ export function DashboardPage() {
     }
   }, [accessToken, mutationCount])
 
-  // Calculate Users by Role distribution for Donut Chart
+  /**
+   * Users by role, straight from the server's GROUP BY.
+   *
+   * Every fabricated fallback that used to live here is gone. With no users loaded it returned a
+   * hardcoded distribution — "Administrators 2 (50%), Admins 1 (25%), Normal Users 1 (25%)" — and
+   * otherwise invented per-role counts with `r.usersCount || (i === 0 ? 2 : 1)`, plus an "Others 0"
+   * padding row so the legend always looked full. A banking console that renders invented figures
+   * indistinguishably from real ones is worse than one that renders nothing: an operator has no way to
+   * tell which is which.
+   *
+   * Percentages are computed against the true total from the same response, so the slices always add
+   * up to the number printed in the centre of the donut.
+   */
   const roleDistribution: RoleDistribution[] = useMemo(() => {
-    if (users.length === 0) {
-      if (roles.length > 0) {
-        return roles.slice(0, 4).map((r, i) => ({
-          name: r.name,
-          count: r.usersCount || (i === 0 ? 2 : 1),
-          percentage: i === 0 ? 50 : 25,
-          color: ROLE_COLORS[i % ROLE_COLORS.length],
-        }))
-      }
-      return [
-        { name: 'Administrators', count: 2, percentage: 50, color: ROLE_COLORS[0] },
-        { name: 'Admins', count: 1, percentage: 25, color: ROLE_COLORS[1] },
-        { name: 'Normal Users', count: 1, percentage: 25, color: ROLE_COLORS[2] },
-        { name: 'Others', count: 0, percentage: 0, color: ROLE_COLORS[3] },
-      ]
-    }
+    const rows = stats?.roleDistribution ?? []
+    if (rows.length === 0) return []
 
-    const counts: Record<string, number> = {}
-    users.forEach((u) => {
-      const roleName = u.roleName || (u.isAdministrator ? 'Administrators' : 'Normal Users')
-      counts[roleName] = (counts[roleName] || 0) + 1
-    })
-
-    const total = users.length || 1
-    const entries = Object.entries(counts).map(([name, count], index) => ({
-      name,
-      count,
-      percentage: Math.round((count / total) * 100),
+    const total = rows.reduce((sum, r) => sum + r.userCount, 0) || 1
+    return rows.map((r, index) => ({
+      name: r.roleName,
+      count: r.userCount,
+      percentage: Math.round((r.userCount / total) * 100),
       color: ROLE_COLORS[index % ROLE_COLORS.length],
     }))
-
-    entries.sort((a, b) => b.count - a.count)
-
-    if (entries.length < 4) {
-      entries.push({ name: 'Others', count: 0, percentage: 0, color: '#94a3b8' })
-    }
-
-    return entries
-  }, [users, roles])
+  }, [stats])
 
   // SVG Donut calculation
   const donutSegments = useMemo(() => {
@@ -202,6 +202,12 @@ export function DashboardPage() {
 
   return (
     <div className={styles.page}>
+      {error && (
+        <div className={styles.dashboardError} role="alert">
+          {error}
+        </div>
+      )}
+
       {/* Top Hero Welcome Card */}
       <div className={styles.heroCard}>
         <div className={styles.heroLeft}>
@@ -245,7 +251,7 @@ export function DashboardPage() {
           </div>
           <div className={styles.statValueRow}>
             <span className={styles.statValue}>
-              {loading ? <SkeletonBlock height={32} width={36} /> : totalUsers || users.length || 0}
+              {loading ? <SkeletonBlock height={32} width={36} /> : totalUsers}
             </span>
           </div>
           <div className={styles.statTrendRow}>
@@ -266,7 +272,7 @@ export function DashboardPage() {
           </div>
           <div className={styles.statValueRow}>
             <span className={styles.statValue}>
-              {loading ? <SkeletonBlock height={32} width={36} /> : totalRoles || roles.length || 0}
+              {loading ? <SkeletonBlock height={32} width={36} /> : totalRoles}
             </span>
           </div>
           <div className={styles.statTrendRow}>
@@ -373,7 +379,7 @@ export function DashboardPage() {
               {/* Center Donut Label */}
               <div className={styles.donutCenter}>
                 <span className={styles.donutTotalNum}>
-                  {loading ? '...' : totalUsers || users.length || 0}
+                  {loading ? '...' : totalUsers}
                 </span>
                 <span className={styles.donutTotalLabel}>Total</span>
               </div>
@@ -683,7 +689,7 @@ export function DashboardPage() {
 
       {/* Footer */}
       <footer className={styles.footer}>
-        <span className={styles.copyright}>© 2026 OmniConnect Micro-Frontend Platform. All rights reserved.</span>
+        <span className={styles.copyright}>© {COPYRIGHT_YEAR} {APP_NAME} Micro-Frontend Platform. All rights reserved.</span>
         <span className={styles.version}>Module Federation 2.0 • Build v1.2.0</span>
       </footer>
     </div>

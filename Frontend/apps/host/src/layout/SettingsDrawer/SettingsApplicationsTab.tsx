@@ -2,16 +2,25 @@ import { useEffect, useState } from 'react'
 import { useAuthStore } from '../../features/auth/store/authStore'
 import { remoteAppsApi, type RemoteAppDto, type RemoteAppStatus } from '../../features/settings-applications/api/remoteAppsApi'
 import { useSettingsDrawerStore } from '../../shared/stores/settingsDrawerStore'
+import { useDebouncedValue } from '../../shared/hooks/useDebouncedValue'
 import { useModuleRegistryStore } from '../../shared/stores/moduleRegistryStore'
 import { Icon } from '../../shared/components/Icon/Icon'
 import { SkeletonBlock } from '../../shared/components/Skeleton'
+import { Pagination } from '../../shared/components/Pagination/Pagination'
+import { Modal } from '../../shared/components/Modal/Modal'
+import { Button } from '../../shared/components/Button/Button'
+import { ApiError } from '../../shared/api/httpClient'
 import styles from './SettingsApplicationsTab.module.css'
+
+const PAGE_SIZE = 10
 
 export function SettingsApplicationsTab() {
   const accessToken = useAuthStore((s) => s.accessToken)
   const isAdministrator = Boolean(useAuthStore((s) => s.user)?.isAdministrator)
   const hasCapability = useAuthStore((s) => s.hasCapability)
   const pushLayer = useSettingsDrawerStore((s) => s.pushLayer)
+  const mutationCount = useSettingsDrawerStore((s) => s.mutationCount)
+  const notifyMutation = useSettingsDrawerStore((s) => s.notifyMutation)
 
   const canRegister = isAdministrator || hasCapability('host.settings.applications', 'Register') || hasCapability('host.settings.applications', 'Create')
   const canEdit = isAdministrator || hasCapability('host.settings.applications', 'Edit')
@@ -21,7 +30,15 @@ export function SettingsApplicationsTab() {
   const [apps, setApps] = useState<RemoteAppDto[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [pendingDelete, setPendingDelete] = useState<RemoteAppDto | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [resyncing, setResyncing] = useState(false)
+  const [resyncResult, setResyncResult] = useState<string | null>(null)
+
+  const debouncedSearch = useDebouncedValue(search, 300)
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null)
 
   // Status Change Modal State
@@ -37,13 +54,22 @@ export function SettingsApplicationsTab() {
     async function load() {
       setLoading(true)
       try {
-        const res = await remoteAppsApi.list(accessToken!, { search: search || undefined })
-        if (!cancelled) {
-          setApps(res.items)
-          setTotal(res.total)
-        }
+        const res = await remoteAppsApi.list(accessToken!, {
+          page,
+          pageSize: PAGE_SIZE,
+          search: debouncedSearch || undefined,
+        })
+        if (cancelled) return
+        setApps(res.items)
+        setTotal(res.total)
+        setError(null)
       } catch (err) {
-        console.error('Failed to load apps:', err)
+        if (cancelled) return
+        // Was console-only, so a failed load looked identical to "no applications registered" —
+        // alarming and misleading when the registry is simply unreachable.
+        setError(err instanceof ApiError ? err.message : 'Could not load applications.')
+        setApps([])
+        setTotal(0)
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -53,35 +79,46 @@ export function SettingsApplicationsTab() {
     return () => {
       cancelled = true
     }
-  }, [accessToken, search])
+  }, [accessToken, debouncedSearch, page, mutationCount])
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!window.confirm(`Are you sure you want to remove "${name}"?`)) return
-    if (!accessToken) return
+  useEffect(() => {
+    setPage(1)
+  }, [debouncedSearch])
+
+  async function confirmDelete() {
+    if (!pendingDelete || !accessToken) return
+    setDeleting(true)
     try {
-      await remoteAppsApi.remove(accessToken, id)
-      const res = await remoteAppsApi.list(accessToken, { search: search || undefined })
-      setApps(res.items)
-      setTotal(res.total)
+      await remoteAppsApi.remove(accessToken, pendingDelete.id)
+      setPendingDelete(null)
+      // The sidebar lists registered apps, so it has to be refreshed or the removed app lingers
+      // there until the next full page load.
       void useModuleRegistryStore.getState().fetchForSidebar(accessToken)
-      useSettingsDrawerStore.getState().notifyMutation()
+      if (apps.length === 1 && page > 1) setPage((p) => p - 1)
+      else notifyMutation()
     } catch (err) {
-      console.error('Failed to remove app:', err)
-      window.alert('Failed to remove app.')
+      setError(err instanceof ApiError ? err.message : 'Could not remove this application.')
+      setPendingDelete(null)
     } finally {
+      setDeleting(false)
       setActiveMenuId(null)
     }
   }
 
   const handleResync = async () => {
     if (!accessToken) return
+    setResyncing(true)
+    setResyncResult(null)
     try {
       const res = await remoteAppsApi.resyncPermissions(accessToken)
-      window.alert(`Successfully resynced permissions for ${res.resyncedCount} app(s).`)
+      // Reported in the panel rather than through window.alert, which can be suppressed by the
+      // browser and would then make a successful resync look like nothing happened.
+      setResyncResult(`Resynced permissions for ${res.resyncedCount} application(s).`)
+      notifyMutation()
     } catch (err) {
-      console.error('Failed to resync:', err)
-      window.alert('Failed to resync permissions.')
+      setError(err instanceof ApiError ? err.message : 'Could not resync permissions.')
     } finally {
+      setResyncing(false)
       setActiveMenuId(null)
     }
   }
@@ -103,15 +140,13 @@ export function SettingsApplicationsTab() {
         newStatus,
         newStatus === 'Maintenance' ? maintenanceMessage || 'Application is temporarily down for maintenance.' : null
       )
-      const res = await remoteAppsApi.list(accessToken, { search: search || undefined })
-      setApps(res.items)
-      setTotal(res.total)
       setStatusTargetApp(null)
+      // The sidebar has to be refreshed too: an app moved to Maintenance must stop being navigable
+      // immediately, without waiting for a page reload.
       void useModuleRegistryStore.getState().fetchForSidebar(accessToken)
-      useSettingsDrawerStore.getState().notifyMutation()
+      notifyMutation()
     } catch (err) {
-      console.error('Failed to update app status:', err)
-      window.alert('Failed to update application status.')
+      setError(err instanceof ApiError ? err.message : 'Could not update this application.')
     } finally {
       setUpdatingStatus(false)
     }
@@ -148,6 +183,18 @@ export function SettingsApplicationsTab() {
         />
         <Icon.Search width={16} height={16} className={styles.searchIcon} />
       </div>
+
+      {error && (
+        <div className={styles.errorBanner} role="alert">
+          {error}
+        </div>
+      )}
+
+      {resyncResult && (
+        <div className={styles.successBanner} role="status">
+          {resyncResult}
+        </div>
+      )}
 
       {/* Apps List */}
       <div className={styles.appList}>
@@ -231,7 +278,7 @@ export function SettingsApplicationsTab() {
                     <button
                       type="button"
                       className={styles.deleteBtn}
-                      onClick={() => void handleDelete(app.id, app.displayName)}
+                      onClick={() => setPendingDelete(app)}
                       title="Delete Application"
                     >
                       <Icon.Trash width={16} height={16} />
@@ -267,16 +314,20 @@ export function SettingsApplicationsTab() {
                             type="button"
                             className={styles.menuItem}
                             onClick={() => void handleResync()}
+                            disabled={resyncing}
                           >
                             <Icon.Activity width={14} height={14} />
-                            <span>Resync Permissions</span>
+                            {/* Resync fans out an HTTP call per registered app, so it can take a
+                                few seconds. Without this the menu looked inert and invited a
+                                second click, firing the whole sweep twice. */}
+                            <span>{resyncing ? 'Resyncing…' : 'Resync Permissions'}</span>
                           </button>
                         )}
                         {canDelete && (
                           <button
                             type="button"
                             className={`${styles.menuItem} ${styles.menuItemDelete}`}
-                            onClick={() => void handleDelete(app.id, app.displayName)}
+                            onClick={() => setPendingDelete(app)}
                           >
                             <Icon.Trash width={14} height={14} />
                             <span>Remove App</span>
@@ -296,21 +347,38 @@ export function SettingsApplicationsTab() {
         )}
       </div>
 
-      {/* Footer */}
-      <div className={styles.footer}>
-        <span className={styles.footerText}>
-          Showing 1 to {apps.length} of {total} applications
-        </span>
-        <div className={styles.pagination}>
-          <button type="button" className={styles.pageBtn} disabled>
-            &lt;
-          </button>
-          <span className={styles.pageActive}>1</span>
-          <button type="button" className={styles.pageBtn} disabled>
-            &gt;
-          </button>
-        </div>
-      </div>
+      {/*
+        Real pagination, replacing a permanently disabled prev/next around a literal "1" — with more
+        registered applications than one page, the rest could not be reached at all.
+      */}
+      {total > 0 && (
+        <Pagination
+          page={page}
+          pageSize={PAGE_SIZE}
+          total={total}
+          onPageChange={setPage}
+          itemLabel="application"
+        />
+      )}
+
+      <Modal
+        open={Boolean(pendingDelete)}
+        title={`Remove ${pendingDelete?.displayName}?`}
+        onClose={() => setPendingDelete(null)}
+        actions={
+          <>
+            <Button variant="secondary" onClick={() => setPendingDelete(null)}>
+              Cancel
+            </Button>
+            <Button variant="danger" loading={deleting} onClick={confirmDelete}>
+              Remove
+            </Button>
+          </>
+        }
+      >
+        This unregisters the application and removes it from the sidebar. Every permission granted
+        against it stops taking effect. The application&rsquo;s own data is untouched.
+      </Modal>
 
       {/* Status Change Modal Dialog */}
       {statusTargetApp && (

@@ -31,7 +31,9 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
   const isEdit = Boolean(userId)
   const accessToken = useAuthStore((s) => s.accessToken)
   const ensureFreshAccessToken = useAuthStore((s) => s.ensureFreshAccessToken)
+  const refreshSession = useAuthStore((s) => s.refreshSession)
   const popLayer = useSettingsDrawerStore((s) => s.popLayer)
+  const notifyMutation = useSettingsDrawerStore((s) => s.notifyMutation)
 
   const [currentStep, setCurrentStep] = useState<Step>('basic')
   const [loading, setLoading] = useState(true)
@@ -316,8 +318,15 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
           email,
           phoneNumber: phoneNumber || null,
           roleId: roleId || null,
+          // The toggle's value now actually reaches the server; it was previously dropped here.
+          isActive,
         })
         await usersApi.replaceOverrides(token, userId, computedOverrides)
+        // The acting admin may have just changed their own role or permissions, and the list behind
+        // the drawer is now stale — without these the drawer closed onto old rows and only a full page
+        // reload would show the change.
+        void refreshSession()
+        notifyMutation()
         popLayer()
       } else {
         const res = await usersApi.create(token, {
@@ -332,6 +341,7 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
           await usersApi.replaceOverrides(token, res.user.id, computedOverrides)
         }
 
+        notifyMutation()
         setCreatedResult(res)
       }
     } catch (err: any) {

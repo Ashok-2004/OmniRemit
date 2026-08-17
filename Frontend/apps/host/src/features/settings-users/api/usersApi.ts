@@ -69,6 +69,15 @@ export interface UpdateUserRequest {
   email: string
   phoneNumber?: string | null
   roleId?: string | null
+  /**
+   * Whether the account may sign in.
+   *
+   * The edit form has always shown an "Account is Active" toggle, but neither this type nor the
+   * server's UpdateUserRequest carried the field — so the toggle moved, the form saved, and the status
+   * silently did not change. Status is edited here rather than from a list row, so this is the field
+   * that actually applies it.
+   */
+  isActive: boolean
 }
 
 export interface ListUsersParams {

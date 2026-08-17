@@ -257,3 +257,15 @@
 }
 
 .skeletonCard { padding: 4px 0; }
+
+/* Load/delete failures. These were console.error only, so a failed request rendered the empty state
+   and an operator would reasonably conclude the roles had been deleted. */
+.errorBanner {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--omni-color-danger-200, #fecaca);
+  border-radius: 8px;
+  background: var(--omni-color-danger-50, #fef2f2);
+  color: var(--omni-color-danger-700, #b91c1c);
+  font-size: 13px;
+}

@@ -8,6 +8,7 @@ import { useAuthStore } from './features/auth/store/authStore'
 import { useModuleRegistryStore } from './shared/stores/moduleRegistryStore'
 import { SetupPanel } from './layout/SetupPanel/SetupPanel'
 import { RouteFallback } from './shared/components/RouteFallback/RouteFallback'
+import { lazyWithPreload, preloadWhenIdle } from './shared/utils/lazyWithPreload'
 
 /**
  * Every route is code-split.
@@ -20,7 +21,11 @@ import { RouteFallback } from './shared/components/RouteFallback/RouteFallback'
  * AppShell / SetupPanel / the route guards stay eager: they are the frame around every authenticated
  * route, so splitting them would only add a waterfall.
  */
-const DashboardPage = lazy(() => import('./pages/DashboardPage/DashboardPage').then((m) => ({ default: m.DashboardPage })))
+// Preloadable: nearly every sign-in lands here, so the chunk is fetched during idle time on the login
+// screen and again the instant the form is submitted, removing the Suspense gap after authentication.
+const { Component: DashboardPage, preload: preloadDashboard } = lazyWithPreload(() =>
+  import('./pages/DashboardPage/DashboardPage').then((m) => ({ default: m.DashboardPage })),
+)
 const LoginPage = lazy(() => import('./pages/LoginPage/LoginPage').then((m) => ({ default: m.LoginPage })))
 const MaintenancePage = lazy(() => import('./pages/MaintenancePage/MaintenancePage').then((m) => ({ default: m.MaintenancePage })))
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage/NotFoundPage').then((m) => ({ default: m.NotFoundPage })))
@@ -47,15 +52,30 @@ function LoginRoute() {
   const loginWithGoogle = useAuthStore((s) => s.loginWithGoogle)
   const loginLoading = useAuthStore((s) => s.loginLoading)
   const loginError = useAuthStore((s) => s.loginError)
-  const navigate = useNavigate()
   const location = useLocation()
 
+  // The dashboard is where nearly every sign-in lands, so its chunk is fetched while the user is still
+  // typing rather than after they authenticate. The submit handlers below start it again on intent.
   useEffect(() => {
-    if (status === 'authenticated') {
-      const from = (location.state as { from?: Pick<Location, 'pathname'> } | null)?.from?.pathname ?? '/'
-      navigate(from, { replace: true })
-    }
-  }, [status, navigate, location.state])
+    preloadWhenIdle(preloadDashboard)
+  }, [])
+
+  /*
+   * Redirect DECLARATIVELY, not from an effect.
+   *
+   * Redirecting inside useEffect meant that on a successful sign-in React committed one more render of
+   * the LOGIN page before the effect ran and changed the route. The error banner from a previous failed
+   * attempt lives in that same subtree, so it was painted again — and then the lazy DashboardPage chunk
+   * had to download before anything replaced it. That download is what made the stale screen linger
+   * long enough to read as "it showed the error, then after some time the success page".
+   *
+   * Returning <Navigate> means the moment status flips to authenticated this component renders a
+   * redirect and nothing else: the login UI cannot repaint.
+   */
+  if (status === 'authenticated') {
+    const from = (location.state as { from?: Pick<Location, 'pathname'> } | null)?.from?.pathname ?? '/'
+    return <Navigate to={from} replace />
+  }
 
   return (
     <LoginPage

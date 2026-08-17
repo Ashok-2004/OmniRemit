@@ -5,6 +5,7 @@ import { Icon } from '../../shared/components/Icon/Icon'
 import { GoogleSignInButton } from '../../features/auth/components/GoogleSignInButton'
 import { LoginHero } from './LoginHero'
 import styles from './LoginPage.module.css'
+import { APP_NAME } from '../../shared/config/branding'
 
 export interface LoginPageProps {
   onSubmit: (email: string, password: string) => Promise<void>
@@ -42,7 +43,7 @@ export function LoginPage({ onSubmit, onGoogleCredential, loading, errorMessage 
             <div className={styles.formBrandIcon} aria-hidden="true">
               <Icon.Lock width={18} height={18} />
             </div>
-            <span className={styles.formBrandName}>OmniConnect</span>
+            <span className={styles.formBrandName}>{APP_NAME}</span>
           </div>
 
           {/* Heading */}

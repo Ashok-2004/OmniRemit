@@ -1,4 +1,5 @@
 import styles from './LoginHero.module.css'
+import { APP_NAME, COPYRIGHT_YEAR } from '../../../shared/config/branding'
 
 export function LoginHero() {
   return (
@@ -306,7 +307,7 @@ export function LoginHero() {
 
       {/* Footer */}
       <footer className={styles.footer}>
-        <span>© 2026 OmniConnect · All rights reserved</span>
+        <span>© {COPYRIGHT_YEAR} {APP_NAME} · All rights reserved</span>
         <div className={styles.footerLinks}>
           <a href="#" className={styles.footerLink}>Privacy</a>
           <a href="#" className={styles.footerLink}>Terms</a>

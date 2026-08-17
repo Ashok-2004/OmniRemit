@@ -1,8 +1,23 @@
+import { Suspense, useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
 import { Sidebar, type SidebarAppItem } from '../Sidebar/Sidebar'
 import { Topbar, type TopbarSettingsAccess } from '../Topbar/Topbar'
-import { SettingsDrawer } from '../SettingsDrawer/SettingsDrawer'
+import { useSettingsDrawerStore } from '../../shared/stores/settingsDrawerStore'
+import { lazyWithPreload, preloadWhenIdle } from '../../shared/utils/lazyWithPreload'
 import styles from './AppShell.module.css'
+
+/**
+ * The settings drawer is by far the largest thing in the app — the drawer plus three tabs and three
+ * form layers, and the form layers pull in the whole permission-catalog editor. Imported statically it
+ * shipped in the eager entry chunk that EVERY user downloads before the login form is interactive,
+ * despite rendering nothing at all until someone clicks the gear.
+ *
+ * Splitting defers that cost; the idle preload then fetches it once the shell has mounted, so by the
+ * time an admin reaches for the gear the chunk is already parsed and it still opens instantly.
+ */
+const { Component: SettingsDrawer, preload: preloadSettingsDrawer } = lazyWithPreload(() =>
+  import('../SettingsDrawer/SettingsDrawer').then((m) => ({ default: m.SettingsDrawer })),
+)
 
 export interface AppShellProps {
   apps?: SidebarAppItem[]
@@ -14,6 +29,14 @@ export interface AppShellProps {
 }
 
 export function AppShell({ apps, appsError, userName, settingsAccess, canAccessAuditLogs, onLogout }: AppShellProps) {
+  // Subscribed so the drawer is only mounted when it is actually open — mounting it unconditionally
+  // would resolve the lazy component on first render and negate the split.
+  const drawerOpen = useSettingsDrawerStore((s) => s.isOpen)
+
+  useEffect(() => {
+    preloadWhenIdle(preloadSettingsDrawer)
+  }, [])
+
   return (
     <div className={styles.shell}>
       {/* Sidebar — only receives app-list and system-access props; profile is in Topbar */}
@@ -35,8 +58,19 @@ export function AppShell({ apps, appsError, userName, settingsAccess, canAccessA
         </div>
       </div>
 
-      {/* Global slide-over settings & override layers */}
-      <SettingsDrawer />
+      {/*
+        Global slide-over settings & override layers.
+
+        No Suspense fallback: the drawer animates in from the edge, so a spinner in its place would be
+        a visible flash of nothing where a panel is about to be. The idle preload means the chunk is
+        normally already resolved; if it is not, the drawer simply appears a moment later, which is
+        indistinguishable from a slightly slower animation.
+      */}
+      {drawerOpen && (
+        <Suspense fallback={null}>
+          <SettingsDrawer />
+        </Suspense>
+      )}
     </div>
   )
 }

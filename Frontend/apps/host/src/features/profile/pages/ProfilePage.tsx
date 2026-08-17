@@ -109,6 +109,9 @@ export function ProfilePage() {
         email: isSuperAdmin ? email.trim() : user.email,
         phoneNumber: phoneNumber.trim() || null,
         roleId: user.roleId,
+        // Editing your own profile must never change your account status. Sending the current value
+        // keeps this a no-op — omitting it would let the server default deactivate the account.
+        isActive: user.isActive,
       })
 
       await refreshSession()
@@ -226,20 +229,16 @@ export function ProfilePage() {
           </div>
         </div>
 
+        {/*
+          Status badge only. The duplicate "Edit Profile" button that sat here has been removed — the
+          page header already carries one, and the same action offered twice on one screen makes a
+          reader stop and work out whether the two do the same thing.
+        */}
         <div className={styles.identityRight}>
           <span className={user.isActive ? styles.activeBadge : styles.inactiveBadge}>
             <span className={styles.livePulse} />
             {user.isActive ? 'Active Account' : 'Inactive'}
           </span>
-          <button
-            type="button"
-            className={styles.quickEditBtn}
-            onClick={() => openDrawer('profile')}
-            title="Edit profile details"
-          >
-            <Icon.Edit width={14} height={14} />
-            <span>Edit Profile</span>
-          </button>
         </div>
       </div>
 

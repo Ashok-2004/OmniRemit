@@ -279,7 +279,13 @@ export function UserFormPage() {
       const token = await ensureFreshAccessToken()
 
       if (isEdit && id) {
-        await usersApi.update(token, id, { name, email, phoneNumber: phone || null, roleId: roleId || null })
+        await usersApi.update(token, id, {
+          name,
+          email,
+          phoneNumber: phone || null,
+          roleId: roleId || null,
+          isActive,
+        })
         await usersApi.replaceOverrides(token, id, computedOverrides)
         void refreshSession()
         navigate('/settings/users')

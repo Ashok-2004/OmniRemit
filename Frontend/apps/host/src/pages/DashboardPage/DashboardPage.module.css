@@ -828,3 +828,15 @@
 
 .copyright { color: #94a3b8; font-weight: 400; }
 .version   { color: #cbd5e1; font-weight: 400; }
+
+/* Metric load failure. Without this the page rendered zeroes, which reads as "the platform has no
+   users" rather than "the request failed". */
+.dashboardError {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--omni-color-danger-200, #fecaca);
+  border-radius: 12px;
+  background: var(--omni-color-danger-50, #fef2f2);
+  color: var(--omni-color-danger-700, #b91c1c);
+  font-size: 13px;
+}
