@@ -5,6 +5,7 @@ import { SkeletonBlock } from '../../shared/components/Skeleton'
 import { Icon } from '../../shared/components/Icon/Icon'
 import { useAuthStore } from '../../features/auth/store/authStore'
 import { useClickOutside } from '../../shared/hooks/useClickOutside'
+import { resolveIcon } from '../../shared/components/Icon/resolveIcon'
 import { APP_NAME } from '../../shared/config/branding'
 import styles from './Sidebar.module.css'
 
@@ -27,23 +28,6 @@ function navItemClass({ isActive }: { isActive: boolean }) {
   return classNames(styles.navItem, isActive && styles.navItemActive)
 }
 
-/**
- * Resolve a registered app's `iconKey` to a real icon component.
- *
- * Every remote app was previously rendered with the *same* Users icon regardless of what it does, so
- * a Helpdesk and an Inventory app were visually indistinguishable — even though the registry already
- * stores an icon key per app. An unrecognised or absent key falls back to a neutral Box rather than
- * crashing on an undefined component, which matters because the key is operator-supplied data.
- */
-type IconComponent = (typeof Icon)[keyof typeof Icon]
-
-function appIcon(iconKey?: string | null): IconComponent {
-  if (iconKey) {
-    const candidate = (Icon as Record<string, IconComponent | undefined>)[iconKey]
-    if (candidate) return candidate
-  }
-  return Icon.Box
-}
 
 export function Sidebar({ apps, canAccessAuditLogs, error, userName, onLogout }: SidebarProps) {
   const user = useAuthStore((s) => s.user)
@@ -101,7 +85,7 @@ export function Sidebar({ apps, canAccessAuditLogs, error, userName, onLogout }:
 
         {apps?.map((app) => {
           const isUnreachable = app.health === 'Unreachable'
-          const AppIcon = appIcon(app.iconKey)
+          const AppIcon = resolveIcon(app.iconKey)
           return (
             <NavLink
               key={app.key}

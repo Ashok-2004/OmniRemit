@@ -958,3 +958,21 @@
   flex-direction: column;
   gap: 16px;
 }
+
+/*
+ * A capability the row's module does not declare. Was an inline style attribute repeated eight
+ * times in the JSX; as a class it can also carry the tooltip that explains the blank is deliberate.
+ */
+.capNotDeclared {
+  color: var(--omni-color-text-muted, #94a3b8);
+  cursor: help;
+}
+
+/* Explanatory copy under a section heading, e.g. when an app has declared no capabilities yet. */
+.sectionHint {
+  margin: 0;
+  padding: 12px 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--omni-color-text-secondary, #64748b);
+}

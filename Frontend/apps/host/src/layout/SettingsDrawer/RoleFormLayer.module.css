@@ -380,6 +380,30 @@
   text-align: center;
 }
 
+/*
+ * A capability this row's module does not declare. Previously an inline style attribute repeated
+ * eight times in the JSX; as a class it can also carry a title tooltip explaining that the blank is
+ * deliberate rather than a rendering failure.
+ */
+.capNotDeclared {
+  color: var(--omni-color-text-muted, #94a3b8);
+  cursor: help;
+}
+
+/*
+ * How many capabilities this role already holds on an app, shown on the collapsed accordion so an
+ * operator can see which applications a role touches without expanding every one.
+ */
+.grantCountBadge {
+  padding: 2px 8px;
+  border-radius: var(--omni-radius-full, 999px);
+  background: var(--omni-color-primary-50, #eef2ff);
+  color: var(--omni-color-primary-700, #4338ca);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .checkbox {
   width: 15px;
   height: 15px;
