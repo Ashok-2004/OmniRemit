@@ -10,6 +10,7 @@ import { useAuthStore } from './features/auth/store/authStore'
 import { useModuleRegistryStore } from './shared/stores/moduleRegistryStore'
 import { useSettingsDrawerStore, type SettingsTab } from './shared/stores/settingsDrawerStore'
 import { RouteFallback } from './shared/components/RouteFallback/RouteFallback'
+import { lazyWithPreload, preloadWhenIdle } from './shared/utils/lazyWithPreload'
 
 /**
  * Every route is code-split.
@@ -22,7 +23,12 @@ import { RouteFallback } from './shared/components/RouteFallback/RouteFallback'
  * AppShell and the route guards stay eager: they are the frame around every authenticated
  * route, so splitting them would only add a waterfall.
  */
-const DashboardPage = lazy(() => import('./pages/DashboardPage/DashboardPage').then((m) => ({ default: m.DashboardPage })))
+// The dashboard is preloadable: it is where nearly every sign-in lands, so its chunk is fetched during
+// idle time on the login screen and again the instant the form is submitted, rather than after
+// authentication succeeds. That removes the Suspense gap between login and dashboard entirely.
+const { Component: DashboardPage, preload: preloadDashboard } = lazyWithPreload(() =>
+  import('./pages/DashboardPage/DashboardPage').then((m) => ({ default: m.DashboardPage })),
+)
 const LoginPage = lazy(() => import('./pages/LoginPage/LoginPage').then((m) => ({ default: m.LoginPage })))
 const MaintenancePage = lazy(() => import('./pages/MaintenancePage/MaintenancePage').then((m) => ({ default: m.MaintenancePage })))
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage/NotFoundPage').then((m) => ({ default: m.NotFoundPage })))
@@ -83,20 +89,44 @@ function LoginRoute() {
   // Why the previous session ended (idle timeout, expiry, another tab signing out) — shown so the
   // user isn't dumped on the login screen with no explanation. A real login error takes precedence.
   const sessionExpiredReason = useAuthStore((s) => s.sessionExpiredReason)
-  const navigate = useNavigate()
   const location = useLocation()
 
+  // The dashboard is the destination in almost every case, so its chunk is fetched while the user is
+  // still typing rather than after they authenticate. See the submit handler below for the other half.
   useEffect(() => {
-    if (status === 'authenticated') {
-      const from = (location.state as { from?: Pick<Location, 'pathname'> } | null)?.from?.pathname ?? '/'
-      navigate(from, { replace: true })
-    }
-  }, [status, navigate, location.state])
+    preloadWhenIdle(preloadDashboard)
+  }, [])
+
+  /*
+   * Redirect DECLARATIVELY, not from an effect.
+   *
+   * This previously navigated inside a useEffect, which meant that on a successful sign-in React
+   * committed one more render of the login page BEFORE the effect ran and changed the route. The user
+   * saw the login screen again — including the error banner from a previous failed attempt, since that
+   * banner is part of the same subtree — and only then the dashboard, once its lazy chunk had
+   * downloaded. That download is what made the stale screen linger long enough to notice.
+   *
+   * Returning <Navigate> instead means the moment status flips to authenticated this component
+   * renders a redirect and nothing else: the login UI is never painted again.
+   */
+  if (status === 'authenticated') {
+    const from = (location.state as { from?: Pick<Location, 'pathname'> } | null)?.from?.pathname ?? '/'
+    return <Navigate to={from} replace />
+  }
 
   return (
     <LoginPage
-      onSubmit={login}
-      onGoogleCredential={loginWithGoogle}
+      onSubmit={async (email, password) => {
+        // Start the dashboard chunk download in parallel with the login request instead of after it.
+        // Both are in flight at once, so the chunk is usually parsed before the token comes back and
+        // the post-login Suspense fallback never appears.
+        void preloadDashboard()
+        await login(email, password)
+      }}
+      onGoogleCredential={async (idToken) => {
+        void preloadDashboard()
+        await loginWithGoogle(idToken)
+      }}
       loading={loginLoading}
       errorMessage={loginError ?? sessionExpiredReason}
     />
