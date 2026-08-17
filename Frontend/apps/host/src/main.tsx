@@ -6,11 +6,6 @@ import { installHostBridge } from './shared/federation/hostBridge'
 import { createQueryClient } from './shared/query/queryClient'
 import { registerSessionCleanup } from './features/auth/store/authStore'
 
-// Self-hosted variable fonts — bundled by Vite, never fetched from a CDN. Imported before the
-// theme so the @font-face rules exist by the time --omni-font-family references them.
-import '@fontsource-variable/geist'
-import '@fontsource-variable/geist-mono'
-
 import './shared/styles/theme.css'
 import './shared/styles/reset.css'
 import './shared/styles/typography.css'

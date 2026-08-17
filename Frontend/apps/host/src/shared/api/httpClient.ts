@@ -1,31 +1,10 @@
 export class ApiError extends Error {
   status: number
 
-  /**
-   * Per-field validation errors from an ASP.NET Core ProblemDetails 400, keyed by field name as the
-   * server spells it (PascalCase, e.g. "Email").
-   *
-   * Without this the UI could only show the response's `title`, which for a validation failure is the
-   * generic "One or more validation errors occurred." — it tells the user nothing about which field or
-   * what rule. The server already sends the detail; it was simply being discarded here.
-   */
-  fieldErrors?: Record<string, string[]>
-
-  constructor(status: number, message: string, fieldErrors?: Record<string, string[]>) {
+  constructor(status: number, message: string) {
     super(message)
     this.name = 'ApiError'
     this.status = status
-    this.fieldErrors = fieldErrors
-  }
-
-  /**
-   * The first message for a field, matched case-insensitively so a caller can ask for `email` and
-   * still find the server's `Email`.
-   */
-  errorFor(field: string): string | undefined {
-    if (!this.fieldErrors) return undefined
-    const key = Object.keys(this.fieldErrors).find((k) => k.toLowerCase() === field.toLowerCase())
-    return key ? this.fieldErrors[key]?.[0] : undefined
   }
 }
 
@@ -108,8 +87,8 @@ export async function apiFetch<T>(url: string, options: ApiFetchOptions = {}): P
   }
 
   if (!response.ok) {
-    const { title, fieldErrors } = await readErrorDetail(response)
-    throw new ApiError(response.status, title, fieldErrors)
+    const title = await readErrorTitle(response)
+    throw new ApiError(response.status, title)
   }
 
   if (response.status === 204) {
@@ -119,36 +98,11 @@ export async function apiFetch<T>(url: string, options: ApiFetchOptions = {}): P
   return (await response.json()) as T
 }
 
-/**
- * Reads an ASP.NET Core ProblemDetails body.
- *
- * For a validation failure the useful content is in `errors`, not `title` — the title is always the
- * generic "One or more validation errors occurred.". So when `errors` is present the message is built
- * from the actual field messages, which is what a user needs to see, and the raw map is passed along so
- * a form can attach each message to its own field.
- */
-async function readErrorDetail(
-  response: Response,
-): Promise<{ title: string; fieldErrors?: Record<string, string[]> }> {
+async function readErrorTitle(response: Response): Promise<string> {
   try {
-    const problem = (await response.json()) as {
-      title?: string
-      detail?: string
-      errors?: Record<string, string[]>
-    }
-
-    const fieldErrors =
-      problem.errors && Object.keys(problem.errors).length > 0 ? problem.errors : undefined
-
-    if (fieldErrors) {
-      // Deduplicated and joined: several fields failing produces one readable sentence rather than a
-      // repeated generic title.
-      const messages = [...new Set(Object.values(fieldErrors).flat())]
-      return { title: messages.join(' '), fieldErrors }
-    }
-
-    return { title: problem.title ?? problem.detail ?? response.statusText }
+    const problem = (await response.json()) as { title?: string }
+    return problem.title ?? response.statusText
   } catch {
-    return { title: response.statusText || `Request failed with status ${response.status}` }
+    return response.statusText || `Request failed with status ${response.status}`
   }
 }

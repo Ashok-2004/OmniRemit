@@ -3,24 +3,15 @@ import { useAuthStore } from '../../features/auth/store/authStore'
 import { usersApi, type UserListItemDto } from '../../features/settings-users/api/usersApi'
 import { rolesApi, type RoleListItemDto } from '../../features/settings-roles/api/rolesApi'
 import { useSettingsDrawerStore } from '../../shared/stores/settingsDrawerStore'
-import { useDebouncedValue } from '../../shared/hooks/useDebouncedValue'
 import { Icon } from '../../shared/components/Icon/Icon'
 import { SkeletonBlock } from '../../shared/components/Skeleton'
-import { Pagination } from '../../shared/components/Pagination/Pagination'
-import { Modal } from '../../shared/components/Modal/Modal'
-import { Button } from '../../shared/components/Button/Button'
-import { ApiError } from '../../shared/api/httpClient'
 import styles from './SettingsUsersTab.module.css'
-
-const PAGE_SIZE = 10
 
 export function SettingsUsersTab() {
   const accessToken = useAuthStore((s) => s.accessToken)
   const isAdministrator = Boolean(useAuthStore((s) => s.user)?.isAdministrator)
   const hasCapability = useAuthStore((s) => s.hasCapability)
   const pushLayer = useSettingsDrawerStore((s) => s.pushLayer)
-  const mutationCount = useSettingsDrawerStore((s) => s.mutationCount)
-  const notifyMutation = useSettingsDrawerStore((s) => s.notifyMutation)
 
   const canCreate = isAdministrator || hasCapability('host.settings.users', 'Create')
   const canEdit = isAdministrator || hasCapability('host.settings.users', 'Edit')
@@ -31,15 +22,8 @@ export function SettingsUsersTab() {
   const [roles, setRoles] = useState<RoleListItemDto[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [selectedRoleId, setSelectedRoleId] = useState<string>('')
-  const [page, setPage] = useState(1)
-  const [pendingDelete, setPendingDelete] = useState<UserListItemDto | null>(null)
-  const [deleting, setDeleting] = useState(false)
-
-  // Debounced so typing a name doesn't fire one query per keystroke against the user table.
-  const debouncedSearch = useDebouncedValue(search, 300)
 
   // Load available roles for the filter dropdown
   useEffect(() => {
@@ -67,25 +51,17 @@ export function SettingsUsersTab() {
     let cancelled = false
 
     async function load() {
-      setLoading(true)
       try {
         const res = await usersApi.list(accessToken!, {
-          page,
-          pageSize: PAGE_SIZE,
-          search: debouncedSearch || undefined,
+          search: search || undefined,
           roleId: selectedRoleId || undefined,
         })
-        if (cancelled) return
-        setUsers(res.items)
-        setTotal(res.total)
-        setError(null)
+        if (!cancelled) {
+          setUsers(res.items)
+          setTotal(res.total)
+        }
       } catch (err) {
-        if (cancelled) return
-        // Surfaced rather than console-only: a failed load previously rendered the empty state, so
-        // an operator saw "no users" and could reasonably think the directory had been wiped.
-        setError(err instanceof ApiError ? err.message : 'Could not load users.')
-        setUsers([])
-        setTotal(0)
+        console.error('Failed to load users:', err)
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -95,37 +71,38 @@ export function SettingsUsersTab() {
     return () => {
       cancelled = true
     }
-  }, [accessToken, debouncedSearch, selectedRoleId, page, mutationCount])
-
-  // Any change of filter invalidates the page number — page 4 of an unfiltered list is rarely a
-  // valid page of the filtered one, and asking for it shows a confusing empty result.
-  useEffect(() => {
-    setPage(1)
-  }, [debouncedSearch, selectedRoleId])
+  }, [accessToken, search, selectedRoleId])
 
   const handleToggleStatus = async (id: string, currentActive: boolean) => {
     if (!accessToken) return
     try {
       await usersApi.updateStatus(accessToken, id, !currentActive)
-      notifyMutation()
+      const res = await usersApi.list(accessToken, {
+        search: search || undefined,
+        roleId: selectedRoleId || undefined,
+      })
+      setUsers(res.items)
+      setTotal(res.total)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not update this user.')
+      console.error('Failed to update user status:', err)
+      window.alert('Failed to update user status.')
     }
   }
 
-  async function confirmDelete() {
-    if (!pendingDelete || !accessToken) return
-    setDeleting(true)
+  const handleDelete = async (id: string, name: string) => {
+    if (!window.confirm(`Are you sure you want to delete user "${name}"? This action cannot be undone.`)) return
+    if (!accessToken) return
     try {
-      await usersApi.remove(accessToken, pendingDelete.id)
-      setPendingDelete(null)
-      if (users.length === 1 && page > 1) setPage((p) => p - 1)
-      else notifyMutation()
+      await usersApi.remove(accessToken, id)
+      const res = await usersApi.list(accessToken, {
+        search: search || undefined,
+        roleId: selectedRoleId || undefined,
+      })
+      setUsers(res.items)
+      setTotal(res.total)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not delete this user.')
-      setPendingDelete(null)
-    } finally {
-      setDeleting(false)
+      console.error('Failed to delete user:', err)
+      window.alert('Failed to delete user.')
     }
   }
 
@@ -178,12 +155,6 @@ export function SettingsUsersTab() {
           <Icon.ChevronDown width={14} height={14} className={styles.selectChevron} />
         </div>
       </div>
-
-      {error && (
-        <div className={styles.errorBanner} role="alert">
-          {error}
-        </div>
-      )}
 
       {/* Users List */}
       <div className={styles.usersList}>
@@ -238,7 +209,7 @@ export function SettingsUsersTab() {
                     <button
                       type="button"
                       className={styles.deleteBtn}
-                      onClick={() => setPendingDelete(u)}
+                      onClick={() => handleDelete(u.id, u.name || u.email)}
                       title="Delete User"
                     >
                       <Icon.Trash width={16} height={16} />
@@ -255,32 +226,21 @@ export function SettingsUsersTab() {
         )}
       </div>
 
-      {/*
-        Real pagination. The footer used to render a permanently disabled prev/next around a literal
-        "1", so with more than one page of users the rest of the directory was unreachable.
-      */}
-      {total > 0 && (
-        <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} itemLabel="user" />
-      )}
-
-      <Modal
-        open={Boolean(pendingDelete)}
-        title={`Delete ${pendingDelete?.name || pendingDelete?.email}?`}
-        onClose={() => setPendingDelete(null)}
-        actions={
-          <>
-            <Button variant="secondary" onClick={() => setPendingDelete(null)}>
-              Cancel
-            </Button>
-            <Button variant="danger" loading={deleting} onClick={confirmDelete}>
-              Delete
-            </Button>
-          </>
-        }
-      >
-        This removes their access immediately. Their audit log entries are kept, so the record of
-        what they did remains intact.
-      </Modal>
+      {/* Footer */}
+      <div className={styles.footer}>
+        <span className={styles.footerText}>
+          Showing 1 to {users.length} of {total} users
+        </span>
+        <div className={styles.pagination}>
+          <button type="button" className={styles.pageBtn} disabled>
+            &lt;
+          </button>
+          <span className={styles.pageActive}>1</span>
+          <button type="button" className={styles.pageBtn} disabled>
+            &gt;
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

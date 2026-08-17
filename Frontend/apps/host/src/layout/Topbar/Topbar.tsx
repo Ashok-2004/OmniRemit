@@ -21,109 +21,131 @@ export interface TopbarProps {
 function getUserInitials(name?: string | null): string {
   if (!name) return 'SA'
   const parts = name.trim().split(/\s+/)
-  if (parts.length >= 2) {
-    return `${parts[0][0]}${parts[1][0]}`.toUpperCase()
-  }
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase()
   return name.slice(0, 2).toUpperCase()
 }
 
 export function Topbar({ userName, settingsAccess, onLogout }: TopbarProps) {
   const [menuOpen, setMenuOpen] = useState(false)
-  const menuRef = useRef<HTMLDivElement>(null)
-  const userTriggerRef = useRef<HTMLButtonElement>(null)
+  const menuRef      = useRef<HTMLDivElement>(null)
+  const triggerRef   = useRef<HTMLButtonElement>(null)
 
   const openSettings = useSettingsDrawerStore((s) => s.open)
 
   useClickOutside([menuRef], () => setMenuOpen(false), menuOpen)
-  const handleUserMenuKeyDown = useMenuKeyboardNav(menuRef, () => setMenuOpen(false), userTriggerRef)
+  const handleKeyDown = useMenuKeyboardNav(menuRef, () => setMenuOpen(false), triggerRef)
 
-  const canAccessSettings = Boolean(settingsAccess?.users || settingsAccess?.roles || settingsAccess?.applications)
+  const canAccessSettings = Boolean(
+    settingsAccess?.users || settingsAccess?.roles || settingsAccess?.applications
+  )
+  const displayName = userName || 'Super Admin'
 
   return (
     <header className={styles.topbar}>
-      {/* Search Input */}
+
+      {/* Search */}
       <div className={styles.search}>
-        <Icon.Search width={16} height={16} className={styles.searchIcon} />
+        <Icon.Search width={15} height={15} className={styles.searchIcon} />
         <input
-          type="text"
+          type="search"
           className={styles.searchInput}
           placeholder="Search..."
+          aria-label="Search"
         />
       </div>
 
-      {/* Top Right Action Items */}
+      {/* Right actions */}
       <div className={styles.actions}>
-        {/* Settings Gear Button (Opens Slide-over Drawer) */}
+
+        {/* Settings gear */}
         {canAccessSettings && (
           <button
             type="button"
             className={styles.iconButton}
             aria-label="Settings"
-            onClick={() => openSettings('users')}
             title="System Settings"
+            onClick={() => openSettings('users')}
           >
-            <Icon.Settings width={18} height={18} />
+            <Icon.Settings width={17} height={17} />
           </button>
         )}
 
-        {/* Notification Bell with dot */}
-        <button type="button" className={styles.iconButton} aria-label="Notifications" title="Notifications">
-          <Icon.Bell width={18} height={18} />
+        {/* Notifications */}
+        <button
+          type="button"
+          className={styles.iconButton}
+          aria-label="Notifications"
+          title="Notifications"
+        >
+          <Icon.Bell width={17} height={17} />
           <span className={styles.notificationDot} />
         </button>
 
-        {/* User Pill Dropdown */}
-        <div className={styles.menuWrapper} ref={menuRef} onKeyDown={handleUserMenuKeyDown}>
+        <div className={styles.actionsDivider} aria-hidden="true" />
+
+        {/* User pill */}
+        <div className={styles.menuWrapper} ref={menuRef} onKeyDown={handleKeyDown}>
           <button
-            ref={userTriggerRef}
+            ref={triggerRef}
             type="button"
             className={styles.userButton}
-            onClick={() => setMenuOpen((open) => !open)}
+            onClick={() => setMenuOpen((o) => !o)}
             aria-haspopup="menu"
             aria-expanded={menuOpen}
           >
             <span className={styles.avatar} aria-hidden="true">
               {getUserInitials(userName)}
             </span>
-            <span className={styles.userName}>{userName || 'Super Admin'}</span>
-            <Icon.ChevronDown width={14} height={14} className={styles.userChevron} />
+            <span className={styles.userName}>{displayName}</span>
+            <Icon.ChevronDown width={13} height={13} className={styles.userChevron} />
           </button>
 
           {menuOpen && (
             <div className={styles.menu} role="menu">
+
+              {/* User header */}
               <div className={styles.menuUserHeader}>
-                <span className={styles.menuUserHeaderName}>{userName || 'Super Admin'}</span>
-                <span className={styles.menuUserHeaderRole}>Platform Administrator</span>
+                <span className={styles.menuUserHeaderAvatar} aria-hidden="true">
+                  {getUserInitials(userName)}
+                </span>
+                <div className={styles.menuUserHeaderInfo}>
+                  <span className={styles.menuUserHeaderName}>{displayName}</span>
+                  <span className={styles.menuUserHeaderRole}>Platform Administrator</span>
+                </div>
               </div>
               <div className={styles.menuDivider} />
 
-              <Link to="/profile" role="menuitem" className={styles.menuItem} onClick={() => setMenuOpen(false)}>
-                <Icon.Users width={16} height={16} />
-                <span>My Profile</span>
-              </Link>
-              <button
-                type="button"
+              <Link
+                to="/profile"
                 role="menuitem"
                 className={styles.menuItem}
-                onClick={() => {
-                  setMenuOpen(false)
-                  openSettings('users')
-                }}
+                onClick={() => setMenuOpen(false)}
               >
-                <Icon.Settings width={16} height={16} />
-                <span>Settings</span>
-              </button>
+                <Icon.Users width={15} height={15} />
+                <span>My Profile</span>
+              </Link>
+
+              {canAccessSettings && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={styles.menuItem}
+                  onClick={() => { setMenuOpen(false); openSettings('users') }}
+                >
+                  <Icon.Settings width={15} height={15} />
+                  <span>Settings</span>
+                </button>
+              )}
+
               <div className={styles.menuDivider} />
+
               <button
                 type="button"
                 role="menuitem"
                 className={`${styles.menuItem} ${styles.menuItemDanger}`}
-                onClick={() => {
-                  setMenuOpen(false)
-                  onLogout?.()
-                }}
+                onClick={() => { setMenuOpen(false); onLogout?.() }}
               >
-                <Icon.LogOut width={16} height={16} />
+                <Icon.LogOut width={15} height={15} />
                 <span>Sign out</span>
               </button>
             </div>

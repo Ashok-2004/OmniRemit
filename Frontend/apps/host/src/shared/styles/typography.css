@@ -16,32 +16,6 @@ h5,
 h6 {
   font-weight: var(--omni-font-weight-bold);
   line-height: var(--omni-line-height-tight);
-  /* Large text tracks loose at default spacing; pulling it in is what gives a heading presence. */
-  letter-spacing: var(--omni-letter-spacing-tight);
-  /* Stops a heading dropping a single word onto its own last line. */
-  text-wrap: balance;
-}
-
-/*
- * Tabular figures everywhere numbers are read in a column or animate.
- *
- * Proportional digits have different widths, so a table of amounts never lines up and a counting-up
- * stat card visibly jitters as digits change. This is the single highest-value typographic setting
- * in a data console.
- */
-table,
-th,
-td,
-time,
-[data-numeric] {
-  font-variant-numeric: tabular-nums;
-}
-
-code,
-kbd,
-samp,
-pre {
-  font-family: var(--omni-font-family-mono);
 }
 
 h1 {

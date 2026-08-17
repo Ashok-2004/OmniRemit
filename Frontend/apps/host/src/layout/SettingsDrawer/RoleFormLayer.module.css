@@ -22,15 +22,16 @@
 }
 
 .headerIconBox {
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   border-radius: 10px;
-  background: #ecfdf5;
-  color: #10b981;
+  background: #eff6ff;
+  color: #2563eb;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.8);
 }
 
 .title {
@@ -107,7 +108,7 @@
 }
 
 .tabBtnActive {
-  color: #4f46e5;
+  color: #2563eb;
 }
 
 .tabBtnActive::after {
@@ -116,14 +117,15 @@
   bottom: -1px;
   left: 0;
   right: 0;
-  height: 2px;
-  background: #4f46e5;
+  height: 2.5px;
+  background: linear-gradient(90deg, #2563eb, #60a5fa);
   border-radius: 2px;
 }
 
 .tabBadge {
-  background: #ede9fe;
-  color: #6366f1;
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
   font-size: 10px;
   font-weight: 700;
   padding: 1px 6px;
@@ -212,8 +214,8 @@
 }
 
 .inputWithIcon:focus {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
 .fieldLeftIcon {
@@ -240,8 +242,8 @@
 }
 
 .textarea:focus {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
 .adminToggleCard {
@@ -380,35 +382,11 @@
   text-align: center;
 }
 
-/*
- * A capability this row's module does not declare. Previously an inline style attribute repeated
- * eight times in the JSX; as a class it can also carry a title tooltip explaining that the blank is
- * deliberate rather than a rendering failure.
- */
-.capNotDeclared {
-  color: var(--omni-color-text-muted, #94a3b8);
-  cursor: help;
-}
-
-/*
- * How many capabilities this role already holds on an app, shown on the collapsed accordion so an
- * operator can see which applications a role touches without expanding every one.
- */
-.grantCountBadge {
-  padding: 2px 8px;
-  border-radius: var(--omni-radius-full, 999px);
-  background: var(--omni-color-primary-50, #eef2ff);
-  color: var(--omni-color-primary-700, #4338ca);
-  font-size: 11px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
 .checkbox {
   width: 15px;
   height: 15px;
   border-radius: 4px;
-  accent-color: #4f46e5;
+  accent-color: #2563eb;
   cursor: pointer;
 }
 
@@ -435,13 +413,15 @@
 .textActionBtn {
   background: none;
   border: none;
-  color: #4f46e5;
+  color: #2563eb;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
+  transition: color 130ms ease;
 }
 
 .textActionBtn:hover {
+  color: #1d4ed8;
   text-decoration: underline;
 }
 
@@ -557,10 +537,11 @@
 .selectLink {
   background: none;
   border: none;
-  color: #4f46e5;
+  color: #2563eb;
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
+  transition: color 130ms ease;
 }
 
 /* Assigned Users Tab */
@@ -643,8 +624,8 @@
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  background: #ede9fe;
-  color: #6366f1;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #ffffff;
   font-size: 11px;
   font-weight: 700;
   display: flex;
@@ -687,49 +668,54 @@
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
-  padding: 14px 24px;
-  border-top: 1px solid #f1f5f9;
+  padding: 14px 28px;
+  border-top: 1px solid #eaecf0;
   background: #ffffff;
 }
 
 .cancelBtn {
   background: #ffffff;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  padding: 8px 16px;
-  font-size: 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 9px;
+  padding: 9px 18px;
+  font-size: 13px;
+  font-family: 'Inter', -apple-system, sans-serif;
   font-weight: 600;
   color: #475569;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 130ms ease, border-color 130ms ease;
 }
 
 .cancelBtn:hover {
   background: #f8fafc;
+  border-color: #c8d4e4;
 }
 
 .saveBtn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  background: #4f46e5;
+  gap: 7px;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
   border: none;
-  border-radius: 8px;
-  padding: 9px 20px;
-  font-size: 12px;
+  border-radius: 9px;
+  padding: 9px 22px;
+  font-size: 13px;
+  font-family: 'Inter', -apple-system, sans-serif;
   font-weight: 600;
   color: #ffffff;
   cursor: pointer;
-  transition: background 0.15s ease;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.28);
+  transition: box-shadow 140ms ease, transform 120ms ease;
 }
 
 .saveBtn:hover {
-  background: #4338ca;
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.38);
+  transform: translateY(-1px);
 }
 
 .saveBtn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+  opacity: 0.55;
+  pointer-events: none;
 }
 
 .loadingContainer {
@@ -737,34 +723,4 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-}
-
-/*
- * Inline per-field validation. Previously every problem was reported as one sentence in a banner above
- * the form, so on a multi-field card the user had to work out which input it referred to.
- */
-.fieldError {
-  display: block;
-  margin-top: 4px;
-  font-size: 12px;
-  line-height: 1.4;
-  color: var(--omni-color-danger-600, #dc2626);
-}
-
-/* Paired with aria-invalid so the state is conveyed to assistive tech, not by colour alone. */
-.inputInvalid {
-  border-color: var(--omni-color-danger-400, #f87171) !important;
-}
-
-.inputInvalid:focus {
-  outline-color: var(--omni-color-danger-500, #ef4444);
-  box-shadow: 0 0 0 3px var(--omni-color-danger-100, #fee2e2);
-}
-
-/* Remaining-character counter under a length-capped textarea. */
-.charCount {
-  align-self: flex-end;
-  font-size: 11px;
-  color: var(--omni-color-text-muted, #94a3b8);
-  font-variant-numeric: tabular-nums;
 }

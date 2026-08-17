@@ -5,7 +5,6 @@ import { SkeletonTable } from '../../../shared/components/Skeleton'
 import { Modal } from '../../../shared/components/Modal/Modal'
 import { PermissionGate } from '../../../shared/components/PermissionGate/PermissionGate'
 import { ApiError } from '../../../shared/api/httpClient'
-import { useDebouncedValue } from '../../../shared/hooks/useDebouncedValue'
 import { auditLogsApi, type AuditLogDto, type AuditLogSummaryDto } from '../api/auditLogsApi'
 import { Icon } from '../../../shared/components/Icon/Icon'
 import styles from './AuditLogsPage.module.css'
@@ -95,14 +94,10 @@ const TAB_ACTION_FILTER: Record<TabId, string | undefined> = {
 export function AuditLogsPage() {
   const accessToken = useAuthStore((s) => s.accessToken)
 
-  // Defaults to all activity, not to failures. See the tablist below for why.
-  const [activeTab, setActiveTab] = useState<TabId>(TAB_IDS.auditEvents)
+  const [activeTab, setActiveTab] = useState<TabId>(TAB_IDS.loginErrors)
   const [dateRange, setDateRange] = useState<DateRangePreset>('week')
   const [page, setPage] = useState(1)
   const [service, setService] = useState('')
-  // Debounced so typing a service name does not fire one audit-log query per keystroke. The audit
-  // table is the largest in the platform, so this is the query least worth running on every letter.
-  const debouncedService = useDebouncedValue(service, 300)
 
   const [summary, setSummary] = useState<AuditLogSummaryDto | null>(null)
   const [logs, setLogs] = useState<AuditLogDto[] | null>(null)
@@ -110,11 +105,6 @@ export function AuditLogsPage() {
   const [error, setError] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const [selectedFailure, setSelectedFailure] = useState<AuditLogDto | null>(null)
-
-  // Bumped by the Refresh button to force a refetch of the current query. A counter rather than calling
-  // a loader directly, so refreshing goes through exactly the same effect — and therefore the same
-  // cancellation and loading-state handling — as any other change.
-  const [refreshKey, setRefreshKey] = useState(0)
 
   const range = useMemo(() => computeRange(dateRange), [dateRange])
 
@@ -128,67 +118,35 @@ export function AuditLogsPage() {
     }
   }, [accessToken, range])
 
+  const loadLogs = useCallback(async () => {
+    if (!accessToken) return
+    setError(null)
+    try {
+      const result = await auditLogsApi.list(accessToken, {
+        page,
+        pageSize: PAGE_SIZE,
+        service: service || undefined,
+        action: TAB_ACTION_FILTER[activeTab],
+        ...range,
+      })
+      setLogs(result.items)
+      setTotal(result.total)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not load audit logs.')
+    }
+  }, [accessToken, page, service, activeTab, range])
+
   useEffect(() => {
     void loadSummary()
   }, [loadSummary])
 
-  /*
-   * Loading the rows, with two problems fixed that together produced the reported symptom: switching
-   * from the Login Errors tab to Login Successes showed the FAILURE rows under the success heading for
-   * a moment before the correct data appeared.
-   *
-   * 1. Stale rows across a query change. The previous version never cleared `logs` before fetching, so
-   *    while the new request was in flight the table kept rendering the previous tab's rows under the
-   *    newly-selected tab. Setting `logs` back to null puts the table in its loading state instead, so
-   *    it never displays data that belongs to a filter the user has already moved off.
-   *
-   * 2. An unguarded race. There was no cancellation, so switching tabs quickly left two requests in
-   *    flight; if the first resolved last, its rows won and the tab showed permanently wrong data. The
-   *    `cancelled` flag means a superseded response is discarded rather than applied.
-   *
-   * The page reset is folded in here as well. It used to live in its own effect that ran after this one
-   * had already fetched with the stale page number, costing an extra request per filter change.
-   */
   useEffect(() => {
-    if (!accessToken) return
-    let cancelled = false
+    void loadLogs()
+  }, [loadLogs])
 
-    // Reset to the first page whenever the query itself changes — page 4 of one filter is rarely a
-    // valid page of another. Skipped when only `page` changed, which is what the guard below checks.
-    setLogs(null)
-    setError(null)
-
-    async function load() {
-      try {
-        const result = await auditLogsApi.list(accessToken!, {
-          page,
-          pageSize: PAGE_SIZE,
-          service: debouncedService || undefined,
-          action: TAB_ACTION_FILTER[activeTab],
-          ...range,
-        })
-        if (cancelled) return
-        setLogs(result.items)
-        setTotal(result.total)
-      } catch (err) {
-        if (cancelled) return
-        setError(err instanceof ApiError ? err.message : 'Could not load audit logs.')
-        setLogs([])
-        setTotal(0)
-      }
-    }
-
-    void load()
-    return () => {
-      cancelled = true
-    }
-  }, [accessToken, page, debouncedService, activeTab, range, refreshKey])
-
-  // Changing the filter invalidates the page number. Separate from the fetch effect so it cannot cause
-  // a second request: setting page while already on page 1 is a no-op that React bails out of.
   useEffect(() => {
     setPage(1)
-  }, [activeTab, dateRange, debouncedService])
+  }, [activeTab, dateRange, service])
 
   async function handleExport() {
     if (!accessToken) return
@@ -196,7 +154,7 @@ export function AuditLogsPage() {
     setError(null)
     try {
       await auditLogsApi.exportCsv(accessToken, {
-        service: debouncedService || undefined,
+        service: service || undefined,
         action: TAB_ACTION_FILTER[activeTab],
         ...range,
       })
@@ -281,41 +239,27 @@ export function AuditLogsPage() {
 
       {/* Tabs & Filter Bar */}
       <div className={styles.navBar}>
-        {/*
-          Broadest view first, and it is the default. The page used to open on Login Errors, so an
-          administrator's first sight of the audit log was a list of failures — alarming out of context,
-          and the wrong starting point for "what has been happening on this platform".
-
-          role="tablist" and aria-selected are what let a screen reader announce these as tabs rather
-          than as three unrelated buttons.
-        */}
-        <div className={styles.tabsList} role="tablist" aria-label="Audit log views">
+        <div className={styles.tabsList}>
           <button
             type="button"
-            role="tab"
-            aria-selected={activeTab === TAB_IDS.auditEvents}
-            className={`${styles.tabBtn} ${activeTab === TAB_IDS.auditEvents ? styles.tabActive : ''}`}
-            onClick={() => setActiveTab(TAB_IDS.auditEvents)}
-          >
-            All Activity
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === TAB_IDS.loginSuccesses}
-            className={`${styles.tabBtn} ${activeTab === TAB_IDS.loginSuccesses ? styles.tabActive : ''}`}
-            onClick={() => setActiveTab(TAB_IDS.loginSuccesses)}
-          >
-            Sign-ins
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === TAB_IDS.loginErrors}
             className={`${styles.tabBtn} ${activeTab === TAB_IDS.loginErrors ? styles.tabActive : ''}`}
             onClick={() => setActiveTab(TAB_IDS.loginErrors)}
           >
-            Failed Sign-ins
+            Login Errors
+          </button>
+          <button
+            type="button"
+            className={`${styles.tabBtn} ${activeTab === TAB_IDS.loginSuccesses ? styles.tabActive : ''}`}
+            onClick={() => setActiveTab(TAB_IDS.loginSuccesses)}
+          >
+            Login Successes
+          </button>
+          <button
+            type="button"
+            className={`${styles.tabBtn} ${activeTab === TAB_IDS.auditEvents ? styles.tabActive : ''}`}
+            onClick={() => setActiveTab(TAB_IDS.auditEvents)}
+          >
+            Audit Events
           </button>
         </div>
 
@@ -334,10 +278,7 @@ export function AuditLogsPage() {
           <button
             type="button"
             className={styles.refreshBtn}
-            onClick={() => {
-              setRefreshKey((k) => k + 1)
-              void loadSummary()
-            }}
+            onClick={() => void loadLogs()}
             title="Refresh Logs"
           >
             <Icon.Activity width={15} height={15} />

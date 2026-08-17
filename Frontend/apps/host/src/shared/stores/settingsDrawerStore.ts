@@ -1,11 +1,6 @@
 import { create } from 'zustand'
 
-/**
- * Tabs the settings drawer can show. Every value here must have a rendering branch in
- * SettingsDrawer — 'departments' and 'general' were previously declared but rendered nothing, so
- * setActiveTab('general') opened a drawer with an empty body and no way to tell it had failed.
- */
-export type SettingsTab = 'overview' | 'users' | 'roles' | 'applications'
+export type SettingsTab = 'users' | 'roles' | 'applications' | 'departments' | 'general'
 
 export type DrawerLayer =
   | { type: 'root'; tab?: SettingsTab }

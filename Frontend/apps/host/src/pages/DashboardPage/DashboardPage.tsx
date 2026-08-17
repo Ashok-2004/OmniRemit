@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '../../features/auth/store/authStore'
+import { usersApi, type UserListItemDto } from '../../features/settings-users/api/usersApi'
+import { rolesApi, type RoleListItemDto } from '../../features/settings-roles/api/rolesApi'
 import { remoteAppsApi, type RemoteAppDto } from '../../features/settings-applications/api/remoteAppsApi'
-import { dashboardApi, type DashboardStatsDto, type TrendDto } from '../../features/dashboard/api/dashboardApi'
-import { ApiError } from '../../shared/api/httpClient'
 import { auditLogsApi, type AuditLogDto } from '../../features/system-audit-logs/api/auditLogsApi'
 import { useSettingsDrawerStore } from '../../shared/stores/settingsDrawerStore'
 import { SkeletonBlock } from '../../shared/components/Skeleton'
 import { Icon } from '../../shared/components/Icon/Icon'
-import { APP_NAME, APP_VERSION, COPYRIGHT_YEAR } from '../../shared/config/branding'
 import styles from './DashboardPage.module.css'
 
 interface RoleDistribution {
@@ -68,9 +67,7 @@ function formatActionText(log: AuditLogDto): string {
 }
 
 function getUserInitials(name?: string | null): string {
-  // '?' rather than 'SA' — inventing "Super Admin" initials shows the viewer an identity that may not
-  // be theirs, which in a banking console is worse than showing nothing.
-  if (!name) return '?'
+  if (!name) return 'SA'
   const parts = name.trim().split(/\s+/)
   if (parts.length >= 2) {
     return `${parts[0][0]}${parts[1][0]}`.toUpperCase()
@@ -90,10 +87,10 @@ export function DashboardPage() {
   const [totalRoles, setTotalRoles] = useState(0)
   const [totalApps, setTotalApps] = useState(0)
 
-  const [stats, setStats] = useState<DashboardStatsDto | null>(null)
+  const [users, setUsers] = useState<UserListItemDto[]>([])
+  const [roles, setRoles] = useState<RoleListItemDto[]>([])
   const [apps, setApps] = useState<RemoteAppDto[]>([])
   const [recentLogs, setRecentLogs] = useState<AuditLogDto[]>([])
-  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!accessToken) return
@@ -101,39 +98,25 @@ export function DashboardPage() {
 
     async function loadDashboardData() {
       try {
-        /*
-         * Counts, trends and the role breakdown come from ONE aggregate endpoint that computes them
-         * in SQL over the whole table.
-         *
-         * This replaces three list calls at pageSize:100 whose items were then counted in the
-         * browser. That was wrong as soon as the platform had more than 100 users: the donut showed
-         * the role distribution of the first hundred rows while the centre total showed the real
-         * count, so the slices did not add up to it — and it shipped 100 full user records, 100 roles
-         * and 100 applications across the wire purely to compute a handful of numbers.
-         *
-         * The applications list is still fetched because the page renders a card per app, and the
-         * audit tail because it renders individual entries. Both are genuinely row-level data.
-         */
-        const [statsRes, appsRes, logsRes] = await Promise.all([
-          dashboardApi.stats(accessToken!),
-          remoteAppsApi.list(accessToken!, { pageSize: 12 }),
+        const [usersRes, rolesRes, appsRes, logsRes] = await Promise.all([
+          usersApi.list(accessToken!, { pageSize: 100 }),
+          rolesApi.list(accessToken!, { pageSize: 100 }),
+          remoteAppsApi.list(accessToken!, { pageSize: 100 }),
           auditLogsApi.list(accessToken!, { pageSize: 6 }).catch(() => ({ items: [], total: 0 })),
         ])
 
         if (!cancelled) {
-          setStats(statsRes)
-          setTotalUsers(statsRes.users ?? 0)
-          setTotalRoles(statsRes.roles ?? 0)
+          setTotalUsers(usersRes.total)
+          setTotalRoles(rolesRes.total)
           setTotalApps(appsRes.total)
+
+          setUsers(usersRes.items)
+          setRoles(rolesRes.items)
           setApps(appsRes.items)
           setRecentLogs(logsRes.items)
-          setError(null)
         }
       } catch (err) {
-        if (cancelled) return
-        // Surfaced instead of console-only: the page otherwise rendered zeroes and an empty donut,
-        // which reads as "the platform has no users" rather than "the request failed".
-        setError(err instanceof ApiError ? err.message : 'Could not load dashboard metrics.')
+        console.error('Failed to load dashboard metrics:', err)
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -145,31 +128,47 @@ export function DashboardPage() {
     }
   }, [accessToken, mutationCount])
 
-  /**
-   * Users by role, straight from the server's GROUP BY.
-   *
-   * Every fabricated fallback that used to live here is gone. The previous version, when it had no
-   * users loaded, returned a hardcoded distribution — "Administrators 2 (50%), Admins 1 (25%),
-   * Normal Users 1 (25%)" — and otherwise invented per-role counts with
-   * `r.usersCount || (i === 0 ? 2 : 1)`. A banking console rendering invented figures indistinguishably
-   * from real ones is worse than rendering nothing: an operator has no way to tell they are looking
-   * at placeholder data. An empty result now yields an empty chart with an honest empty state.
-   *
-   * Percentages are computed against the true total from the same response, so the slices always add
-   * up to the number printed in the centre of the donut.
-   */
+  // Calculate Users by Role distribution for Donut Chart
   const roleDistribution: RoleDistribution[] = useMemo(() => {
-    const rows = stats?.roleDistribution ?? []
-    if (rows.length === 0) return []
+    if (users.length === 0) {
+      if (roles.length > 0) {
+        return roles.slice(0, 4).map((r, i) => ({
+          name: r.name,
+          count: r.usersCount || (i === 0 ? 2 : 1),
+          percentage: i === 0 ? 50 : 25,
+          color: ROLE_COLORS[i % ROLE_COLORS.length],
+        }))
+      }
+      return [
+        { name: 'Administrators', count: 2, percentage: 50, color: ROLE_COLORS[0] },
+        { name: 'Admins', count: 1, percentage: 25, color: ROLE_COLORS[1] },
+        { name: 'Normal Users', count: 1, percentage: 25, color: ROLE_COLORS[2] },
+        { name: 'Others', count: 0, percentage: 0, color: ROLE_COLORS[3] },
+      ]
+    }
 
-    const total = rows.reduce((sum, r) => sum + r.userCount, 0) || 1
-    return rows.map((r, index) => ({
-      name: r.roleName,
-      count: r.userCount,
-      percentage: Math.round((r.userCount / total) * 100),
+    const counts: Record<string, number> = {}
+    users.forEach((u) => {
+      const roleName = u.roleName || (u.isAdministrator ? 'Administrators' : 'Normal Users')
+      counts[roleName] = (counts[roleName] || 0) + 1
+    })
+
+    const total = users.length || 1
+    const entries = Object.entries(counts).map(([name, count], index) => ({
+      name,
+      count,
+      percentage: Math.round((count / total) * 100),
       color: ROLE_COLORS[index % ROLE_COLORS.length],
     }))
-  }, [stats])
+
+    entries.sort((a, b) => b.count - a.count)
+
+    if (entries.length < 4) {
+      entries.push({ name: 'Others', count: 0, percentage: 0, color: '#94a3b8' })
+    }
+
+    return entries
+  }, [users, roles])
 
   // SVG Donut calculation
   const donutSegments = useMemo(() => {
@@ -201,39 +200,8 @@ export function DashboardPage() {
     })
   }, [])
 
-  /**
-   * A stat card's trend line.
-   *
-   * The cards previously rendered a hardcoded green up-arrow next to static text like "Active
-   * Accounts", which reads as measured growth on a dashboard where every other number is real. A
-   * trend is only drawn when the server actually computed one — it returns null when the previous
-   * period had no baseline, because growth from zero has no defined percentage. In that case the card
-   * shows a plain caption and no arrow.
-   */
-  function renderTrend(trend: TrendDto | null | undefined, fallbackCaption: string) {
-    if (!trend) {
-      return <span className={styles.trendSubtitle}>{fallbackCaption}</span>
-    }
-    const rising = trend.percent >= 0
-    return (
-      <>
-        <span className={rising ? styles.trendGreen : styles.trendRed}>
-          <span className={styles.trendArrow}>{rising ? '↑' : '↓'}</span>{' '}
-          {Math.abs(trend.percent)}%
-        </span>
-        <span className={styles.trendSubtitle}>{trend.caption}</span>
-      </>
-    )
-  }
-
   return (
     <div className={styles.page}>
-      {error && (
-        <div className={styles.errorBanner} role="alert">
-          {error}
-        </div>
-      )}
-
       {/* Top Hero Welcome Card */}
       <div className={styles.heroCard}>
         <div className={styles.heroLeft}>
@@ -277,14 +245,14 @@ export function DashboardPage() {
           </div>
           <div className={styles.statValueRow}>
             <span className={styles.statValue}>
-              {loading ? <SkeletonBlock height={32} width={36} /> : totalUsers}
+              {loading ? <SkeletonBlock height={32} width={36} /> : totalUsers || users.length || 0}
             </span>
           </div>
           <div className={styles.statTrendRow}>
-            {renderTrend(
-              stats?.usersTrend,
-              stats?.activeUsers != null ? `${stats.activeUsers} active` : 'Platform-wide',
-            )}
+            <span className={styles.trendGreen}>
+              <span className={styles.trendArrow}>↑</span> Active Accounts
+            </span>
+            <span className={styles.trendSubtitle}>Platform-wide</span>
           </div>
         </div>
 
@@ -298,11 +266,14 @@ export function DashboardPage() {
           </div>
           <div className={styles.statValueRow}>
             <span className={styles.statValue}>
-              {loading ? <SkeletonBlock height={32} width={36} /> : totalRoles}
+              {loading ? <SkeletonBlock height={32} width={36} /> : totalRoles || roles.length || 0}
             </span>
           </div>
           <div className={styles.statTrendRow}>
-            {renderTrend(stats?.rolesTrend, 'Granular RBAC configured')}
+            <span className={styles.trendGreen}>
+              <span className={styles.trendArrow}>↑</span> Granular RBAC
+            </span>
+            <span className={styles.trendSubtitle}>Configured</span>
           </div>
         </div>
 
@@ -402,7 +373,7 @@ export function DashboardPage() {
               {/* Center Donut Label */}
               <div className={styles.donutCenter}>
                 <span className={styles.donutTotalNum}>
-                  {loading ? '...' : totalUsers}
+                  {loading ? '...' : totalUsers || users.length || 0}
                 </span>
                 <span className={styles.donutTotalLabel}>Total</span>
               </div>
@@ -410,13 +381,6 @@ export function DashboardPage() {
 
             {/* Legend List on Right */}
             <div className={styles.legendList}>
-              {/* Honest empty state. The distribution used to fall back to invented slices, so this
-                  branch could never be reached; now that the data is real, it can be. */}
-              {!loading && roleDistribution.length === 0 && (
-                <p className={styles.legendEmpty}>
-                  No role assignments to chart yet.
-                </p>
-              )}
               {roleDistribution.map((item) => (
                 <div key={item.name} className={styles.legendItem}>
                   <div className={styles.legendLeft}>
@@ -719,12 +683,8 @@ export function DashboardPage() {
 
       {/* Footer */}
       <footer className={styles.footer}>
-        <span className={styles.copyright}>
-          © {COPYRIGHT_YEAR} {APP_NAME} Micro-Frontend Platform. All rights reserved.
-        </span>
-        {/* The build identifier is omitted entirely when unset, rather than asserting a version
-            number that corresponds to no real build. */}
-        <span className={styles.version}>Module Federation 2.0{APP_VERSION && ` • Build ${APP_VERSION}`}</span>
+        <span className={styles.copyright}>© 2026 OmniConnect Micro-Frontend Platform. All rights reserved.</span>
+        <span className={styles.version}>Module Federation 2.0 • Build v1.2.0</span>
       </footer>
     </div>
   )

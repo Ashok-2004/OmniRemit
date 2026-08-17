@@ -1,16 +1,13 @@
 import { lazy, Suspense, useEffect } from 'react'
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useParams, type Location } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, type Location } from 'react-router-dom'
 import { AppShell } from './layout/AppShell/AppShell'
 import { RequireAuth } from './features/auth/components/RequireAuth'
 import { RequireCapability } from './features/auth/components/RequireCapability'
 import { useSilentRefresh } from './features/auth/hooks/useSilentRefresh'
-import { useIdleTimeout } from './features/auth/hooks/useIdleTimeout'
-import { IdleWarningModal } from './features/auth/components/IdleWarningModal'
 import { useAuthStore } from './features/auth/store/authStore'
 import { useModuleRegistryStore } from './shared/stores/moduleRegistryStore'
-import { useSettingsDrawerStore, type SettingsTab } from './shared/stores/settingsDrawerStore'
+import { SetupPanel } from './layout/SetupPanel/SetupPanel'
 import { RouteFallback } from './shared/components/RouteFallback/RouteFallback'
-import { lazyWithPreload, preloadWhenIdle } from './shared/utils/lazyWithPreload'
 
 /**
  * Every route is code-split.
@@ -20,19 +17,20 @@ import { lazyWithPreload, preloadWhenIdle } from './shared/utils/lazyWithPreload
  * screen was downloading and parsing the audit-logs page, the permission matrix, and all three
  * settings CRUD flows before they had typed a password.
  *
- * AppShell and the route guards stay eager: they are the frame around every authenticated
+ * AppShell / SetupPanel / the route guards stay eager: they are the frame around every authenticated
  * route, so splitting them would only add a waterfall.
  */
-// The dashboard is preloadable: it is where nearly every sign-in lands, so its chunk is fetched during
-// idle time on the login screen and again the instant the form is submitted, rather than after
-// authentication succeeds. That removes the Suspense gap between login and dashboard entirely.
-const { Component: DashboardPage, preload: preloadDashboard } = lazyWithPreload(() =>
-  import('./pages/DashboardPage/DashboardPage').then((m) => ({ default: m.DashboardPage })),
-)
+const DashboardPage = lazy(() => import('./pages/DashboardPage/DashboardPage').then((m) => ({ default: m.DashboardPage })))
 const LoginPage = lazy(() => import('./pages/LoginPage/LoginPage').then((m) => ({ default: m.LoginPage })))
 const MaintenancePage = lazy(() => import('./pages/MaintenancePage/MaintenancePage').then((m) => ({ default: m.MaintenancePage })))
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage/NotFoundPage').then((m) => ({ default: m.NotFoundPage })))
 const RemoteAppPage = lazy(() => import('./pages/RemoteAppPage/RemoteAppPage').then((m) => ({ default: m.RemoteAppPage })))
+const UsersListPage = lazy(() => import('./features/settings-users/pages/UsersListPage').then((m) => ({ default: m.UsersListPage })))
+const UserFormPage = lazy(() => import('./features/settings-users/pages/UserFormPage').then((m) => ({ default: m.UserFormPage })))
+const RolesListPage = lazy(() => import('./features/settings-roles/pages/RolesListPage').then((m) => ({ default: m.RolesListPage })))
+const RoleFormPage = lazy(() => import('./features/settings-roles/pages/RoleFormPage').then((m) => ({ default: m.RoleFormPage })))
+const RemoteAppsListPage = lazy(() => import('./features/settings-applications/pages/RemoteAppsListPage').then((m) => ({ default: m.RemoteAppsListPage })))
+const RemoteAppFormPage = lazy(() => import('./features/settings-applications/pages/RemoteAppFormPage').then((m) => ({ default: m.RemoteAppFormPage })))
 const AuditLogsPage = lazy(() => import('./features/system-audit-logs/pages/AuditLogsPage').then((m) => ({ default: m.AuditLogsPage })))
 const ProfilePage = lazy(() => import('./features/profile/pages/ProfilePage').then((m) => ({ default: m.ProfilePage })))
 
@@ -43,92 +41,28 @@ const FEATURE_KEYS = {
   auditLogs: 'host.system.audit-logs',
 } as const
 
-/**
- * Opens the settings drawer for a `/settings/...` URL, then returns to the dashboard.
- *
- * Users, Roles and Applications used to exist twice over: once as routed full pages and once as tabs
- * inside the gear drawer. Both were live, so the same CRUD was implemented and maintained twice and
- * the two were free to disagree. The drawer is now the only settings UI.
- *
- * These routes are kept rather than deleted so existing bookmarks and links keep working: the URL
- * resolves to the same destination it always did, just rendered as a drawer layer. `replace` is used
- * so the redirect doesn't leave a dead entry that Back would bounce off.
- */
-function SettingsDeepLink({ tab }: { tab: SettingsTab }) {
-  const { id } = useParams<{ id: string }>()
-  const openTab = useSettingsDrawerStore((s) => s.open)
-  const pushLayer = useSettingsDrawerStore((s) => s.pushLayer)
-  const navigate = useNavigate()
-  const location = useLocation()
-
-  useEffect(() => {
-    openTab(tab)
-
-    // A trailing /new or /:id opens the corresponding form layer straight away, matching what the
-    // old routed form pages did.
-    const isNew = location.pathname.endsWith('/new')
-    if (isNew || id) {
-      const entityId = isNew ? undefined : id
-      if (tab === 'users') pushLayer({ type: 'user-form', userId: entityId })
-      else if (tab === 'roles') pushLayer({ type: 'role-form', roleId: entityId })
-      else if (tab === 'applications') pushLayer({ type: 'app-form', appId: entityId })
-    }
-
-    navigate('/', { replace: true })
-  }, [tab, id, location.pathname, openTab, pushLayer, navigate])
-
-  return <RouteFallback />
-}
-
 function LoginRoute() {
   const status = useAuthStore((s) => s.status)
   const login = useAuthStore((s) => s.login)
   const loginWithGoogle = useAuthStore((s) => s.loginWithGoogle)
   const loginLoading = useAuthStore((s) => s.loginLoading)
   const loginError = useAuthStore((s) => s.loginError)
-  // Why the previous session ended (idle timeout, expiry, another tab signing out) — shown so the
-  // user isn't dumped on the login screen with no explanation. A real login error takes precedence.
-  const sessionExpiredReason = useAuthStore((s) => s.sessionExpiredReason)
+  const navigate = useNavigate()
   const location = useLocation()
 
-  // The dashboard is the destination in almost every case, so its chunk is fetched while the user is
-  // still typing rather than after they authenticate. See the submit handler below for the other half.
   useEffect(() => {
-    preloadWhenIdle(preloadDashboard)
-  }, [])
-
-  /*
-   * Redirect DECLARATIVELY, not from an effect.
-   *
-   * This previously navigated inside a useEffect, which meant that on a successful sign-in React
-   * committed one more render of the login page BEFORE the effect ran and changed the route. The user
-   * saw the login screen again — including the error banner from a previous failed attempt, since that
-   * banner is part of the same subtree — and only then the dashboard, once its lazy chunk had
-   * downloaded. That download is what made the stale screen linger long enough to notice.
-   *
-   * Returning <Navigate> instead means the moment status flips to authenticated this component
-   * renders a redirect and nothing else: the login UI is never painted again.
-   */
-  if (status === 'authenticated') {
-    const from = (location.state as { from?: Pick<Location, 'pathname'> } | null)?.from?.pathname ?? '/'
-    return <Navigate to={from} replace />
-  }
+    if (status === 'authenticated') {
+      const from = (location.state as { from?: Pick<Location, 'pathname'> } | null)?.from?.pathname ?? '/'
+      navigate(from, { replace: true })
+    }
+  }, [status, navigate, location.state])
 
   return (
     <LoginPage
-      onSubmit={async (email, password) => {
-        // Start the dashboard chunk download in parallel with the login request instead of after it.
-        // Both are in flight at once, so the chunk is usually parsed before the token comes back and
-        // the post-login Suspense fallback never appears.
-        void preloadDashboard()
-        await login(email, password)
-      }}
-      onGoogleCredential={async (idToken) => {
-        void preloadDashboard()
-        await loginWithGoogle(idToken)
-      }}
+      onSubmit={login}
+      onGoogleCredential={loginWithGoogle}
       loading={loginLoading}
-      errorMessage={loginError ?? sessionExpiredReason}
+      errorMessage={loginError}
     />
   )
 }
@@ -157,20 +91,6 @@ function AuthenticatedShell() {
     }
   }, [accessToken, registryStatus, registryApps.length, ensureFreshAccessToken, fetchForSidebar])
 
-  // 30 minutes of genuine inactivity, then a 60-second countdown before sign-out. An unattended
-  // workstation previously stayed signed in indefinitely — the refresh timer renewed the session
-  // forever as long as the tab stayed open.
-  const idle = useIdleTimeout({
-    enabled: true,
-    idleMs: 30 * 60_000,
-    warningMs: 60_000,
-    onTimeout: () => {
-      void logout('You were signed out after a period of inactivity.').then(() =>
-        navigate('/login', { replace: true }),
-      )
-    },
-  })
-
   const isAdministrator = Boolean(user?.isAdministrator)
   const settingsAccess = {
     users: isAdministrator || hasCapability(FEATURE_KEYS.users, 'View'),
@@ -180,26 +100,16 @@ function AuthenticatedShell() {
   const canAccessAuditLogs = isAdministrator || hasCapability(FEATURE_KEYS.auditLogs, 'View')
 
   return (
-    <>
-      <AppShell
-        apps={registryStatus === 'idle' || registryStatus === 'loading' ? undefined : registryApps}
-        appsError={registryError}
-        userName={user?.name}
-        settingsAccess={settingsAccess}
-        canAccessAuditLogs={canAccessAuditLogs}
-        onLogout={() => {
-          void logout().then(() => navigate('/login', { replace: true }))
-        }}
-      />
-      <IdleWarningModal
-        open={idle.warning}
-        secondsRemaining={idle.secondsRemaining}
-        onStaySignedIn={idle.stayActive}
-        onSignOut={() => {
-          void logout().then(() => navigate('/login', { replace: true }))
-        }}
-      />
-    </>
+    <AppShell
+      apps={registryStatus === 'idle' || registryStatus === 'loading' ? undefined : registryApps}
+      appsError={registryError}
+      userName={user?.name}
+      settingsAccess={settingsAccess}
+      canAccessAuditLogs={canAccessAuditLogs}
+      onLogout={() => {
+        void logout().then(() => navigate('/login', { replace: true }))
+      }}
+    />
   )
 }
 
@@ -236,50 +146,80 @@ function AppRoutes() {
           }
         />
 
-        {/*
-          Settings has no pages of its own — it is the gear drawer, rendered globally by AppShell.
-          These routes exist only so old /settings/* links resolve: each opens the drawer on the
-          right tab (and the right form layer) and then hands the URL back to the dashboard.
-
-          The capability guards are kept here so an unauthorised deep link is refused at the route,
-          exactly as before, rather than opening a drawer that then renders an error inside itself.
-        */}
-        <Route path="settings">
-          <Route index element={<SettingsDeepLink tab="overview" />} />
-          {(
-            [
-              ['users', FEATURE_KEYS.users, 'Create'],
-              ['roles', FEATURE_KEYS.roles, 'Create'],
-              ['applications', FEATURE_KEYS.applications, 'Register'],
-            ] as const
-          ).map(([tab, featureKey, createCapability]) => (
-            <Route key={tab} path={tab}>
-              <Route
-                index
-                element={
-                  <RequireCapability featureKey={featureKey}>
-                    <SettingsDeepLink tab={tab} />
-                  </RequireCapability>
-                }
-              />
-              <Route
-                path="new"
-                element={
-                  <RequireCapability featureKey={featureKey} capability={createCapability}>
-                    <SettingsDeepLink tab={tab} />
-                  </RequireCapability>
-                }
-              />
-              <Route
-                path=":id"
-                element={
-                  <RequireCapability featureKey={featureKey} capability="Edit">
-                    <SettingsDeepLink tab={tab} />
-                  </RequireCapability>
-                }
-              />
-            </Route>
-          ))}
+        <Route path="settings" element={<SetupPanel />}>
+          <Route index element={<Navigate to="users" replace />} />
+          <Route
+            path="users"
+            element={
+              <RequireCapability featureKey={FEATURE_KEYS.users}>
+                <UsersListPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="users/new"
+            element={
+              <RequireCapability featureKey={FEATURE_KEYS.users} capability="Create">
+                <UserFormPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="users/:id"
+            element={
+              <RequireCapability featureKey={FEATURE_KEYS.users} capability="Edit">
+                <UserFormPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="roles"
+            element={
+              <RequireCapability featureKey={FEATURE_KEYS.roles}>
+                <RolesListPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="roles/new"
+            element={
+              <RequireCapability featureKey={FEATURE_KEYS.roles} capability="Create">
+                <RoleFormPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="roles/:id"
+            element={
+              <RequireCapability featureKey={FEATURE_KEYS.roles} capability="Edit">
+                <RoleFormPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="applications"
+            element={
+              <RequireCapability featureKey={FEATURE_KEYS.applications}>
+                <RemoteAppsListPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="applications/new"
+            element={
+              <RequireCapability featureKey={FEATURE_KEYS.applications} capability="Create">
+                <RemoteAppFormPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="applications/:id"
+            element={
+              <RequireCapability featureKey={FEATURE_KEYS.applications} capability="Edit">
+                <RemoteAppFormPage />
+              </RequireCapability>
+            }
+          />
         </Route>
       </Route>
 

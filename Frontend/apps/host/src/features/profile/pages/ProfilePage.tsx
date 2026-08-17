@@ -1,8 +1,8 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../auth/store/authStore'
 import { usersApi } from '../../settings-users/api/usersApi'
-import { authServiceClient, type PasswordPolicyDto } from '../../../shared/api/authServiceClient'
+import { authServiceClient } from '../../../shared/api/authServiceClient'
 import { Button } from '../../../shared/components/Button/Button'
 import { Input } from '../../../shared/components/Input/Input'
 import { Icon } from '../../../shared/components/Icon/Icon'
@@ -22,9 +22,7 @@ function formatDateTime(iso: string | null) {
 }
 
 function getUserInitials(name?: string | null): string {
-  // '?' rather than 'SA': inventing "Super Admin" initials for a missing name shows the viewer an
-  // identity that isn't theirs, which in a banking console is worse than showing nothing.
-  if (!name) return '?'
+  if (!name) return 'SA'
   const parts = name.trim().split(/\s+/)
   if (parts.length >= 2) {
     return `${parts[0][0]}${parts[1][0]}`.toUpperCase()
@@ -60,26 +58,6 @@ export function ProfilePage() {
   const [showConfirmPw, setShowConfirmPw] = useState(false)
   const [savingPassword, setSavingPassword] = useState(false)
   const [passwordError, setPasswordError] = useState<string | null>(null)
-
-  // Fetched from the server so the form states the rules that are actually enforced. Failure to load
-  // is non-fatal: validation still happens server-side, the hint is simply absent.
-  const [passwordPolicy, setPasswordPolicy] = useState<PasswordPolicyDto | null>(null)
-
-  useEffect(() => {
-    if (!accessToken) return
-    let cancelled = false
-    authServiceClient
-      .passwordPolicy(accessToken)
-      .then((policy) => {
-        if (!cancelled) setPasswordPolicy(policy)
-      })
-      .catch(() => {
-        /* hint unavailable; the server remains the authority */
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [accessToken])
 
   // Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null)
@@ -149,23 +127,12 @@ export function ProfilePage() {
       setPasswordError('Current password is required.')
       return
     }
-    // Length is checked against the server's actual policy, not a hardcoded 6. The rest of the rules
-    // (character classes) are left to the server so there is exactly one implementation of them —
-    // its rejection message describes precisely what failed.
-    if (!newPassword) {
-      setPasswordError('New password is required.')
-      return
-    }
-    if (passwordPolicy && newPassword.length < passwordPolicy.minimumLength) {
-      setPasswordError(passwordPolicy.description)
+    if (!newPassword || newPassword.length < 6) {
+      setPasswordError('New password must be at least 6 characters.')
       return
     }
     if (newPassword !== confirmPassword) {
       setPasswordError('New password and confirmation do not match.')
-      return
-    }
-    if (newPassword === currentPassword) {
-      setPasswordError('The new password must be different from your current one.')
       return
     }
 
@@ -175,7 +142,7 @@ export function ProfilePage() {
     setPasswordError(null)
 
     try {
-      const result = await authServiceClient.changePassword(accessToken, {
+      await authServiceClient.changePassword(accessToken, {
         currentPassword,
         newPassword,
       })
@@ -184,10 +151,7 @@ export function ProfilePage() {
       setNewPassword('')
       setConfirmPassword('')
       setDrawerOpen(false)
-      // Uses the server's own message, which reports how many OTHER sessions were signed out. A
-      // password change evicts sessions established with the old password, and the user should be
-      // told that happened rather than discovering it on another device.
-      triggerToast(result.message)
+      triggerToast('Account password updated successfully.')
     } catch (err: unknown) {
       setPasswordError(err instanceof Error ? err.message : 'Failed to update password. Please check your current password.')
     } finally {
@@ -602,19 +566,13 @@ export function ProfilePage() {
                   <Input
                     label="New Password"
                     type={showNewPw ? 'text' : 'password'}
-                    placeholder={
-                      passwordPolicy
-                        ? `At least ${passwordPolicy.minimumLength} characters`
-                        : 'Enter new password'
-                    }
+                    placeholder="Enter new password (min. 6 chars)"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     required
                     disabled={savingPassword}
                     leading={<Icon.Lock width={16} height={16} />}
-                    // Server-supplied, so the stated rule always matches the enforced one. The
-                    // placeholder and hint both said "6 characters" while the server required 12.
-                    helperText={passwordPolicy?.description}
+                    helperText="Password must be at least 6 characters."
                     trailing={
                       <button
                         type="button"

@@ -114,10 +114,6 @@ function applySession(session: { accessToken: string; expiresAt: string; user: C
     accessTokenExpiresAt: new Date(session.expiresAt).getTime(),
     status: 'authenticated' as const,
     sessionExpiredReason: null,
-    // Cleared here as well as at the start of login(). Any path that establishes a session — login,
-    // Google sign-in, silent refresh on boot — must leave no stale failure message behind, or a
-    // previous attempt's error can outlive the attempt and be shown over a working session.
-    loginError: null,
   }
 }
 
