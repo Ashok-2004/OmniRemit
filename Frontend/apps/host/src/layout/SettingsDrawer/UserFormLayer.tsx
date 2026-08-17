@@ -13,6 +13,16 @@ import { Icon } from '../../shared/components/Icon/Icon'
 import { resolveIcon } from '../../shared/components/Icon/resolveIcon'
 import { Switch } from '../../shared/components/Switch/Switch'
 import { SkeletonBlock } from '../../shared/components/Skeleton'
+import {
+  LIMITS,
+  required,
+  maxLength,
+  email as emailRule,
+  phone as phoneRule,
+  firstError,
+  isValid,
+  type FieldErrors,
+} from '../../shared/validation/rules'
 import styles from './UserFormLayer.module.css'
 
 interface UserFormLayerProps {
@@ -340,10 +350,35 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
   const grantsList = useMemo(() => computedOverrides.filter((o) => o.effect === 'Grant'), [computedOverrides])
   const revokesList = useMemo(() => computedOverrides.filter((o) => o.effect === 'Revoke'), [computedOverrides])
 
+  /**
+   * Per-field validation, mirroring the server's data annotations on CreateUserRequest.
+   *
+   * This replaces a single check that only asked whether name and email were non-empty and reported
+   * one combined message above the form. That let through `not-an-email` and a 5000-character name —
+   * both verified to be accepted by the API before its DTOs were annotated, the second producing a 500
+   * when it exceeded the column length.
+   *
+   * The server still validates independently; these errors exist so the problem is attached to the
+   * field that caused it while the user is still looking at it.
+   */
+  const fieldErrors: FieldErrors<'name' | 'email' | 'phoneNumber'> = {
+    name: firstError(required(name, 'Name'), maxLength(name, LIMITS.userName, 'Name')),
+    email: firstError(required(email, 'Email'), emailRule(email), maxLength(email, LIMITS.email, 'Email')),
+    phoneNumber: firstError(phoneRule(phoneNumber), maxLength(phoneNumber, LIMITS.phone, 'Phone number')),
+  }
+
+  // Errors are only shown once a field has been visited or a submit attempted, so the form does not
+  // greet the user with three red messages for fields they have not reached yet.
+  const [touched, setTouched] = useState<Record<string, boolean>>({})
+  const [submitAttempted, setSubmitAttempted] = useState(false)
+  const showError = (field: keyof typeof fieldErrors) =>
+    (touched[field] || submitAttempted) ? fieldErrors[field] : undefined
+
   const handleNextFromBasic = (e: FormEvent) => {
     e.preventDefault()
-    if (!name.trim() || !email.trim()) {
-      setError('Please provide a valid name and email address.')
+    setSubmitAttempted(true)
+    if (!isValid(fieldErrors)) {
+      setError(null)
       return
     }
     setError(null)
@@ -532,14 +567,22 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
                       <div className={styles.inputIconWrap}>
                         <input
                           type="text"
-                          required
-                          className={styles.inputWithIcon}
+                          className={`${styles.inputWithIcon} ${showError("name") ? styles.inputInvalid : ""}`}
                           placeholder="e.g. Uday Chauhan"
                           value={name}
+                          maxLength={LIMITS.userName}
+                          aria-invalid={Boolean(showError("name"))}
+                          aria-describedby={showError("name") ? "user-name-error" : undefined}
                           onChange={(e) => setName(e.target.value)}
+                          onBlur={() => setTouched((t) => ({ ...t, name: true }))}
                         />
                         <Icon.Users width={16} height={16} className={styles.fieldLeftIcon} />
                       </div>
+                      {showError("name") && (
+                        <span id="user-name-error" className={styles.fieldError} role="alert">
+                          {showError("name")}
+                        </span>
+                      )}
                     </div>
 
                     <div className={styles.inputGroup}>
@@ -549,14 +592,22 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
                       <div className={styles.inputIconWrap}>
                         <input
                           type="email"
-                          required
-                          className={styles.inputWithIcon}
+                          className={`${styles.inputWithIcon} ${showError("email") ? styles.inputInvalid : ""}`}
                           placeholder="e.g. uday@example.com"
                           value={email}
+                          maxLength={LIMITS.email}
+                          aria-invalid={Boolean(showError("email"))}
+                          aria-describedby={showError("email") ? "user-email-error" : undefined}
                           onChange={(e) => setEmail(e.target.value)}
+                          onBlur={() => setTouched((t) => ({ ...t, email: true }))}
                         />
                         <Icon.FileText width={16} height={16} className={styles.fieldLeftIcon} />
                       </div>
+                      {showError("email") && (
+                        <span id="user-email-error" className={styles.fieldError} role="alert">
+                          {showError("email")}
+                        </span>
+                      )}
                     </div>
 
                     <div className={styles.inputGroupFull}>
@@ -564,13 +615,22 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
                       <div className={styles.inputIconWrap}>
                         <input
                           type="tel"
-                          className={styles.inputWithIcon}
-                          placeholder="e.g. +1 555 0100"
+                          className={`${styles.inputWithIcon} ${showError("phoneNumber") ? styles.inputInvalid : ""}`}
+                          placeholder="e.g. +91 98765 43210"
                           value={phoneNumber}
+                          maxLength={LIMITS.phone}
+                          aria-invalid={Boolean(showError("phoneNumber"))}
+                          aria-describedby={showError("phoneNumber") ? "user-phone-error" : undefined}
                           onChange={(e) => setPhoneNumber(e.target.value)}
+                          onBlur={() => setTouched((t) => ({ ...t, phoneNumber: true }))}
                         />
                         <Icon.Activity width={16} height={16} className={styles.fieldLeftIcon} />
                       </div>
+                      {showError("phoneNumber") && (
+                        <span id="user-phone-error" className={styles.fieldError} role="alert">
+                          {showError("phoneNumber")}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>

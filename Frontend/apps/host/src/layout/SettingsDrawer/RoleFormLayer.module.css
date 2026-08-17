@@ -738,3 +738,33 @@
   flex-direction: column;
   gap: 16px;
 }
+
+/*
+ * Inline per-field validation. Previously every problem was reported as one sentence in a banner above
+ * the form, so on a multi-field card the user had to work out which input it referred to.
+ */
+.fieldError {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--omni-color-danger-600, #dc2626);
+}
+
+/* Paired with aria-invalid so the state is conveyed to assistive tech, not by colour alone. */
+.inputInvalid {
+  border-color: var(--omni-color-danger-400, #f87171) !important;
+}
+
+.inputInvalid:focus {
+  outline-color: var(--omni-color-danger-500, #ef4444);
+  box-shadow: 0 0 0 3px var(--omni-color-danger-100, #fee2e2);
+}
+
+/* Remaining-character counter under a length-capped textarea. */
+.charCount {
+  align-self: flex-end;
+  font-size: 11px;
+  color: var(--omni-color-text-muted, #94a3b8);
+  font-variant-numeric: tabular-nums;
+}

@@ -8,6 +8,7 @@ import { Icon } from '../../shared/components/Icon/Icon'
 import { resolveIcon } from '../../shared/components/Icon/resolveIcon'
 import { Switch } from '../../shared/components/Switch/Switch'
 import { SkeletonBlock } from '../../shared/components/Skeleton'
+import { LIMITS, required, maxLength, firstError, isValid, type FieldErrors } from '../../shared/validation/rules'
 import styles from './RoleFormLayer.module.css'
 
 interface RoleFormLayerProps {
@@ -244,8 +245,31 @@ export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
     return permissions.filter((p) => rowKeys.has(p.featureKey)).length
   }
 
+  /**
+   * Field validation mirroring UpsertRoleRequest's annotations. There was none here at all, and the
+   * server had none either: an empty role name was accepted and created a nameless role that rendered
+   * as a blank row in every list and every role picker.
+   */
+  const fieldErrors: FieldErrors<'name' | 'description'> = {
+    name: firstError(required(name, 'Role name'), maxLength(name, LIMITS.roleName, 'Role name')),
+    description: maxLength(description, LIMITS.roleDescription, 'Description'),
+  }
+
+  const [touched, setTouched] = useState<Record<string, boolean>>({})
+  const [submitAttempted, setSubmitAttempted] = useState(false)
+  const showError = (field: keyof typeof fieldErrors) =>
+    (touched[field] || submitAttempted) ? fieldErrors[field] : undefined
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
+    setSubmitAttempted(true)
+    if (!isValid(fieldErrors)) {
+      // The inline messages say what is wrong and where; a banner repeating it would be noise. Jump
+      // to the tab that holds the invalid field, since it may not be the one on screen.
+      setActiveTab('basic')
+      return
+    }
+
     setError(null)
     setSaving(true)
 
@@ -373,25 +397,45 @@ export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
                     <div className={styles.inputIconWrap}>
                       <input
                         type="text"
-                        required
-                        className={styles.inputWithIcon}
+                        className={`${styles.inputWithIcon} ${showError("name") ? styles.inputInvalid : ""}`}
                         placeholder="e.g. Employee Operations Manager"
                         value={name}
+                        maxLength={LIMITS.roleName}
+                        aria-invalid={Boolean(showError("name"))}
+                        aria-describedby={showError("name") ? "role-name-error" : undefined}
                         onChange={(e) => setName(e.target.value)}
+                        onBlur={() => setTouched((t) => ({ ...t, name: true }))}
                       />
                       <Icon.ShieldCheck width={16} height={16} className={styles.fieldLeftIcon} />
                     </div>
+                    {showError("name") && (
+                      <span id="role-name-error" className={styles.fieldError} role="alert">
+                        {showError("name")}
+                      </span>
+                    )}
                   </div>
 
                   <div className={styles.inputGroupFull}>
                     <label className={styles.label}>Role Description</label>
                     <textarea
-                      className={styles.textarea}
+                      className={`${styles.textarea} ${showError("description") ? styles.inputInvalid : ""}`}
                       placeholder="Briefly describe the operational scope and capabilities of this role..."
                       rows={3}
                       value={description}
+                      maxLength={LIMITS.roleDescription}
+                      aria-invalid={Boolean(showError("description"))}
                       onChange={(e) => setDescription(e.target.value)}
+                      onBlur={() => setTouched((t) => ({ ...t, description: true }))}
                     />
+                    {/* Live remaining-character count, so hitting the cap is never a surprise. */}
+                    <span className={styles.charCount}>
+                      {description.length} / {LIMITS.roleDescription}
+                    </span>
+                    {showError("description") && (
+                      <span className={styles.fieldError} role="alert">
+                        {showError("description")}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

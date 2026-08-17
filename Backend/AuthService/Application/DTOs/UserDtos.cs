@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace AuthService.Application.DTOs;
 
 public record UserListItemDto(
@@ -30,13 +32,61 @@ public record UserDetailDto(
     IReadOnlyList<PermissionOverrideDto> PermissionOverrides,
     string AuthProvider);
 
+/*
+ * Field validation lives here as data annotations, so [ApiController] rejects a bad request with a 400
+ * and a per-field error list before it reaches any service.
+ *
+ * There was previously none at all, only duplicate-email and role-exists checks. Verified against the
+ * running service before this was added: POST /api/users with {"name":"","email":"not-an-email"}
+ * returned 201 and created the account, POST /api/roles with an empty name returned 201, and a
+ * 5000-character name produced a 500 — the string exceeded the column length and the database error
+ * surfaced as an unhandled exception instead of a validation message.
+ *
+ * Every MaxLength below matches the HasMaxLength in AuthDbContext for that column. That is the whole
+ * point: a value the API accepts must be a value the schema can store, or the check has just moved the
+ * failure from a clean 400 to a 500.
+ */
+
 /// <summary>AuthProvider defaults "Local" and is immutable after creation (like RemoteApp.Key) — switching an existing account between Local and Google mid-life is a deliberately unsupported edge case for v1, avoiding a half-defined credential-transition flow.</summary>
-public record CreateUserRequest(string Name, string Email, string? PhoneNumber, Guid? RoleId, bool IsActive = true, string AuthProvider = "Local");
+public record CreateUserRequest(
+    [Required(AllowEmptyStrings = false, ErrorMessage = "Name is required.")]
+    [MaxLength(200, ErrorMessage = "Name cannot exceed 200 characters.")]
+    string Name,
+
+    [Required(AllowEmptyStrings = false, ErrorMessage = "Email is required.")]
+    [EmailAddress(ErrorMessage = "Enter a valid email address.")]
+    [MaxLength(320, ErrorMessage = "Email cannot exceed 320 characters.")]
+    string Email,
+
+    // Deliberately permissive on shape — Indian numbers appear with +91, spaces, hyphens and
+    // parentheses, and rejecting a legitimately-formatted number is worse than storing a loose one.
+    // Length is still bounded to the column so it cannot 500.
+    [MaxLength(32, ErrorMessage = "Phone number cannot exceed 32 characters.")]
+    [RegularExpression(@"^[0-9+()\-.\s]*$", ErrorMessage = "Phone number may contain only digits, spaces and + ( ) - . characters.")]
+    string? PhoneNumber,
+
+    Guid? RoleId,
+    bool IsActive = true,
+    string AuthProvider = "Local");
 
 /// <summary>Null for Google-provisioned accounts — there's no local password to hand back.</summary>
 public record CreateUserResponse(UserDetailDto User, string? TemporaryPassword);
 
-public record UpdateUserRequest(string Name, string Email, string? PhoneNumber, Guid? RoleId);
+public record UpdateUserRequest(
+    [Required(AllowEmptyStrings = false, ErrorMessage = "Name is required.")]
+    [MaxLength(200, ErrorMessage = "Name cannot exceed 200 characters.")]
+    string Name,
+
+    [Required(AllowEmptyStrings = false, ErrorMessage = "Email is required.")]
+    [EmailAddress(ErrorMessage = "Enter a valid email address.")]
+    [MaxLength(320, ErrorMessage = "Email cannot exceed 320 characters.")]
+    string Email,
+
+    [MaxLength(32, ErrorMessage = "Phone number cannot exceed 32 characters.")]
+    [RegularExpression(@"^[0-9+()\-.\s]*$", ErrorMessage = "Phone number may contain only digits, spaces and + ( ) - . characters.")]
+    string? PhoneNumber,
+
+    Guid? RoleId);
 
 public record UpdateUserStatusRequest(bool IsActive);
 
