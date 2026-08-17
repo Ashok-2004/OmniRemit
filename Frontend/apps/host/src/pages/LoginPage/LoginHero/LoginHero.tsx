@@ -43,8 +43,11 @@ export function LoginHero() {
           </div>
           <div className={styles.brandTextGroup}>
             <span className={styles.brandTitle}>
-              <span className={styles.brandOmni}>Omni</span>
-              <span className={styles.brandConnect}>Connect</span>
+              {/* Split so the two-tone brand styling survives, but the NAME comes from config —
+                  it was hardcoded here as two spans, which is why a plain search for the product
+                  name never found it. */}
+              <span className={styles.brandOmni}>{APP_NAME.slice(0, 4)}</span>
+              <span className={styles.brandConnect}>{APP_NAME.slice(4)}</span>
             </span>
           </div>
         </header>
@@ -62,18 +65,37 @@ export function LoginHero() {
           </p>
 
           {/* Three stats — social proof, not repeated elsewhere */}
+          {/*
+            These describe how the platform WORKS. They are deliberately not metrics or service
+            commitments.
+
+            This block previously read "12k+ Active users", "99.9% Uptime SLA" and "24/7 Support".
+            The first is a fabricated figure — the platform has five accounts, and printing an invented
+            user count on a product being sold to a bank is a straightforward false claim. The other
+            two are contractual undertakings by whoever operates the deployment, not properties of the
+            software, and each deploying bank will have its own numbers in its own agreement.
+
+            Every line below is a real, implemented behaviour a reader can verify in the code, and each
+            was exercised against the running services.
+          */}
           <div className={styles.stats}>
             <div className={styles.stat}>
-              <span className={styles.statValue}>12<span className={styles.statAccent}>k+</span></span>
-              <span className={styles.statLabel}>Active users</span>
+              <span className={styles.statValue}>
+                Role<span className={styles.statAccent}>-based</span>
+              </span>
+              <span className={styles.statLabel}>Checked on every request</span>
             </div>
             <div className={styles.stat}>
-              <span className={styles.statValue}>99<span className={styles.statAccent}>.9%</span></span>
-              <span className={styles.statLabel}>Uptime SLA</span>
+              <span className={styles.statValue}>
+                <span className={styles.statAccent}>Audited</span>
+              </span>
+              <span className={styles.statLabel}>Every change attributable</span>
             </div>
             <div className={styles.stat}>
-              <span className={styles.statValue}><span className={styles.statAccent}>24</span>/7</span>
-              <span className={styles.statLabel}>Support</span>
+              <span className={styles.statValue}>
+                Auto<span className={styles.statAccent}>-lock</span>
+              </span>
+              <span className={styles.statLabel}>Idle sessions signed out</span>
             </div>
           </div>
         </div>

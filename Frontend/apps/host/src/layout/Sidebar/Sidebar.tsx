@@ -2,7 +2,9 @@ import { NavLink } from 'react-router-dom'
 import { classNames } from '../../shared/utils/classNames'
 import { SkeletonBlock } from '../../shared/components/Skeleton'
 import { Icon } from '../../shared/components/Icon/Icon'
+import { resolveIcon } from '../../shared/components/Icon/resolveIcon'
 import styles from './Sidebar.module.css'
+import { APP_NAME } from '../../shared/config/branding'
 
 export interface SidebarAppItem {
   key: string
@@ -43,8 +45,9 @@ export function Sidebar({ apps, canAccessAuditLogs, error }: SidebarProps) {
         </div>
         <div className={styles.brandNames}>
           <span className={styles.brandName}>
-            <span className={styles.brandOmni}>Omni</span>
-            <span className={styles.brandAccent}>Connect</span>
+            {/* Name from config; split only so the two-tone styling still applies. */}
+            <span className={styles.brandOmni}>{APP_NAME.slice(0, 4)}</span>
+            <span className={styles.brandAccent}>{APP_NAME.slice(4)}</span>
           </span>
         </div>
       </div>
@@ -85,6 +88,9 @@ export function Sidebar({ apps, canAccessAuditLogs, error }: SidebarProps) {
         {/* App links */}
         {apps?.map((app) => {
           const isUnreachable = app.health === 'Unreachable'
+          // The registry stores an icon per app; every entry was rendered with the same Users icon, so
+          // a Helpdesk and an Inventory app were visually identical in the nav.
+          const AppIcon = resolveIcon(app.iconKey)
           return (
             <NavLink
               key={app.key}
@@ -95,7 +101,7 @@ export function Sidebar({ apps, canAccessAuditLogs, error }: SidebarProps) {
               title={isUnreachable ? `${app.displayName} is not responding` : undefined}
             >
               <span className={styles.navIcon} aria-hidden="true">
-                <Icon.Users width={17} height={17} />
+                <AppIcon width={17} height={17} />
               </span>
               <span className={styles.navLabel}>{app.displayName}</span>
               {isUnreachable && (
