@@ -1,85 +1,71 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '../../auth/store/authStore'
-import { useAppMutation } from '../../../shared/query/useAppMutation'
-import { queryKeys } from '../../../shared/query/queryKeys'
-import { Drawer } from '../../../shared/components/Drawer/Drawer'
-import { Stepper } from '../../../shared/components/Stepper/Stepper'
 import { Button } from '../../../shared/components/Button/Button'
-import { Input } from '../../../shared/components/Input/Input'
-import { Switch } from '../../../shared/components/Switch/Switch'
-import { Badge } from '../../../shared/components/Badge/Badge'
 import { SkeletonText } from '../../../shared/components/Skeleton'
-import { Icon } from '../../../shared/components/Icon/Icon'
 import { ApiError } from '../../../shared/api/httpClient'
 import { remoteAppsApi } from '../api/remoteAppsApi'
+import { Icon } from '../../../shared/components/Icon/Icon'
 import styles from './RemoteAppFormPage.module.css'
 
-const STEPS = [
-  { key: 'details', label: 'App Details' },
-  { key: 'capabilities', label: 'Capabilities' },
-  { key: 'review', label: 'Review' },
-]
-
-function toMessage(error: unknown, fallback: string) {
-  return error instanceof ApiError ? error.message : fallback
-}
-
-/**
- * Register and edit a remote application, in a right-side drawer over the applications list.
- *
- * Step 2 shows what the app's own discovery endpoint ACTUALLY reports rather than letting an admin
- * type capabilities by hand — the whole point of the dynamic permission system is that a remote
- * declares its own modules and actions, and anything typed here would drift from what the remote
- * really enforces. On create there is nothing to show yet, so the step explains what will happen.
- */
 export function RemoteAppFormPage() {
   const { id } = useParams<{ id: string }>()
   const isEdit = Boolean(id)
   const navigate = useNavigate()
   const accessToken = useAuthStore((s) => s.accessToken)
+  const ensureFreshAccessToken = useAuthStore((s) => s.ensureFreshAccessToken)
+  const refreshSession = useAuthStore((s) => s.refreshSession)
 
-  const [stepIndex, setStepIndex] = useState(0)
-  const [formError, setFormError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(isEdit)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const [key, setKey] = useState('')
   const [displayName, setDisplayName] = useState('')
+  const [iconKey, setIconKey] = useState('')
   const [manifestUrl, setManifestUrl] = useState('')
   const [permissionsSourceUrl, setPermissionsSourceUrl] = useState('')
-  const [sidebarOrder, setSidebarOrder] = useState(100)
-  const [isActive, setIsActive] = useState(true)
-  const [hydrated, setHydrated] = useState(false)
-
-  const appQuery = useQuery({
-    queryKey: queryKeys.applications.detail(id ?? ''),
-    queryFn: () => remoteAppsApi.get(accessToken!, id!),
-    enabled: Boolean(accessToken) && isEdit,
-  })
+  const [sidebarOrder, setSidebarOrder] = useState(10)
 
   useEffect(() => {
-    if (!appQuery.data || hydrated) return
-    setKey(appQuery.data.key)
-    setDisplayName(appQuery.data.displayName)
-    setManifestUrl(appQuery.data.manifestUrl)
-    setPermissionsSourceUrl(appQuery.data.permissionsSourceUrl ?? '')
-    setSidebarOrder(appQuery.data.sidebarOrder)
-    setIsActive(appQuery.data.status === 'Active')
-    setHydrated(true)
-  }, [appQuery.data, hydrated])
+    const token = accessToken
+    if (!token || !id) return
+    let cancelled = false
 
-  const capabilities = appQuery.data?.capabilities ?? []
-  const loading = isEdit && appQuery.isPending
+    remoteAppsApi
+      .get(token, id)
+      .then((app) => {
+        if (cancelled) return
+        setKey(app.key)
+        setDisplayName(app.displayName)
+        setIconKey(app.iconKey ?? '')
+        setManifestUrl(app.manifestUrl)
+        setPermissionsSourceUrl(app.permissionsSourceUrl ?? '')
+        setSidebarOrder(app.sidebarOrder)
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof ApiError ? err.message : 'Could not load this app.')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
 
-  function close() {
-    navigate('/settings/applications')
-  }
+    return () => {
+      cancelled = true
+    }
+  }, [accessToken, id])
 
-  const saveMutation = useAppMutation<void>({
-    mutationFn: async (token) => {
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault()
+    setError(null)
+    setSaving(true)
+    try {
+      const token = await ensureFreshAccessToken()
+
       if (isEdit && id) {
         await remoteAppsApi.update(token, id, {
           displayName,
+          iconKey: iconKey || null,
           manifestUrl,
           permissionsSourceUrl: permissionsSourceUrl || null,
           sidebarOrder,
@@ -88,266 +74,164 @@ export function RemoteAppFormPage() {
         await remoteAppsApi.create(token, {
           key,
           displayName,
+          iconKey: iconKey || null,
           manifestUrl,
           permissionsSourceUrl: permissionsSourceUrl || null,
           sidebarOrder,
         })
       }
-    },
-    invalidates: ['applications', 'permissions'],
-    refreshSession: true,
-    refreshSidebar: true,
-    onSuccess: () => close(),
-    onError: (err) => setFormError(toMessage(err, 'Could not save this application.')),
-  })
-
-  function validateDetails(): string | null {
-    if (!displayName.trim()) return 'Application name is required.'
-    if (!isEdit && !key.trim()) return 'Application key is required.'
-    if (!manifestUrl.trim()) return 'Manifest URL is required.'
-    try {
-      // Matches the server's own check, so an obvious mistake is caught before the round trip.
-      new URL(manifestUrl)
-    } catch {
-      return 'Manifest URL must be a full absolute URL, e.g. http://localhost:5001/mf-manifest.json'
+      const { useModuleRegistryStore } = await import('../../../shared/stores/moduleRegistryStore')
+      const { useSettingsDrawerStore } = await import('../../../shared/stores/settingsDrawerStore')
+      void useModuleRegistryStore.getState().fetchForSidebar(token)
+      useSettingsDrawerStore.getState().notifyMutation()
+      void refreshSession()
+      navigate('/settings/applications')
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not save this app.')
+    } finally {
+      setSaving(false)
     }
-    if (permissionsSourceUrl.trim()) {
-      try {
-        new URL(permissionsSourceUrl)
-      } catch {
-        return 'Permissions source URL must be a full absolute URL.'
-      }
-    }
-    return null
   }
 
-  function submit() {
-    const problem = validateDetails()
-    if (problem) {
-      setFormError(problem)
-      setStepIndex(0)
-      return
-    }
-    setFormError(null)
-    saveMutation.mutate()
+  if (loading) {
+    return <SkeletonText lines={6} />
   }
-
-  const details = (
-    <div className={styles.section}>
-      <h3 className={styles.sectionHeading}>Application Details</h3>
-
-      <Input
-        label="Application Name"
-        required
-        placeholder="e.g. Employee Management"
-        value={displayName}
-        onChange={(e) => setDisplayName(e.target.value)}
-      />
-
-      {isEdit ? (
-        <div className={styles.readonlyField}>
-          <span className={styles.readonlyLabel}>Application Key</span>
-          <span className={styles.readonlyValue}>{key}</span>
-          {/* Immutable by design — the key is the Module Federation registration name and the root of
-              this app's permission feature keys. Changing it would orphan every grant made against it. */}
-          <span className={styles.hint}>Can&rsquo;t be changed after registration.</span>
-        </div>
-      ) : (
-        <Input
-          label="Application Key"
-          required
-          placeholder="e.g. employee"
-          value={key}
-          onChange={(e) => setKey(e.target.value.toLowerCase())}
-          helperText="Lowercase letters, digits and hyphens. Used to identify the application everywhere in the system."
-        />
-      )}
-
-      <Input
-        label="Display Order"
-        type="number"
-        required
-        value={sidebarOrder}
-        onChange={(e) => setSidebarOrder(Number(e.target.value))}
-        helperText="Controls where the application appears in the sidebar. Lower numbers come first."
-      />
-
-      <Input
-        label="Manifest URL"
-        required
-        placeholder="e.g. http://localhost:5001/mf-manifest.json"
-        value={manifestUrl}
-        onChange={(e) => setManifestUrl(e.target.value)}
-        helperText="URL to the remote application's mf-manifest.json file."
-      />
-
-      <Input
-        label="Permissions Source URL"
-        placeholder="e.g. http://localhost:5285/api/employee-service/permissions"
-        value={permissionsSourceUrl}
-        onChange={(e) => setPermissionsSourceUrl(e.target.value)}
-        helperText="Optional. The endpoint this app uses to declare its own modules and permissions."
-      />
-
-      {isEdit && (
-        <div className={styles.toggleRow}>
-          <div className={styles.toggleLabel}>
-            <span className={styles.toggleTitle}>Active</span>
-            <span className={styles.toggleHint}>Inactive applications aren&rsquo;t visible in the sidebar.</span>
-          </div>
-          {/* Read-only here on purpose: status has its own control on the list, which also captures
-              a maintenance message. Two places to change it would let them disagree. */}
-          <Switch checked={isActive} disabled readOnly />
-        </div>
-      )}
-
-      <div className={styles.tips}>
-        <span className={styles.tipsTitle}>
-          <Icon.AlertTriangle width={16} height={16} />
-          Tips
-        </span>
-        <ul className={styles.tipsList}>
-          <li>The manifest URL must be reachable from the host — it is checked when you save.</li>
-          <li>Two applications cannot share a Module Federation container name.</li>
-          <li>Changes to the manifest may require a permissions resync.</li>
-        </ul>
-      </div>
-    </div>
-  )
-
-  const capabilitiesStep = (
-    <div className={styles.section}>
-      <h3 className={styles.sectionHeading}>Capabilities</h3>
-
-      {isEdit ? (
-        capabilities.length === 0 ? (
-          <p className={styles.hint}>
-            This application hasn&rsquo;t declared any capabilities. Set a Permissions Source URL and
-            use <strong>Resync permissions</strong> on the list to pull them in.
-          </p>
-        ) : (
-          <>
-            <p className={styles.hint}>
-              Reported by the application itself. These appear automatically in every role&rsquo;s
-              permission editor — nothing is typed here.
-            </p>
-            <div className={styles.capabilityList}>
-              {capabilities.map((cap) => (
-                <Badge key={cap.key} tone="info">
-                  {cap.displayName}
-                </Badge>
-              ))}
-            </div>
-          </>
-        )
-      ) : (
-        <p className={styles.hint}>
-          Capabilities are discovered from the application itself, not entered by hand. If you provide
-          a Permissions Source URL, its modules and actions are fetched on save and appear in the role
-          editor automatically.
-        </p>
-      )}
-    </div>
-  )
-
-  const footer = isEdit ? (
-    <>
-      <Button variant="secondary" onClick={close}>
-        Cancel
-      </Button>
-      <Button loading={saveMutation.isPending} onClick={submit}>
-        Save Changes
-      </Button>
-    </>
-  ) : (
-    <>
-      <Button variant="secondary" onClick={stepIndex === 0 ? close : () => setStepIndex((i) => i - 1)}>
-        {stepIndex === 0 ? 'Cancel' : 'Back'}
-      </Button>
-      {stepIndex < STEPS.length - 1 ? (
-        <Button
-          onClick={() => {
-            if (stepIndex === 0) {
-              const problem = validateDetails()
-              if (problem) {
-                setFormError(problem)
-                return
-              }
-            }
-            setFormError(null)
-            setStepIndex((i) => i + 1)
-          }}
-        >
-          {stepIndex === 0 ? 'Next: Capabilities' : 'Next: Review'}
-        </Button>
-      ) : (
-        <Button loading={saveMutation.isPending} onClick={submit}>
-          Register Application
-        </Button>
-      )}
-    </>
-  )
 
   return (
-    <Drawer
-      open
-      title={isEdit ? 'Edit Application' : 'Add Application'}
-      description={isEdit ? 'Update registration details' : 'Register a remote application with the platform'}
-      size="md"
-      onClose={close}
-      footer={footer}
-      leading={
-        !isEdit && stepIndex > 0 ? (
-          <button
-            type="button"
-            className={styles.backButton}
-            aria-label="Previous step"
-            onClick={() => setStepIndex((i) => i - 1)}
-          >
-            <Icon.ChevronLeft width={18} height={18} />
-          </button>
-        ) : undefined
-      }
-    >
-      {formError && <div className={styles.errorBanner}>{formError}</div>}
+    <div className={styles.page}>
+      {/* Header */}
+      <div className={styles.header}>
+        <div className={styles.headerTitleWrap}>
+          <div className={styles.headerIconBox}>
+            <Icon.Grid width={24} height={24} />
+          </div>
+          <div>
+            <h1 className={styles.pageTitle}>{isEdit ? 'Edit Remote Application' : 'Register Remote Application'}</h1>
+            <p className={styles.pageSubtitle}>Configure Module Federation 2.0 manifest and runtime discovery endpoints</p>
+          </div>
+        </div>
+        <Button variant="ghost" onClick={() => navigate('/settings/applications')}>
+          Cancel
+        </Button>
+      </div>
 
-      {loading ? (
-        <SkeletonText lines={8} />
-      ) : isEdit ? (
-        <>
-          {details}
-          {capabilitiesStep}
-        </>
-      ) : (
-        <>
-          <Stepper steps={STEPS} currentIndex={stepIndex} onStepSelect={setStepIndex} />
+      {error && <div className={styles.errorBanner}>{error}</div>}
 
-          {stepIndex === 0 && details}
-          {stepIndex === 1 && capabilitiesStep}
-
-          {stepIndex === 2 && (
-            <div className={styles.section}>
-              <h3 className={styles.sectionHeading}>Review</h3>
-              <dl className={styles.reviewList}>
-                <dt>Name</dt>
-                <dd>{displayName || '—'}</dd>
-                <dt>Key</dt>
-                <dd className={styles.mono}>{key || '—'}</dd>
-                <dt>Display order</dt>
-                <dd>{sidebarOrder}</dd>
-                <dt>Manifest URL</dt>
-                <dd className={styles.mono}>{manifestUrl || '—'}</dd>
-                <dt>Permissions source</dt>
-                <dd className={styles.mono}>{permissionsSourceUrl || 'Not set'}</dd>
-              </dl>
-              <p className={styles.hint}>
-                The manifest is fetched when you register, so an unreachable URL or a duplicate
-                container name is reported straight away rather than failing later in the browser.
-              </p>
+      <form className={styles.form} onSubmit={(e) => void handleSubmit(e)}>
+        {/* Card 1: Identity */}
+        <div className={styles.formCard}>
+          <h3 className={styles.formCardTitle}>Application Identity</h3>
+          <div className={styles.fieldsGrid}>
+            <div className={styles.inputGroup}>
+              <label className={styles.label}>
+                Application Key <span className={styles.req}>*</span>
+              </label>
+              <div className={styles.inputIconWrap}>
+                <input
+                  type="text"
+                  required
+                  disabled={isEdit}
+                  className={styles.inputWithIcon}
+                  placeholder="e.g. employee"
+                  value={key}
+                  onChange={(e) => setKey(e.target.value)}
+                />
+                <Icon.Grid width={18} height={18} className={styles.fieldLeftIcon} />
+              </div>
+              <span className={styles.fieldHint}>
+                Unique identifier used in routes (/apps/{key || '<key>'}) and permission features (remote.{key || '<key>'}).
+              </span>
             </div>
-          )}
-        </>
-      )}
-    </Drawer>
+
+            <div className={styles.inputGroup}>
+              <label className={styles.label}>
+                Display Name <span className={styles.req}>*</span>
+              </label>
+              <div className={styles.inputIconWrap}>
+                <input
+                  type="text"
+                  required
+                  className={styles.inputWithIcon}
+                  placeholder="e.g. Employee Management"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                />
+                <Icon.Layers width={18} height={18} className={styles.fieldLeftIcon} />
+              </div>
+              <span className={styles.fieldHint}>
+                User-facing application title rendered in headers and permission tables.
+              </span>
+            </div>
+
+            <div className={styles.inputGroupFull}>
+              <label className={styles.label}>Sidebar Sort Priority</label>
+              <input
+                type="number"
+                className={styles.input}
+                value={sidebarOrder}
+                onChange={(e) => setSidebarOrder(Number(e.target.value) || 0)}
+              />
+              <span className={styles.fieldHint}>
+                Sort order in the host application navigation bar (lower numbers appear higher).
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 2: Federation & Discovery */}
+        <div className={styles.formCard}>
+          <h3 className={styles.formCardTitle}>Integration &amp; Federation Endpoints</h3>
+          <div className={styles.fieldsGrid}>
+            <div className={styles.inputGroupFull}>
+              <label className={styles.label}>
+                Module Federation Manifest URL <span className={styles.req}>*</span>
+              </label>
+              <div className={styles.inputIconWrap}>
+                <input
+                  type="url"
+                  required
+                  className={styles.inputWithIcon}
+                  placeholder="http://localhost:5001/mf-manifest.json"
+                  value={manifestUrl}
+                  onChange={(e) => setManifestUrl(e.target.value)}
+                />
+                <Icon.Globe width={18} height={18} className={styles.fieldLeftIcon} />
+              </div>
+              <span className={styles.fieldHint}>
+                The remote&apos;s live mf-manifest.json URL — the host reads its remoteEntry and exposed modules at runtime.
+              </span>
+            </div>
+
+            <div className={styles.inputGroupFull}>
+              <label className={styles.label}>Permissions Source URL (Discovery)</label>
+              <div className={styles.inputIconWrap}>
+                <input
+                  type="url"
+                  className={styles.inputWithIcon}
+                  placeholder="http://localhost:5285/api/employee-service/permissions"
+                  value={permissionsSourceUrl}
+                  onChange={(e) => setPermissionsSourceUrl(e.target.value)}
+                />
+                <Icon.Activity width={18} height={18} className={styles.fieldLeftIcon} />
+              </div>
+              <span className={styles.fieldHint}>
+                Discovery endpoint declaring this application&apos;s permissions for automatic catalog synchronization.
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Actions Bar */}
+        <div className={styles.actions}>
+          <Button variant="ghost" onClick={() => navigate('/settings/applications')}>
+            Cancel
+          </Button>
+          <Button type="submit" variant="primary" loading={saving}>
+            <Icon.CheckCircle width={16} height={16} />
+            <span>{isEdit ? 'Save Changes' : 'Register Application'}</span>
+          </Button>
+        </div>
+      </form>
+    </div>
   )
 }

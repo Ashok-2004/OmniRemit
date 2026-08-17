@@ -17,7 +17,7 @@ function base(props: IconProps) {
   }
 }
 
-/** Small, dependency-free icon set — inline SVG so it inherits `currentColor` and needs no asset requests. */
+/** Comprehensive, dependency-free icon set — inline SVG matching the modern UI screenshots. */
 export const Icon = {
   Mail: (props: IconProps) => (
     <svg {...base(props)}>
@@ -98,6 +98,21 @@ export const Icon = {
       <path d="m6 9 6 6 6-6" />
     </svg>
   ),
+  ChevronUp: (props: IconProps) => (
+    <svg {...base(props)}>
+      <path d="m18 15-6-6-6 6" />
+    </svg>
+  ),
+  ChevronRight: (props: IconProps) => (
+    <svg {...base(props)}>
+      <path d="m9 18 6-6-6-6" />
+    </svg>
+  ),
+  ChevronLeft: (props: IconProps) => (
+    <svg {...base(props)}>
+      <path d="m15 18-6-6 6-6" />
+    </svg>
+  ),
   Search: (props: IconProps) => (
     <svg {...base(props)}>
       <circle cx="11" cy="11" r="8" />
@@ -116,98 +131,106 @@ export const Icon = {
       <path d="M9 22V12h6v10" />
     </svg>
   ),
-
-  /*
-   * Added so the app can stop substituting raw text glyphs for icons. Before this, the codebase
-   * rendered a literal "✕" as the close control, "▢" as every remote app's sidebar icon, "→" on
-   * stat cards, "⚠" in the federation error state and "✓" inside the checkbox. Glyphs pick up the
-   * text font rather than the icon set, so they sat at the wrong optical weight and size next to
-   * real icons, and their rendering varied by platform.
-   *
-   * Same 24×24 grid and stroke weight as everything above, so the set stays visually consistent.
-   */
   Plus: (props: IconProps) => (
     <svg {...base(props)}>
-      <path d="M12 5v14M5 12h14" />
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <line x1="5" y1="12" x2="19" y2="12" />
     </svg>
   ),
   X: (props: IconProps) => (
     <svg {...base(props)}>
-      <path d="M18 6 6 18M6 6l12 12" />
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
     </svg>
   ),
   Check: (props: IconProps) => (
     <svg {...base(props)}>
-      <path d="M20 6 9 17l-5-5" />
+      <polyline points="20 6 9 17 4 12" />
     </svg>
   ),
-  Pencil: (props: IconProps) => (
+  CheckCircle: (props: IconProps) => (
     <svg {...base(props)}>
-      <path d="M12 20h9" />
-      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z" />
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+      <polyline points="22 4 12 14.01 9 11.01" />
+    </svg>
+  ),
+  AlertCircle: (props: IconProps) => (
+    <svg {...base(props)}>
+      <circle cx="12" cy="12" r="10" />
+      <line x1="12" y1="8" x2="12" y2="12" />
+      <line x1="12" y1="16" x2="12.01" y2="16" />
+    </svg>
+  ),
+  Info: (props: IconProps) => (
+    <svg {...base(props)}>
+      <circle cx="12" cy="12" r="10" />
+      <line x1="12" y1="16" x2="12" y2="12" />
+      <line x1="12" y1="8" x2="12.01" y2="8" />
+    </svg>
+  ),
+  Edit: (props: IconProps) => (
+    <svg {...base(props)}>
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
     </svg>
   ),
   Trash: (props: IconProps) => (
     <svg {...base(props)}>
-      <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
-      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
-      <path d="M10 11v6M14 11v6" />
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <line x1="10" y1="11" x2="10" y2="17" />
+      <line x1="14" y1="11" x2="14" y2="17" />
     </svg>
   ),
-  ChevronLeft: (props: IconProps) => (
-    <svg {...base(props)}>
-      <path d="m15 18-6-6 6-6" />
-    </svg>
-  ),
-  ChevronRight: (props: IconProps) => (
-    <svg {...base(props)}>
-      <path d="m9 18 6-6-6-6" />
-    </svg>
-  ),
-  ChevronUp: (props: IconProps) => (
-    <svg {...base(props)}>
-      <path d="m18 15-6-6-6 6" />
-    </svg>
-  ),
-  ArrowRight: (props: IconProps) => (
-    <svg {...base(props)}>
-      <path d="M5 12h14M12 5l7 7-7 7" />
-    </svg>
-  ),
-  MoreHorizontal: (props: IconProps) => (
+  MoreVertical: (props: IconProps) => (
     <svg {...base(props)}>
       <circle cx="12" cy="12" r="1" />
-      <circle cx="19" cy="12" r="1" />
-      <circle cx="5" cy="12" r="1" />
-    </svg>
-  ),
-  Filter: (props: IconProps) => (
-    <svg {...base(props)}>
-      <path d="M22 3H2l8 9.46V19l4 2v-8.54z" />
-    </svg>
-  ),
-  Download: (props: IconProps) => (
-    <svg {...base(props)}>
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-      <path d="m7 10 5 5 5-5M12 15V3" />
-    </svg>
-  ),
-  Copy: (props: IconProps) => (
-    <svg {...base(props)}>
-      <rect x="9" y="9" width="13" height="13" rx="2" />
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+      <circle cx="12" cy="5" r="1" />
+      <circle cx="12" cy="19" r="1" />
     </svg>
   ),
   Building: (props: IconProps) => (
     <svg {...base(props)}>
-      <rect x="4" y="2" width="16" height="20" rx="2" />
+      <rect x="4" y="2" width="16" height="20" rx="2" ry="2" />
       <path d="M9 22v-4h6v4M8 6h.01M16 6h.01M8 10h.01M16 10h.01M8 14h.01M16 14h.01" />
     </svg>
   ),
-  TrendingUp: (props: IconProps) => (
+  Briefcase: (props: IconProps) => (
     <svg {...base(props)}>
-      <path d="m22 7-8.5 8.5-5-5L2 17" />
-      <path d="M16 7h6v6" />
+      <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+      <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+    </svg>
+  ),
+  DollarSign: (props: IconProps) => (
+    <svg {...base(props)}>
+      <line x1="12" y1="1" x2="12" y2="23" />
+      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+    </svg>
+  ),
+  Activity: (props: IconProps) => (
+    <svg {...base(props)}>
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+    </svg>
+  ),
+  Globe: (props: IconProps) => (
+    <svg {...base(props)}>
+      <circle cx="12" cy="12" r="10" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    </svg>
+  ),
+  Layers: (props: IconProps) => (
+    <svg {...base(props)}>
+      <polygon points="12 2 2 7 12 12 22 7 12 2" />
+      <polyline points="2 17 12 22 22 17" />
+      <polyline points="2 12 12 17 22 12" />
+    </svg>
+  ),
+  LogOut: (props: IconProps) => (
+    <svg {...base(props)}>
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <polyline points="16 17 21 12 16 7" />
+      <line x1="21" y1="12" x2="9" y2="12" />
     </svg>
   ),
   AlertTriangle: (props: IconProps) => (
@@ -216,34 +239,43 @@ export const Icon = {
       <path d="M12 9v4M12 17h.01" />
     </svg>
   ),
-  LogOut: (props: IconProps) => (
+  ArrowRight: (props: IconProps) => (
     <svg {...base(props)}>
-      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-      <path d="m16 17 5-5-5-5M21 12H9" />
+      <path d="M5 12h14M12 5l7 7-7 7" />
     </svg>
   ),
-
-  /* Added for the rebuilt list/dashboard surfaces — same 24×24 grid and stroke weight as above. */
+  Box: (props: IconProps) => (
+    <svg {...base(props)}>
+      <path d="M21 8v8a2 2 0 0 1-1 1.7l-7 4a2 2 0 0 1-2 0l-7-4A2 2 0 0 1 3 16V8a2 2 0 0 1 1-1.7l7-4a2 2 0 0 1 2 0l7 4A2 2 0 0 1 21 8z" />
+      <path d="m3.3 7 8.7 5 8.7-5M12 22V12" />
+    </svg>
+  ),
   Calendar: (props: IconProps) => (
     <svg {...base(props)}>
       <rect x="3" y="4" width="18" height="18" rx="2" />
       <path d="M16 2v4M8 2v4M3 10h18" />
     </svg>
   ),
-  Key: (props: IconProps) => (
+  Copy: (props: IconProps) => (
     <svg {...base(props)}>
-      <circle cx="7.5" cy="15.5" r="4.5" />
-      <path d="m10.5 12.5 8-8M17 7l3 3M14.5 8.5l3 3" />
-    </svg>
-  ),
-  Star: (props: IconProps) => (
-    <svg {...base(props)}>
-      <path d="m12 3 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.8 6.2 20.9l1.1-6.5L2.6 9.8l6.5-.9z" />
+      <rect x="9" y="9" width="13" height="13" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
     </svg>
   ),
   Crown: (props: IconProps) => (
     <svg {...base(props)}>
       <path d="M3 7l4 4 5-6 5 6 4-4v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    </svg>
+  ),
+  Download: (props: IconProps) => (
+    <svg {...base(props)}>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <path d="m7 10 5 5 5-5M12 15V3" />
+    </svg>
+  ),
+  Filter: (props: IconProps) => (
+    <svg {...base(props)}>
+      <path d="M22 3H2l8 9.46V19l4 2v-8.54z" />
     </svg>
   ),
   Headset: (props: IconProps) => (
@@ -253,15 +285,34 @@ export const Icon = {
       <path d="M18 18v1a3 3 0 0 1-3 3h-3" />
     </svg>
   ),
-  Box: (props: IconProps) => (
+  Key: (props: IconProps) => (
     <svg {...base(props)}>
-      <path d="M21 8v8a2 2 0 0 1-1 1.7l-7 4a2 2 0 0 1-2 0l-7-4A2 2 0 0 1 3 16V8a2 2 0 0 1 1-1.7l7-4a2 2 0 0 1 2 0l7 4A2 2 0 0 1 21 8z" />
-      <path d="m3.3 7 8.7 5 8.7-5M12 22V12" />
+      <circle cx="7.5" cy="15.5" r="4.5" />
+      <path d="m10.5 12.5 8-8M17 7l3 3M14.5 8.5l3 3" />
     </svg>
   ),
-  Activity: (props: IconProps) => (
+  MoreHorizontal: (props: IconProps) => (
     <svg {...base(props)}>
-      <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+      <circle cx="12" cy="12" r="1" />
+      <circle cx="19" cy="12" r="1" />
+      <circle cx="5" cy="12" r="1" />
+    </svg>
+  ),
+  Pencil: (props: IconProps) => (
+    <svg {...base(props)}>
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z" />
+    </svg>
+  ),
+  Star: (props: IconProps) => (
+    <svg {...base(props)}>
+      <path d="m12 3 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.8 6.2 20.9l1.1-6.5L2.6 9.8l6.5-.9z" />
+    </svg>
+  ),
+  TrendingUp: (props: IconProps) => (
+    <svg {...base(props)}>
+      <path d="m22 7-8.5 8.5-5-5L2 17" />
+      <path d="M16 7h6v6" />
     </svg>
   ),
 }

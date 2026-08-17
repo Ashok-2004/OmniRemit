@@ -13,7 +13,7 @@ function getBridge() {
     warnedMissingBridge = true;
     console.warn(
       "[employee_mf] window.__omniremitHost__ is not installed — this remote is designed to run " +
-        "inside the OmniRemit host shell. API calls will be unauthenticated and will fail.",
+        "inside the OmniConnect host shell. API calls will be unauthenticated and will fail.",
     );
   }
   return bridge ?? null;
@@ -23,7 +23,7 @@ export const getAccessToken = () => getBridge()?.getAccessToken() ?? null;
 
 export const ensureFreshAccessToken = () =>
   getBridge()?.ensureFreshAccessToken() ??
-  Promise.reject(new Error("employee_mf is not running inside the OmniRemit host — no access token available."));
+  Promise.reject(new Error("employee_mf is not running inside the OmniConnect host — no access token available."));
 
 export const hasCapability = (featureKey, capability) => getBridge()?.hasCapability(featureKey, capability) ?? false;
 

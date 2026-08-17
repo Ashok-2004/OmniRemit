@@ -48,4 +48,7 @@ export const authServiceClient = {
   logout: () => apiFetch<void>(`${base}/api/auth/logout`, { method: 'POST' }),
 
   me: (accessToken: string) => apiFetch<CurrentUserDto>(`${base}/api/auth/me`, { accessToken }),
+
+  changePassword: (accessToken: string, body: { currentPassword: string; newPassword: string }) =>
+    apiFetch<{ message: string }>(`${base}/api/auth/change-password`, { method: 'POST', accessToken, body }),
 }

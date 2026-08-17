@@ -2,10 +2,8 @@ import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useClickOutside } from '../../shared/hooks/useClickOutside'
 import { useMenuKeyboardNav } from '../../shared/hooks/useMenuKeyboardNav'
+import { useSettingsDrawerStore } from '../../shared/stores/settingsDrawerStore'
 import { Icon } from '../../shared/components/Icon/Icon'
-import { SecurityAlertsMenu } from '../../features/notifications/components/SecurityAlertsMenu/SecurityAlertsMenu'
-import { GlobalSearch } from '../../features/search/components/GlobalSearch/GlobalSearch'
-import { SettingsDrawer } from '../SettingsDrawer/SettingsDrawer'
 import styles from './Topbar.module.css'
 
 export interface TopbarSettingsAccess {
@@ -17,59 +15,64 @@ export interface TopbarSettingsAccess {
 export interface TopbarProps {
   userName?: string
   settingsAccess?: TopbarSettingsAccess
-  /** Gates the security-alerts bell, whose contents are audit-log rows. */
-  canAccessAuditLogs?: boolean
   onLogout?: () => void
 }
 
-/**
- * Gear icon opens the Settings drawer (see layout/SettingsDrawer).
- *
- * It was previously a small popover listing Users/Roles/Applications, and those same three also sat
- * in the sidebar — two simultaneous routes to the same pages. The sidebar entries are gone; this is
- * now the single entry point, and the drawer adds a live summary of whichever area you are in.
- */
+function getUserInitials(name?: string | null): string {
+  if (!name) return 'SA'
+  const parts = name.trim().split(/\s+/)
+  if (parts.length >= 2) {
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase()
+  }
+  return name.slice(0, 2).toUpperCase()
+}
 
-export function Topbar({ userName, settingsAccess, canAccessAuditLogs, onLogout }: TopbarProps) {
+export function Topbar({ userName, settingsAccess, onLogout }: TopbarProps) {
   const [menuOpen, setMenuOpen] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const userTriggerRef = useRef<HTMLButtonElement>(null)
-  const settingsTriggerRef = useRef<HTMLButtonElement>(null)
+
+  const openSettings = useSettingsDrawerStore((s) => s.open)
 
   useClickOutside([menuRef], () => setMenuOpen(false), menuOpen)
-
   const handleUserMenuKeyDown = useMenuKeyboardNav(menuRef, () => setMenuOpen(false), userTriggerRef)
 
-  const initial = userName?.trim().charAt(0).toUpperCase() || '?'
-  const hasAnySettingsAccess = Boolean(settingsAccess && (settingsAccess.users || settingsAccess.roles || settingsAccess.applications))
+  const canAccessSettings = Boolean(settingsAccess?.users || settingsAccess?.roles || settingsAccess?.applications)
 
   return (
     <header className={styles.topbar}>
-      <GlobalSearch />
+      {/* Search Input */}
+      <div className={styles.search}>
+        <Icon.Search width={16} height={16} className={styles.searchIcon} />
+        <input
+          type="text"
+          className={styles.searchInput}
+          placeholder="Search..."
+        />
+      </div>
 
+      {/* Top Right Action Items */}
       <div className={styles.actions}>
-        {hasAnySettingsAccess && (
+        {/* Settings Gear Button (Opens Slide-over Drawer) */}
+        {canAccessSettings && (
           <button
-            ref={settingsTriggerRef}
             type="button"
             className={styles.iconButton}
             aria-label="Settings"
-            aria-haspopup="dialog"
-            aria-expanded={settingsOpen}
-            onClick={() => setSettingsOpen(true)}
+            onClick={() => openSettings('users')}
+            title="System Settings"
           >
             <Icon.Settings width={18} height={18} />
           </button>
         )}
 
-        {/*
-          Gated on the audit-log View capability: the alerts are audit rows, so someone who cannot
-          read the audit log must not see a bell at all — an empty bell would be worse than none,
-          and a populated one would leak data they aren't entitled to.
-        */}
-        {canAccessAuditLogs && <SecurityAlertsMenu />}
+        {/* Notification Bell with dot */}
+        <button type="button" className={styles.iconButton} aria-label="Notifications" title="Notifications">
+          <Icon.Bell width={18} height={18} />
+          <span className={styles.notificationDot} />
+        </button>
 
+        {/* User Pill Dropdown */}
         <div className={styles.menuWrapper} ref={menuRef} onKeyDown={handleUserMenuKeyDown}>
           <button
             ref={userTriggerRef}
@@ -80,13 +83,20 @@ export function Topbar({ userName, settingsAccess, canAccessAuditLogs, onLogout 
             aria-expanded={menuOpen}
           >
             <span className={styles.avatar} aria-hidden="true">
-              {initial}
+              {getUserInitials(userName)}
             </span>
-            {userName && <span className={styles.userName}>{userName}</span>}
+            <span className={styles.userName}>{userName || 'Super Admin'}</span>
+            <Icon.ChevronDown width={14} height={14} className={styles.userChevron} />
           </button>
 
           {menuOpen && (
             <div className={styles.menu} role="menu">
+              <div className={styles.menuUserHeader}>
+                <span className={styles.menuUserHeaderName}>{userName || 'Super Admin'}</span>
+                <span className={styles.menuUserHeaderRole}>Platform Administrator</span>
+              </div>
+              <div className={styles.menuDivider} />
+
               <Link to="/profile" role="menuitem" className={styles.menuItem} onClick={() => setMenuOpen(false)}>
                 <Icon.Users width={16} height={16} />
                 <span>My Profile</span>
@@ -97,25 +107,29 @@ export function Topbar({ userName, settingsAccess, canAccessAuditLogs, onLogout 
                 className={styles.menuItem}
                 onClick={() => {
                   setMenuOpen(false)
+                  openSettings('users')
+                }}
+              >
+                <Icon.Settings width={16} height={16} />
+                <span>Settings</span>
+              </button>
+              <div className={styles.menuDivider} />
+              <button
+                type="button"
+                role="menuitem"
+                className={`${styles.menuItem} ${styles.menuItemDanger}`}
+                onClick={() => {
+                  setMenuOpen(false)
                   onLogout?.()
                 }}
               >
-                Sign out
+                <Icon.LogOut width={16} height={16} />
+                <span>Sign out</span>
               </button>
             </div>
           )}
         </div>
       </div>
-
-      {/* Rendered here rather than in AppShell so the gear's own focus-restore target is the trigger
-          that opened it — Drawer returns focus to whatever was focused when it mounted. */}
-      {settingsAccess && (
-        <SettingsDrawer
-          open={settingsOpen}
-          onClose={() => setSettingsOpen(false)}
-          access={settingsAccess}
-        />
-      )}
     </header>
   )
 }

@@ -3,6 +3,7 @@ import { Button } from '../../shared/components/Button/Button'
 import { Input } from '../../shared/components/Input/Input'
 import { Icon } from '../../shared/components/Icon/Icon'
 import { GoogleSignInButton } from '../../features/auth/components/GoogleSignInButton'
+import { APP_NAME } from '../../shared/config/branding'
 import styles from './LoginPage.module.css'
 
 export interface LoginPageProps {
@@ -31,48 +32,17 @@ export function LoginPage({ onSubmit, onGoogleCredential, loading, errorMessage 
 
   return (
     <div className={styles.page}>
+      {/* Left Brand Image Panel */}
       <div className={styles.brandPanel}>
-        <div className={styles.brandMark}>
-          <span className={styles.brandMarkIcon} aria-hidden="true">
-            <Icon.Grid width={20} height={20} />
-          </span>
-          <span className={styles.brandMarkText}>
-            OmniRemit
-            <span className={styles.brandMarkBadge}>CRM</span>
-          </span>
-        </div>
-
-        <div className={styles.brandGraphic} aria-hidden="true">
-          <div className={styles.geo}>
-            <div className={styles.geoTile} />
-            <div className={styles.geoTile} />
-            <div className={styles.geoTile} />
-            <div className={styles.geoDot} style={{ left: 20, top: 20 }} />
-            <div className={styles.geoDot} style={{ right: 10, top: 60 }} />
-            <div className={styles.geoDot} style={{ left: 40, bottom: 10 }} />
-          </div>
-        </div>
-
-        <div className={styles.brandCopy}>
-          <h1 className={styles.brandHeadline}>
-            One platform for every team, <span className={styles.brandHeadlineAccent}>every app.</span>
-          </h1>
-          <p className={styles.brandSubcopy}>
-            Sign in to reach the tools your role gives you access to — all in one place, managed
-            from one Setup panel.
-          </p>
-        </div>
-
-        <div className={styles.brandFooter}>&copy; {new Date().getFullYear()} OmniRemit. All rights reserved.</div>
+        <img
+          src="/login-hero.png"
+          alt={`${APP_NAME} — one platform for every team, every app`}
+          className={styles.brandHeroImg}
+        />
       </div>
 
+      {/* Right Login Form Panel */}
       <div className={styles.formPanel}>
-        <button type="button" className={styles.langButton}>
-          <Icon.Grid width={14} height={14} />
-          English
-          <Icon.ChevronDown width={14} height={14} />
-        </button>
-
         <form className={styles.formCard} onSubmit={handleSubmit} noValidate>
           <div className={styles.formIcon} aria-hidden="true">
             <Icon.Lock width={22} height={22} />
@@ -80,7 +50,7 @@ export function LoginPage({ onSubmit, onGoogleCredential, loading, errorMessage 
 
           <div className={styles.formHeader}>
             <h2>Welcome back</h2>
-            <p>Sign in to continue to OmniRemit</p>
+            <p>Sign in to continue to {APP_NAME}</p>
           </div>
 
           {errorMessage && (
