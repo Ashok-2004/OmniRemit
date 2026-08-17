@@ -12,6 +12,13 @@ import { useSettingsDrawerStore } from '../../shared/stores/settingsDrawerStore'
 import { Icon } from '../../shared/components/Icon/Icon'
 import { Switch } from '../../shared/components/Switch/Switch'
 import { SkeletonBlock } from '../../shared/components/Skeleton'
+import { resolveIcon } from '../../shared/components/Icon/resolveIcon'
+import {
+  groupsFromCatalog,
+  columnsForRows,
+  allGrantablePairs,
+  pairId,
+} from '../../shared/permissions/catalog'
 import styles from './UserFormLayer.module.css'
 
 interface UserFormLayerProps {
@@ -49,71 +56,74 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
   const [permSearch, setPermSearch] = useState('')
 
   // Permissions calculation for Global and App-wise Select All directly from catalog
-  const hostPermissions = useMemo(() => {
-    const list: { featureKey: string; capability: string }[] = []
-    catalog
-      .filter((f) => f.source === 'Host')
-      .forEach((f) => {
-        f.capabilities.forEach((c) => {
-          list.push({ featureKey: f.key, capability: c.key })
-        })
-      })
-    return list
-  }, [catalog])
+  /*
+   * Grid shape from the catalog, exactly as in the role editor — see shared/permissions/catalog.ts for
+   * why parent keys must never be granted directly.
+   */
+  const hostGroups = useMemo(() => groupsFromCatalog(catalog, 'Host'), [catalog])
+  const hostColumns = useMemo(() => columnsForRows(hostGroups.flatMap((g) => g.rows)), [hostGroups])
 
-  const getAppPermissions = (appKey: string) => {
-    const featureKey = `remote.${appKey}`
-    const feature = catalog.find((f) => f.key === featureKey)
-    const remoteApp = remoteApps.find((a) => a.key === appKey)
-    const caps = (feature?.capabilities && feature.capabilities.length > 0)
-      ? feature.capabilities
-      : (remoteApp?.capabilities ?? [])
-    return caps.map((c) => ({
-      featureKey,
-      capability: c.key,
-    }))
+  const appGroups = useMemo(
+    () =>
+      groupsFromCatalog(catalog, 'RemoteApp').map((group) => ({
+        ...group,
+        app: remoteApps.find((a) => `remote.${a.key}` === group.feature.key),
+      })),
+    [catalog, remoteApps],
+  )
+
+  const hostPermissions = useMemo(
+    () =>
+      hostGroups.flatMap((g) =>
+        g.rows.flatMap((row) => row.capabilities.map((c) => ({ featureKey: row.key, capability: c.key }))),
+      ),
+    [hostGroups],
+  )
+
+  /**
+   * Every grantable pair for one application, sub-modules included.
+   *
+   * Keyed by FEATURE key now, not app key. It previously rebuilt `remote.${appKey}` and read only the
+   * parent's own capabilities — falling back to the registry's flat capability list when the parent
+   * declared none. That fallback is what manufactured `remote.employee:View`.
+   */
+  const getAppPermissions = (featureKey: string) => {
+    const group = appGroups.find((g) => g.feature.key === featureKey)
+    if (!group) return []
+    return group.rows.flatMap((row) =>
+      row.capabilities.map((c) => ({ featureKey: row.key, capability: c.key })),
+    )
   }
 
-  const allGlobalPermissions = useMemo(() => {
-    const list: { featureKey: string; capability: string }[] = []
-    const seen = new Set<string>()
-    catalog.forEach((f) => {
-      f.capabilities.forEach((c) => {
-        const id = `${f.key}:${c.key}`
-        if (!seen.has(id)) {
-          seen.add(id)
-          list.push({ featureKey: f.key, capability: c.key })
-        }
-      })
-    })
-    remoteApps.forEach((app) => {
-      const featureKey = `remote.${app.key}`
-      ;(app.capabilities ?? []).forEach((c) => {
-        const id = `${featureKey}:${c.key}`
-        if (!seen.has(id)) {
-          seen.add(id)
-          list.push({ featureKey, capability: c.key })
-        }
-      })
-    })
-    return list
-  }, [catalog, remoteApps])
+  /**
+   * The universe this editor diffs against to derive Grant/Revoke overrides.
+   *
+   * MUST include sub-modules. `replaceOverrides` reconciles against exactly this list, so a pair that
+   * never appears here is dropped by any unrelated edit — changing a user's phone number silently
+   * removed their department permissions. The second pass over the registry's flat capability list is
+   * gone: the catalog is the single authority, and reading the registry again risked disagreeing
+   * with it.
+   */
+  const allGlobalPermissions = useMemo(() => allGrantablePairs(catalog), [catalog])
 
-  const fetchRolePermSet = async (targetRoleId: string, catalogData: PermissionFeatureDto[], appsData: RemoteAppDto[]): Promise<Set<string>> => {
+  /**
+   * The set of permissions a role confers, as `featureKey:capability` ids.
+   *
+   * For an administrator role this is "everything in the catalog", enumerated the same recursive way —
+   * the old version walked only top-level capabilities, so every sub-module looked UNGRANTED for an
+   * administrator and a later save wrote a pile of spurious Revoke overrides against that account.
+   */
+  const fetchRolePermSet = async (
+    targetRoleId: string,
+    catalogData: PermissionFeatureDto[],
+  ): Promise<Set<string>> => {
     if (!accessToken || !targetRoleId) return new Set()
     try {
       const roleDetail = await rolesApi.get(accessToken, targetRoleId)
       if (roleDetail.isAdministrator) {
-        const full = new Set<string>()
-        catalogData.forEach((f) => {
-          f.capabilities.forEach((c) => full.add(`${f.key}:${c.key}`))
-        })
-        appsData.forEach((app) => {
-          (app.capabilities ?? []).forEach((c) => full.add(`remote.${app.key}:${c.key}`))
-        })
-        return full
+        return new Set(allGrantablePairs(catalogData).map((p) => pairId(p.featureKey, p.capability)))
       }
-      return new Set((roleDetail.permissions ?? []).map((p) => `${p.featureKey}:${p.capability}`))
+      return new Set((roleDetail.permissions ?? []).map((p) => pairId(p.featureKey, p.capability)))
     } catch (err) {
       console.warn('Could not fetch role permissions', err)
       return new Set()
@@ -157,7 +167,7 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
 
           let rolePermSet = new Set<string>()
           if (userRes.roleId) {
-            rolePermSet = await fetchRolePermSet(userRes.roleId, catalogRes, appsRes.items)
+            rolePermSet = await fetchRolePermSet(userRes.roleId, catalogRes)
           }
           setRolePermissions(rolePermSet)
 
@@ -200,7 +210,7 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
     }
 
     try {
-      const rolePermSet = await fetchRolePermSet(newRoleId, catalog, remoteApps)
+      const rolePermSet = await fetchRolePermSet(newRoleId, catalog)
       setRolePermissions(rolePermSet)
       // When role changes, pre-check all permissions of that role by default!
       setSelectedPermKeys(new Set(rolePermSet))
@@ -642,84 +652,52 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
                             <thead>
                               <tr>
                                 <th>FEATURE / MODULE</th>
-                                <th>VIEW</th>
-                                <th>CREATE</th>
-                                <th>EDIT</th>
-                                <th>DELETE</th>
+                                {hostColumns.map((col) => (
+                                  <th key={col.key} title={col.displayName}>
+                                    {col.displayName.toUpperCase()}
+                                  </th>
+                                ))}
                               </tr>
                             </thead>
                             <tbody>
-                              {catalog
-                                .filter((f) => f.source === 'Host')
+                              {hostGroups
+                                .flatMap((group) => group.rows)
                                 .filter(
-                                  (f) =>
+                                  (row) =>
                                     !permSearch ||
-                                    f.displayName.toLowerCase().includes(permSearch.toLowerCase()),
+                                    row.label.toLowerCase().includes(permSearch.toLowerCase()) ||
+                                    row.key.toLowerCase().includes(permSearch.toLowerCase()),
                                 )
-                                .map((f) => {
-                                  const hasView = f.capabilities.some((c) => c.key === 'View')
-                                  const hasCreate = f.capabilities.some((c) => c.key === 'Create' || c.key === 'Register')
-                                  const createCapKey = f.capabilities.find((c) => c.key === 'Create' || c.key === 'Register')?.key || 'Create'
-                                  const hasEdit = f.capabilities.some((c) => c.key === 'Edit')
-                                  const hasDelete = f.capabilities.some((c) => c.key === 'Delete' || c.key === 'Disable')
-                                  const deleteCapKey = f.capabilities.find((c) => c.key === 'Delete' || c.key === 'Disable')?.key || 'Delete'
-
-                                  return (
-                                    <tr key={f.key}>
-                                      <td>
-                                        <span className={styles.featureName}>{f.displayName}</span>
-                                      </td>
-                                      <td>
-                                        {hasView ? (
-                                          <input
-                                            type="checkbox"
-                                            className={styles.checkbox}
-                                            checked={isOverrideGranted(f.key, 'View')}
-                                            onChange={() => toggleOverride(f.key, 'View')}
-                                          />
-                                        ) : (
-                                          <span style={{ color: '#94a3b8' }}>—</span>
-                                        )}
-                                      </td>
-                                      <td>
-                                        {hasCreate ? (
-                                          <input
-                                            type="checkbox"
-                                            className={styles.checkbox}
-                                            checked={isOverrideGranted(f.key, createCapKey)}
-                                            onChange={() => toggleOverride(f.key, createCapKey)}
-                                          />
-                                        ) : (
-                                          <span style={{ color: '#94a3b8' }}>—</span>
-                                        )}
-                                      </td>
-                                      <td>
-                                        {hasEdit ? (
-                                          <input
-                                            type="checkbox"
-                                            className={styles.checkbox}
-                                            checked={isOverrideGranted(f.key, 'Edit')}
-                                            onChange={() => toggleOverride(f.key, 'Edit')}
-                                          />
-                                        ) : (
-                                          <span style={{ color: '#94a3b8' }}>—</span>
-                                        )}
-                                      </td>
-                                      <td>
-                                        {hasDelete ? (
-                                          <input
-                                            type="checkbox"
-                                            className={styles.checkbox}
-                                            checked={isOverrideGranted(f.key, deleteCapKey)}
-                                            onChange={() => toggleOverride(f.key, deleteCapKey)}
-                                          />
-                                        ) : (
-                                          <span style={{ color: '#94a3b8' }}>—</span>
-                                        )}
-                                      </td>
-                                    </tr>
-                                  )
-                                })}
+                                .map((row) => (
+                                  <tr key={row.key}>
+                                    <td>
+                                      <span className={styles.featureName}>{row.label}</span>
+                                    </td>
+                                    {hostColumns.map((col) => {
+                                      const declared = row.capabilities.some((c) => c.key === col.key)
+                                      return (
+                                        <td key={col.key}>
+                                          {declared ? (
+                                            <input
+                                              type="checkbox"
+                                              className={styles.checkbox}
+                                              checked={isOverrideGranted(row.key, col.key)}
+                                              aria-label={`${col.displayName} on ${row.label}`}
+                                              onChange={() => toggleOverride(row.key, col.key)}
+                                            />
+                                          ) : (
+                                            <span
+                                              className={styles.capNotDeclared}
+                                              title="Not applicable to this feature"
+                                            >
+                                              —
+                                            </span>
+                                          )}
+                                        </td>
+                                      )
+                                    })}
+                                  </tr>
+                                ))}
                             </tbody>
                           </table>
                         </div>
@@ -727,54 +705,45 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
                     </div>
                   )}
 
-                  {/* Remote Apps Accordions */}
-                  {remoteApps
-                    .filter((app) => app.status !== 'Disabled')
+                  {/* Remote Apps Accordions — rows and columns come from the catalog */}
+                  {appGroups
+                    .filter(({ app }) => !app || app.status !== 'Disabled')
                     .filter(
-                      (app) =>
+                      ({ feature }) =>
                         !permSearch ||
-                        app.displayName.toLowerCase().includes(permSearch.toLowerCase()) ||
-                        app.key.toLowerCase().includes(permSearch.toLowerCase()),
+                        feature.displayName.toLowerCase().includes(permSearch.toLowerCase()) ||
+                        feature.key.toLowerCase().includes(permSearch.toLowerCase()),
                     )
-                    .map((app) => {
-                      const isExpanded = Boolean(expandedApps[app.key])
-                      const featureKey = `remote.${app.key}`
-                      const appPerms = getAppPermissions(app.key)
-                      const feature = catalog.find((f) => f.key === featureKey)
-                      const caps = (feature?.capabilities && feature.capabilities.length > 0)
-                        ? feature.capabilities
-                        : (app.capabilities ?? [])
-
-                      const hasBaseCreate = caps.some((c) => c.key === 'Create')
-                      const hasBaseView = caps.some((c) => c.key === 'View')
-                      const hasBaseEdit = caps.some((c) => c.key === 'Edit')
-                      const hasBaseDelete = caps.some((c) => c.key === 'Delete')
-
-                      const submodules = Array.from(
-                        new Set(
-                          caps
-                            .filter((c) => c.key.includes(':'))
-                            .map((c) => c.key.split(':')[0]),
-                        ),
-                      )
+                    .map(({ feature, rows, columns, app }) => {
+                      const isExpanded = Boolean(expandedApps[feature.key])
+                      const appPerms = getAppPermissions(feature.key)
+                      const AppIcon = resolveIcon(app?.iconKey)
 
                       return (
-                        <div key={app.id} className={styles.accordionCard}>
+                        <div key={feature.key} className={styles.accordionCard}>
                           <div
                             className={styles.accordionHeader}
-                            onClick={() => toggleAppAccordion(app.key)}
+                            role="button"
+                            tabIndex={0}
+                            aria-expanded={isExpanded}
+                            onClick={() => toggleAppAccordion(feature.key)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault()
+                                toggleAppAccordion(feature.key)
+                              }
+                            }}
                           >
                             <div className={styles.appTitleGroup}>
                               <div className={`${styles.appIconSmall} ${styles.iconRemote}`}>
-                                <Icon.Users width={18} height={18} />
+                                <AppIcon width={18} height={18} />
                               </div>
                               <div>
-                                <span className={styles.accordionAppName}>{app.displayName}</span>
-                                <span className={styles.accordionAppKey}>{app.key}</span>
+                                <span className={styles.accordionAppName}>{feature.displayName}</span>
+                                <span className={styles.accordionAppKey}>{feature.key}</span>
                               </div>
                             </div>
                             <div className={styles.accordionRightMeta}>
-                              {/* App-wise Select All */}
                               <label
                                 className={styles.appSelectAllLabel}
                                 onClick={(e) => e.stopPropagation()}
@@ -787,10 +756,12 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
                                 />
                                 <span>Select All</span>
                               </label>
-                              <span className={styles.activeBadgeSmall}>
-                                <span className={styles.badgeDotGreen} />
-                                {app.status}
-                              </span>
+                              {app && (
+                                <span className={styles.activeBadgeSmall}>
+                                  <span className={styles.badgeDotGreen} />
+                                  {app.status}
+                                </span>
+                              )}
                               {isExpanded ? (
                                 <Icon.ChevronUp width={18} height={18} className={styles.chevron} />
                               ) : (
@@ -801,135 +772,56 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
 
                           {isExpanded && (
                             <div className={styles.accordionBody}>
-                              <table className={styles.matrixTable}>
-                                <thead>
-                                  <tr>
-                                    <th>SUB-MODULE / CAPABILITY</th>
-                                    <th>CREATE</th>
-                                    <th>VIEW</th>
-                                    <th>EDIT</th>
-                                    <th>DELETE</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  <tr>
-                                    <td>
-                                      <span className={styles.featureName}>{app.displayName} (Base Access)</span>
-                                    </td>
-                                    <td>
-                                      {hasBaseCreate ? (
-                                        <input
-                                          type="checkbox"
-                                          className={styles.checkbox}
-                                          checked={isOverrideGranted(featureKey, 'Create')}
-                                          onChange={() => toggleOverride(featureKey, 'Create')}
-                                        />
-                                      ) : (
-                                        <span style={{ color: '#94a3b8' }}>—</span>
-                                      )}
-                                    </td>
-                                    <td>
-                                      {hasBaseView ? (
-                                        <input
-                                          type="checkbox"
-                                          className={styles.checkbox}
-                                          checked={isOverrideGranted(featureKey, 'View')}
-                                          onChange={() => toggleOverride(featureKey, 'View')}
-                                        />
-                                      ) : (
-                                        <span style={{ color: '#94a3b8' }}>—</span>
-                                      )}
-                                    </td>
-                                    <td>
-                                      {hasBaseEdit ? (
-                                        <input
-                                          type="checkbox"
-                                          className={styles.checkbox}
-                                          checked={isOverrideGranted(featureKey, 'Edit')}
-                                          onChange={() => toggleOverride(featureKey, 'Edit')}
-                                        />
-                                      ) : (
-                                        <span style={{ color: '#94a3b8' }}>—</span>
-                                      )}
-                                    </td>
-                                    <td>
-                                      {hasBaseDelete ? (
-                                        <input
-                                          type="checkbox"
-                                          className={styles.checkbox}
-                                          checked={isOverrideGranted(featureKey, 'Delete')}
-                                          onChange={() => toggleOverride(featureKey, 'Delete')}
-                                        />
-                                      ) : (
-                                        <span style={{ color: '#94a3b8' }}>—</span>
-                                      )}
-                                    </td>
-                                  </tr>
-
-                                  {submodules.map((sub) => {
-                                    const hasSubCreate = caps.some((c) => c.key === `${sub}:Create`)
-                                    const hasSubView = caps.some((c) => c.key === `${sub}:View`)
-                                    const hasSubEdit = caps.some((c) => c.key === `${sub}:Edit`)
-                                    const hasSubDelete = caps.some((c) => c.key === `${sub}:Delete`)
-
-                                    return (
-                                      <tr key={sub}>
+                              {columns.length === 0 ? (
+                                <p className={styles.sectionHint}>
+                                  This application hasn&rsquo;t declared any capabilities yet.
+                                </p>
+                              ) : (
+                                <table className={styles.matrixTable}>
+                                  <thead>
+                                    <tr>
+                                      <th>SUB-MODULE / CAPABILITY</th>
+                                      {columns.map((col) => (
+                                        <th key={col.key} title={col.displayName}>
+                                          {col.displayName.toUpperCase()}
+                                        </th>
+                                      ))}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {rows.map((row) => (
+                                      <tr key={row.key}>
                                         <td>
-                                          <span className={styles.featureName}>{sub}</span>
+                                          <span className={styles.featureName}>{row.label}</span>
                                         </td>
-                                        <td>
-                                          {hasSubCreate ? (
-                                            <input
-                                              type="checkbox"
-                                              className={styles.checkbox}
-                                              checked={isOverrideGranted(featureKey, `${sub}:Create`)}
-                                              onChange={() => toggleOverride(featureKey, `${sub}:Create`)}
-                                            />
-                                          ) : (
-                                            <span style={{ color: '#94a3b8' }}>—</span>
-                                          )}
-                                        </td>
-                                        <td>
-                                          {hasSubView ? (
-                                            <input
-                                              type="checkbox"
-                                              className={styles.checkbox}
-                                              checked={isOverrideGranted(featureKey, `${sub}:View`)}
-                                              onChange={() => toggleOverride(featureKey, `${sub}:View`)}
-                                            />
-                                          ) : (
-                                            <span style={{ color: '#94a3b8' }}>—</span>
-                                          )}
-                                        </td>
-                                        <td>
-                                          {hasSubEdit ? (
-                                            <input
-                                              type="checkbox"
-                                              className={styles.checkbox}
-                                              checked={isOverrideGranted(featureKey, `${sub}:Edit`)}
-                                              onChange={() => toggleOverride(featureKey, `${sub}:Edit`)}
-                                            />
-                                          ) : (
-                                            <span style={{ color: '#94a3b8' }}>—</span>
-                                          )}
-                                        </td>
-                                        <td>
-                                          {hasSubDelete ? (
-                                            <input
-                                              type="checkbox"
-                                              className={styles.checkbox}
-                                              checked={isOverrideGranted(featureKey, `${sub}:Delete`)}
-                                              onChange={() => toggleOverride(featureKey, `${sub}:Delete`)}
-                                            />
-                                          ) : (
-                                            <span style={{ color: '#94a3b8' }}>—</span>
-                                          )}
-                                        </td>
+                                        {columns.map((col) => {
+                                          const declared = row.capabilities.some((c) => c.key === col.key)
+                                          return (
+                                            <td key={col.key}>
+                                              {declared ? (
+                                                <input
+                                                  type="checkbox"
+                                                  className={styles.checkbox}
+                                                  checked={isOverrideGranted(row.key, col.key)}
+                                                  aria-label={`${col.displayName} on ${row.label}`}
+                                                  onChange={() => toggleOverride(row.key, col.key)}
+                                                />
+                                              ) : (
+                                                <span
+                                                  className={styles.capNotDeclared}
+                                                  title="Not declared by this module"
+                                                >
+                                                  —
+                                                </span>
+                                              )}
+                                            </td>
+                                          )
+                                        })}
                                       </tr>
-                                    )
-                                  })}
-                                </tbody>
-                              </table>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              )}
                             </div>
                           )}
                         </div>

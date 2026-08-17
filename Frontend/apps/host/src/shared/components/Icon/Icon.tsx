@@ -233,5 +233,86 @@ export const Icon = {
       <line x1="21" y1="12" x2="9" y2="12" />
     </svg>
   ),
+  AlertTriangle: (props: IconProps) => (
+    <svg {...base(props)}>
+      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+      <path d="M12 9v4M12 17h.01" />
+    </svg>
+  ),
+  ArrowRight: (props: IconProps) => (
+    <svg {...base(props)}>
+      <path d="M5 12h14M12 5l7 7-7 7" />
+    </svg>
+  ),
+  Box: (props: IconProps) => (
+    <svg {...base(props)}>
+      <path d="M21 8v8a2 2 0 0 1-1 1.7l-7 4a2 2 0 0 1-2 0l-7-4A2 2 0 0 1 3 16V8a2 2 0 0 1 1-1.7l7-4a2 2 0 0 1 2 0l7 4A2 2 0 0 1 21 8z" />
+      <path d="m3.3 7 8.7 5 8.7-5M12 22V12" />
+    </svg>
+  ),
+  Calendar: (props: IconProps) => (
+    <svg {...base(props)}>
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M16 2v4M8 2v4M3 10h18" />
+    </svg>
+  ),
+  Copy: (props: IconProps) => (
+    <svg {...base(props)}>
+      <rect x="9" y="9" width="13" height="13" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  ),
+  Crown: (props: IconProps) => (
+    <svg {...base(props)}>
+      <path d="M3 7l4 4 5-6 5 6 4-4v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    </svg>
+  ),
+  Download: (props: IconProps) => (
+    <svg {...base(props)}>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <path d="m7 10 5 5 5-5M12 15V3" />
+    </svg>
+  ),
+  Filter: (props: IconProps) => (
+    <svg {...base(props)}>
+      <path d="M22 3H2l8 9.46V19l4 2v-8.54z" />
+    </svg>
+  ),
+  Headset: (props: IconProps) => (
+    <svg {...base(props)}>
+      <path d="M4 14v-2a8 8 0 0 1 16 0v2" />
+      <path d="M4 14a2 2 0 0 1 2-2h1v6H6a2 2 0 0 1-2-2zM20 14a2 2 0 0 0-2-2h-1v6h1a2 2 0 0 0 2-2z" />
+      <path d="M18 18v1a3 3 0 0 1-3 3h-3" />
+    </svg>
+  ),
+  Key: (props: IconProps) => (
+    <svg {...base(props)}>
+      <circle cx="7.5" cy="15.5" r="4.5" />
+      <path d="m10.5 12.5 8-8M17 7l3 3M14.5 8.5l3 3" />
+    </svg>
+  ),
+  MoreHorizontal: (props: IconProps) => (
+    <svg {...base(props)}>
+      <circle cx="12" cy="12" r="1" />
+      <circle cx="19" cy="12" r="1" />
+      <circle cx="5" cy="12" r="1" />
+    </svg>
+  ),
+  Pencil: (props: IconProps) => (
+    <svg {...base(props)}>
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z" />
+    </svg>
+  ),
+  Star: (props: IconProps) => (
+    <svg {...base(props)}>
+      <path d="m12 3 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.8 6.2 20.9l1.1-6.5L2.6 9.8l6.5-.9z" />
+    </svg>
+  ),
+  TrendingUp: (props: IconProps) => (
+    <svg {...base(props)}>
+      <path d="m22 7-8.5 8.5-5-5L2 17" />
+      <path d="M16 7h6v6" />
+    </svg>
+  ),
 }
-

@@ -7,6 +7,8 @@ import { useSettingsDrawerStore } from '../../shared/stores/settingsDrawerStore'
 import { Icon } from '../../shared/components/Icon/Icon'
 import { Switch } from '../../shared/components/Switch/Switch'
 import { SkeletonBlock } from '../../shared/components/Skeleton'
+import { resolveIcon } from '../../shared/components/Icon/resolveIcon'
+import { groupsFromCatalog, columnsForRows } from '../../shared/permissions/catalog'
 import styles from './RoleFormLayer.module.css'
 
 interface RoleFormLayerProps {
@@ -93,7 +95,43 @@ export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
     }
   }, [accessToken, roleId])
 
-  const hostFeatures = useMemo(() => catalog.filter((f) => f.source === 'Host'), [catalog])
+  /*
+   * Grid shape comes from the catalog, never from a fixed list of verbs.
+   *
+   * Host columns are the union of what host features declare, so `users:Disable`,
+   * `applications:Register`, `audit-logs:Export` and `profile:ChangePassword` each get a checkbox —
+   * all four were previously ungrantable because the grid only had View/Create/Edit/Delete.
+   */
+  // Turning the administrator flag on while standing on a permission tab would otherwise leave the
+  // drawer showing a tab whose button no longer exists.
+  useEffect(() => {
+    if (isAdministrator && (activeTab === 'host' || activeTab === 'apps')) {
+      setActiveTab('basic')
+    }
+  }, [isAdministrator, activeTab])
+
+  const hostGroups = useMemo(() => groupsFromCatalog(catalog, 'Host'), [catalog])
+  const hostColumns = useMemo(
+    () => columnsForRows(hostGroups.flatMap((g) => g.rows)),
+    [hostGroups],
+  )
+
+  /*
+   * One group per remote application, joined to its registry row for status and icon.
+   *
+   * Driven by the CATALOG, not by the remote-apps list. The previous version iterated registered apps
+   * and fabricated a single "Base Access" row against the parent key `remote.employee` — which
+   * declares no capabilities at all — so saving emitted `remote.employee:View` and the server rightly
+   * answered "'remote.employee' does not declare a 'View' capability."
+   */
+  const appGroups = useMemo(
+    () =>
+      groupsFromCatalog(catalog, 'RemoteApp').map((group) => ({
+        ...group,
+        app: remoteApps.find((a) => `remote.${a.key}` === group.feature.key),
+      })),
+    [catalog, remoteApps],
+  )
 
   // Capability checking helpers
   const isGranted = (featureKey: string, capability: string) => {
@@ -125,19 +163,25 @@ export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
     setExpandedApps({})
   }
 
-  const handleSelectAllAppPerms = (appKey: string) => {
-    if (isAdministrator) return
-    const feature = catalog.find((f) => f.key === `remote.${appKey}`)
-    if (!feature) return
+  /**
+   * Grant every capability an application declares, sub-modules included, keyed by the FEATURE key.
+   *
+   * Two bugs fixed. It took an app key and rebuilt `remote.${appKey}`, which broke as soon as the grid
+   * started keying rows by feature; and it only granted the parent feature's own capabilities, so on a
+   * two-level app — where the parent declares none — "Select all" granted literally nothing while
+   * appearing to work.
+   */
+  const handleSelectAllAppPerms = (featureKey: string) => {
+    const group = appGroups.find((g) => g.feature.key === featureKey)
+    if (!group) return
 
-    setPermissions((prev) => {
-      const otherPerms = prev.filter((p) => p.featureKey !== feature.key)
-      const allAppPerms = feature.capabilities.map((c) => ({
-        featureKey: feature.key,
-        capability: c.key,
-      }))
-      return [...otherPerms, ...allAppPerms]
-    })
+    const rowKeys = new Set(group.rows.map((r) => r.key))
+    setPermissions((prev) => [
+      ...prev.filter((p) => !rowKeys.has(p.featureKey)),
+      ...group.rows.flatMap((row) =>
+        row.capabilities.map((cap) => ({ featureKey: row.key, capability: cap.key })),
+      ),
+    ])
   }
 
   const handleSubmit = async (e: FormEvent) => {
@@ -151,7 +195,19 @@ export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
         name,
         description: description || null,
         isAdministrator,
-        permissions: isAdministrator ? [] : permissions,
+        /*
+         * Granular grants are PERSISTED even for an administrator role.
+         *
+         * This used to send `[]` whenever the administrator flag was on, which permanently destroyed
+         * the role's configuration: switching a carefully built role to administrator and back left
+         * every checkbox empty, with no warning and no way to recover it.
+         *
+         * Keeping them costs nothing and changes no access. PermissionClaimsBuilder short-circuits on
+         * IsAdministrator and returns "unrestricted" without reading the grant rows at all, so the
+         * effective permissions of an administrator are identical either way — the rows are simply
+         * still there when the flag is turned back off.
+         */
+        permissions,
       }
 
       if (isEdit && roleId) {
@@ -221,23 +277,34 @@ export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
         >
           <span>Basic Details</span>
         </button>
-        <button
-          type="button"
-          className={`${styles.tabBtn} ${activeTab === 'host' ? styles.tabBtnActive : ''}`}
-          onClick={() => setActiveTab('host')}
-        >
-          <span>Host Permissions</span>
-        </button>
+        {/*
+          Both permission tabs are hidden while the role is an administrator. An administrator holds
+          every capability unconditionally, so a grid of checkboxes there would be describing a choice
+          that has no effect — worse, it would show boxes unticked while the role in fact has that
+          access. The underlying grants are kept (see the submit handler), so turning the flag back off
+          restores exactly what was configured.
+        */}
+        {!isAdministrator && (
+          <button
+            type="button"
+            className={`${styles.tabBtn} ${activeTab === 'host' ? styles.tabBtnActive : ''}`}
+            onClick={() => setActiveTab('host')}
+          >
+            <span>Host Permissions</span>
+          </button>
+        )}
+        {!isAdministrator && (
         <button
           type="button"
           className={`${styles.tabBtn} ${activeTab === 'apps' ? styles.tabBtnActive : ''}`}
           onClick={() => setActiveTab('apps')}
         >
           <span>Application Access</span>
-          {remoteApps.length > 0 && (
-            <span className={styles.tabBadge}>{remoteApps.length}</span>
+          {appGroups.length > 0 && (
+            <span className={styles.tabBadge}>{appGroups.length}</span>
           )}
         </button>
+        )}
         <button
           type="button"
           className={`${styles.tabBtn} ${activeTab === 'users' ? styles.tabBtnActive : ''}`}
@@ -316,335 +383,213 @@ export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
                   <div>
                     <h4 className={styles.matrixTitle}>Platform Administrative Modules</h4>
                     <p className={styles.matrixSubtitle}>
-                      {isAdministrator
-                        ? 'Administrator roles automatically receive all capabilities across host features.'
-                        : 'Configure granular read, create, edit, and delete permissions for core platform features.'}
+                      Grant only the capabilities this role needs. Columns are exactly what each
+                      feature declares, so a dash means the action does not exist for that feature.
                     </p>
                   </div>
                 </div>
 
                 <div className={styles.matrixTableWrap}>
-                  <table className={styles.matrixTable}>
-                    <thead>
-                      <tr>
-                        <th className={styles.thFeature}>FEATURE / MODULE</th>
-                        <th className={styles.thCap}>VIEW</th>
-                        <th className={styles.thCap}>CREATE</th>
-                        <th className={styles.thCap}>EDIT</th>
-                        <th className={styles.thCap}>DELETE</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {hostFeatures.map((f) => {
-                        const hasView = f.capabilities.some((c) => c.key === 'View')
-                        const hasCreate = f.capabilities.some((c) => c.key === 'Create' || c.key === 'Register')
-                        const createCapKey = f.capabilities.find((c) => c.key === 'Create' || c.key === 'Register')?.key || 'Create'
-                        const hasEdit = f.capabilities.some((c) => c.key === 'Edit')
-                        const hasDelete = f.capabilities.some((c) => c.key === 'Delete' || c.key === 'Disable')
-                        const deleteCapKey = f.capabilities.find((c) => c.key === 'Delete' || c.key === 'Disable')?.key || 'Delete'
-
-                        return (
-                          <tr key={f.key}>
-                            <td className={styles.tdFeature}>
-                              <span className={styles.featureName}>{f.displayName}</span>
-                              <span className={styles.featureKey}>{f.key}</span>
-                            </td>
-                            <td className={styles.tdCap}>
-                              {hasView ? (
-                                <input
-                                  type="checkbox"
-                                  className={styles.checkbox}
-                                  checked={isGranted(f.key, 'View')}
-                                  disabled={isAdministrator}
-                                  onChange={() => togglePermission(f.key, 'View')}
-                                />
-                              ) : (
-                                <span style={{ color: '#94a3b8' }}>—</span>
-                              )}
-                            </td>
-                            <td className={styles.tdCap}>
-                              {hasCreate ? (
-                                <input
-                                  type="checkbox"
-                                  className={styles.checkbox}
-                                  checked={isGranted(f.key, createCapKey)}
-                                  disabled={isAdministrator}
-                                  onChange={() => togglePermission(f.key, createCapKey)}
-                                />
-                              ) : (
-                                <span style={{ color: '#94a3b8' }}>—</span>
-                              )}
-                            </td>
-                            <td className={styles.tdCap}>
-                              {hasEdit ? (
-                                <input
-                                  type="checkbox"
-                                  className={styles.checkbox}
-                                  checked={isGranted(f.key, 'Edit')}
-                                  disabled={isAdministrator}
-                                  onChange={() => togglePermission(f.key, 'Edit')}
-                                />
-                              ) : (
-                                <span style={{ color: '#94a3b8' }}>—</span>
-                              )}
-                            </td>
-                            <td className={styles.tdCap}>
-                              {hasDelete ? (
-                                <input
-                                  type="checkbox"
-                                  className={styles.checkbox}
-                                  checked={isGranted(f.key, deleteCapKey)}
-                                  disabled={isAdministrator}
-                                  onChange={() => togglePermission(f.key, deleteCapKey)}
-                                />
-                              ) : (
-                                <span style={{ color: '#94a3b8' }}>—</span>
-                              )}
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
+                  {hostGroups.length === 0 ? (
+                    <p className={styles.sectionHint}>The permission catalog is empty.</p>
+                  ) : (
+                    <table className={styles.matrixTable}>
+                      <thead>
+                        <tr>
+                          <th className={styles.thFeature}>FEATURE / MODULE</th>
+                          {hostColumns.map((col) => (
+                            <th key={col.key} className={styles.thCap} title={col.displayName}>
+                              {col.displayName.toUpperCase()}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {hostGroups.flatMap((group) =>
+                          group.rows.map((row) => (
+                            <tr key={row.key}>
+                              <td className={styles.tdFeature}>
+                                <span className={styles.featureName}>{row.label}</span>
+                                <span className={styles.featureKey}>{row.key}</span>
+                              </td>
+                              {hostColumns.map((col) => {
+                                const declared = row.capabilities.some((c) => c.key === col.key)
+                                return (
+                                  <td key={col.key} className={styles.tdCap}>
+                                    {declared ? (
+                                      <input
+                                        type="checkbox"
+                                        className={styles.checkbox}
+                                        checked={isGranted(row.key, col.key)}
+                                        aria-label={`${col.displayName} on ${row.label}`}
+                                        onChange={() => togglePermission(row.key, col.key)}
+                                      />
+                                    ) : (
+                                      <span
+                                        className={styles.capNotDeclared}
+                                        title="Not applicable to this feature"
+                                      >
+                                        —
+                                      </span>
+                                    )}
+                                  </td>
+                                )
+                              })}
+                            </tr>
+                          )),
+                        )}
+                      </tbody>
+                    </table>
+                  )}
                 </div>
               </div>
             </div>
           )}
+
 
           {/* Tab 3: Application Access */}
           {activeTab === 'apps' && (
             <div className={styles.tabSection}>
               <div className={styles.appsHeaderRow}>
                 <p className={styles.sectionHint}>
-                  Control access to registered micro-frontend applications and their respective sub-modules.
+                  Access to registered applications and the sub-modules each one declares. Rows and
+                  columns come from what the application itself reports, so a new module or action
+                  appears here as soon as it is resynced.
                 </p>
                 <div className={styles.appsHeaderActions}>
-                  <button
-                    type="button"
-                    className={styles.textActionBtn}
-                    onClick={handleCollapseAll}
-                  >
+                  <button type="button" className={styles.textActionBtn} onClick={handleCollapseAll}>
                     Collapse all
                   </button>
                 </div>
               </div>
 
               <div className={styles.accordionList}>
-                {remoteApps
-                  .filter((app) => app.status !== 'Disabled')
-                  .map((app) => {
-                    const isExpanded = Boolean(expandedApps[app.key])
-                    const featureKey = `remote.${app.key}`
-                    const feature = catalog.find((f) => f.key === featureKey)
-                    const caps = (feature?.capabilities && feature.capabilities.length > 0)
-                      ? feature.capabilities
-                      : (app.capabilities ?? [])
+                {appGroups.length === 0 && (
+                  <p className={styles.sectionHint}>
+                    No registered application has declared any permissions yet. Set a Permissions
+                    Source URL on an application and resync it to populate this tab.
+                  </p>
+                )}
 
-                    const hasBaseCreate = caps.some((c) => c.key === 'Create')
-                    const hasBaseView = caps.some((c) => c.key === 'View')
-                    const hasBaseEdit = caps.some((c) => c.key === 'Edit')
-                    const hasBaseDelete = caps.some((c) => c.key === 'Delete')
+                {appGroups.map(({ feature, rows, columns, app }) => {
+                  const isExpanded = Boolean(expandedApps[feature.key])
+                  const AppIcon = resolveIcon(app?.iconKey)
+                  const grantedCount = permissions.filter((p) =>
+                    rows.some((r) => r.key === p.featureKey),
+                  ).length
 
-                    const submodules = Array.from(
-                      new Set(
-                        caps
-                          .filter((c) => c.key.includes(':'))
-                          .map((c) => c.key.split(':')[0]),
-                      ),
-                    )
-
-                    return (
-                      <div key={app.id} className={styles.accordionCard}>
-                        {/* Accordion Bar */}
-                        <div
-                          className={styles.accordionHeader}
-                          onClick={() => toggleAppAccordion(app.key)}
-                        >
-                          <div className={styles.appTitleGroup}>
-                            <div className={styles.appIconSmall}>
-                              <Icon.Users width={18} height={18} />
-                            </div>
-                            <div>
-                              <span className={styles.accordionAppName}>{app.displayName}</span>
-                              <span className={styles.accordionAppKey}>{app.key}</span>
-                            </div>
+                  return (
+                    <div key={feature.key} className={styles.accordionCard}>
+                      <div
+                        className={styles.accordionHeader}
+                        role="button"
+                        tabIndex={0}
+                        aria-expanded={isExpanded}
+                        onClick={() => toggleAppAccordion(feature.key)}
+                        onKeyDown={(e) => {
+                          // The header was a plain div, so an operator navigating by keyboard could
+                          // not expand an application at all.
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            toggleAppAccordion(feature.key)
+                          }
+                        }}
+                      >
+                        <div className={styles.appTitleGroup}>
+                          <div className={styles.appIconSmall}>
+                            <AppIcon width={18} height={18} />
                           </div>
+                          <div>
+                            <span className={styles.accordionAppName}>{feature.displayName}</span>
+                            <span className={styles.accordionAppKey}>{feature.key}</span>
+                          </div>
+                        </div>
 
-                          <div className={styles.accordionRightMeta}>
+                        <div className={styles.accordionRightMeta}>
+                          {grantedCount > 0 && (
+                            <span className={styles.grantCountBadge}>{grantedCount} granted</span>
+                          )}
+                          {app && (
                             <span className={styles.activeBadge}>
                               <span className={styles.badgeDot} />
                               {app.status}
                             </span>
-                            {isExpanded ? (
-                              <Icon.ChevronUp width={18} height={18} className={styles.chevron} />
-                            ) : (
-                              <Icon.ChevronDown width={18} height={18} className={styles.chevron} />
-                            )}
-                          </div>
+                          )}
+                          {isExpanded ? (
+                            <Icon.ChevronUp width={18} height={18} className={styles.chevron} />
+                          ) : (
+                            <Icon.ChevronDown width={18} height={18} className={styles.chevron} />
+                          )}
                         </div>
-
-                        {/* Expanded Permission Matrix */}
-                        {isExpanded && (
-                          <div className={styles.accordionBody}>
-                            <div className={styles.selectRow}>
-                              <span className={styles.appScopeLabel}>Declared Application Capabilities</span>
-                              {!isAdministrator && (
-                                <button
-                                  type="button"
-                                  className={styles.selectLink}
-                                  onClick={() => handleSelectAllAppPerms(app.key)}
-                                >
-                                  Select all
-                                </button>
-                              )}
-                            </div>
-
-                            <table className={styles.matrixTable}>
-                              <thead>
-                                <tr>
-                                  <th className={styles.thFeature}>SUB-MODULE / CAPABILITY</th>
-                                  <th className={styles.thCap}>CREATE</th>
-                                  <th className={styles.thCap}>VIEW</th>
-                                  <th className={styles.thCap}>EDIT</th>
-                                  <th className={styles.thCap}>DELETE</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {/* Primary entity row */}
-                                <tr>
-                                  <td className={styles.tdFeature}>
-                                    <span className={styles.featureName}>{app.displayName} (Base Access)</span>
-                                  </td>
-                                  <td className={styles.tdCap}>
-                                    {hasBaseCreate ? (
-                                      <input
-                                        type="checkbox"
-                                        className={styles.checkbox}
-                                        checked={isGranted(featureKey, 'Create')}
-                                        disabled={isAdministrator}
-                                        onChange={() => togglePermission(featureKey, 'Create')}
-                                      />
-                                    ) : (
-                                      <span style={{ color: '#94a3b8' }}>—</span>
-                                    )}
-                                  </td>
-                                  <td className={styles.tdCap}>
-                                    {hasBaseView ? (
-                                      <input
-                                        type="checkbox"
-                                        className={styles.checkbox}
-                                        checked={isGranted(featureKey, 'View')}
-                                        disabled={isAdministrator}
-                                        onChange={() => togglePermission(featureKey, 'View')}
-                                      />
-                                    ) : (
-                                      <span style={{ color: '#94a3b8' }}>—</span>
-                                    )}
-                                  </td>
-                                  <td className={styles.tdCap}>
-                                    {hasBaseEdit ? (
-                                      <input
-                                        type="checkbox"
-                                        className={styles.checkbox}
-                                        checked={isGranted(featureKey, 'Edit')}
-                                        disabled={isAdministrator}
-                                        onChange={() => togglePermission(featureKey, 'Edit')}
-                                      />
-                                    ) : (
-                                      <span style={{ color: '#94a3b8' }}>—</span>
-                                    )}
-                                  </td>
-                                  <td className={styles.tdCap}>
-                                    {hasBaseDelete ? (
-                                      <input
-                                        type="checkbox"
-                                        className={styles.checkbox}
-                                        checked={isGranted(featureKey, 'Delete')}
-                                        disabled={isAdministrator}
-                                        onChange={() => togglePermission(featureKey, 'Delete')}
-                                      />
-                                    ) : (
-                                      <span style={{ color: '#94a3b8' }}>—</span>
-                                    )}
-                                  </td>
-                                </tr>
-
-                                {submodules.map((sub) => {
-                                  const hasSubCreate = caps.some((c) => c.key === `${sub}:Create`)
-                                  const hasSubView = caps.some((c) => c.key === `${sub}:View`)
-                                  const hasSubEdit = caps.some((c) => c.key === `${sub}:Edit`)
-                                  const hasSubDelete = caps.some((c) => c.key === `${sub}:Delete`)
-
-                                  return (
-                                    <tr key={sub}>
-                                      <td className={styles.tdFeature}>
-                                        <span className={styles.featureName}>{sub}</span>
-                                      </td>
-                                      <td className={styles.tdCap}>
-                                        {hasSubCreate ? (
-                                          <input
-                                            type="checkbox"
-                                            className={styles.checkbox}
-                                            checked={isGranted(featureKey, `${sub}:Create`)}
-                                            disabled={isAdministrator}
-                                            onChange={() => togglePermission(featureKey, `${sub}:Create`)}
-                                          />
-                                        ) : (
-                                          <span style={{ color: '#94a3b8' }}>—</span>
-                                        )}
-                                      </td>
-                                      <td className={styles.tdCap}>
-                                        {hasSubView ? (
-                                          <input
-                                            type="checkbox"
-                                            className={styles.checkbox}
-                                            checked={isGranted(featureKey, `${sub}:View`)}
-                                            disabled={isAdministrator}
-                                            onChange={() => togglePermission(featureKey, `${sub}:View`)}
-                                          />
-                                        ) : (
-                                          <span style={{ color: '#94a3b8' }}>—</span>
-                                        )}
-                                      </td>
-                                      <td className={styles.tdCap}>
-                                        {hasSubEdit ? (
-                                          <input
-                                            type="checkbox"
-                                            className={styles.checkbox}
-                                            checked={isGranted(featureKey, `${sub}:Edit`)}
-                                            disabled={isAdministrator}
-                                            onChange={() => togglePermission(featureKey, `${sub}:Edit`)}
-                                          />
-                                        ) : (
-                                          <span style={{ color: '#94a3b8' }}>—</span>
-                                        )}
-                                      </td>
-                                      <td className={styles.tdCap}>
-                                        {hasSubDelete ? (
-                                          <input
-                                            type="checkbox"
-                                            className={styles.checkbox}
-                                            checked={isGranted(featureKey, `${sub}:Delete`)}
-                                            disabled={isAdministrator}
-                                            onChange={() => togglePermission(featureKey, `${sub}:Delete`)}
-                                          />
-                                        ) : (
-                                          <span style={{ color: '#94a3b8' }}>—</span>
-                                        )}
-                                      </td>
-                                    </tr>
-                                  )
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        )}
                       </div>
-                    )
-                  })}
+
+                      {isExpanded && (
+                        <div className={styles.accordionBody}>
+                          <div className={styles.selectRow}>
+                            <span className={styles.appScopeLabel}>Declared Capabilities</span>
+                            <button
+                              type="button"
+                              className={styles.selectLink}
+                              onClick={() => handleSelectAllAppPerms(feature.key)}
+                            >
+                              Select all
+                            </button>
+                          </div>
+
+                          <table className={styles.matrixTable}>
+                            <thead>
+                              <tr>
+                                <th className={styles.thFeature}>SUB-MODULE / CAPABILITY</th>
+                                {columns.map((col) => (
+                                  <th key={col.key} className={styles.thCap} title={col.displayName}>
+                                    {col.displayName.toUpperCase()}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {rows.map((row) => (
+                                <tr key={row.key}>
+                                  <td className={styles.tdFeature}>
+                                    <span className={styles.featureName}>{row.label}</span>
+                                    <span className={styles.featureKey}>{row.key}</span>
+                                  </td>
+                                  {columns.map((col) => {
+                                    const declared = row.capabilities.some((c) => c.key === col.key)
+                                    return (
+                                      <td key={col.key} className={styles.tdCap}>
+                                        {declared ? (
+                                          <input
+                                            type="checkbox"
+                                            className={styles.checkbox}
+                                            checked={isGranted(row.key, col.key)}
+                                            aria-label={`${col.displayName} on ${row.label}`}
+                                            onChange={() => togglePermission(row.key, col.key)}
+                                          />
+                                        ) : (
+                                          <span
+                                            className={styles.capNotDeclared}
+                                            title="Not declared by this module"
+                                          >
+                                            —
+                                          </span>
+                                        )}
+                                      </td>
+                                    )
+                                  })}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}
+
 
           {/* Tab 4: Assigned Users */}
           {activeTab === 'users' && (
