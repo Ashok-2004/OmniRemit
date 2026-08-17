@@ -13,10 +13,22 @@ export interface LoginPageProps {
   errorMessage?: string | null
 }
 
+/*
+ * These describe how the platform WORKS. They deliberately no longer make service commitments.
+ *
+ * The previous copy promised "99.9% uptime guarantee" and "24/7 dedicated support" — an availability
+ * SLA and a support SLA. Neither is something the software can deliver on its own; both are
+ * contractual undertakings by whoever operates the deployment, and this console is shipped to banks
+ * who will have their own (probably different) numbers in their own agreements. Printing an SLA on the
+ * sign-in page of a product you are handing to a customer creates a claim nobody has agreed to.
+ *
+ * "Bank-grade security" was equally unfalsifiable marketing, so it is now a statement of the actual
+ * mechanism instead. Each line below is something a reader can go and verify in the code.
+ */
 const TRUST_ITEMS = [
-  { icon: Icon.ShieldCheck, title: 'Secure', desc: 'Bank-grade security for your data' },
-  { icon: Icon.Clock, title: 'Reliable', desc: '99.9% uptime guarantee' },
-  { icon: Icon.Chat, title: 'Support', desc: '24/7 dedicated support' },
+  { icon: Icon.ShieldCheck, title: 'Role-based access', desc: 'Every action checked against your role' },
+  { icon: Icon.Clock, title: 'Session protection', desc: 'Idle timeout and automatic sign-out' },
+  { icon: Icon.FileText, title: 'Fully audited', desc: 'Every change recorded and attributable' },
 ]
 
 export function LoginPage({ onSubmit, onGoogleCredential, loading, errorMessage }: LoginPageProps) {
