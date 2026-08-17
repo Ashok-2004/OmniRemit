@@ -117,6 +117,38 @@ public class RefreshTokenService(AuthDbContext db, IOptions<JwtOptions> jwtOptio
         }
     }
 
+    /// <summary>
+    /// Revokes every active session for a user except the one presenting <paramref name="keepRawToken"/>.
+    ///
+    /// Used after a password change. Changing a password has to evict sessions established with the
+    /// OLD password — otherwise a user who changes their password because they believe it was stolen
+    /// leaves the thief logged in indefinitely, since the attacker's refresh token keeps rotating on
+    /// its own. The caller's current session is spared so they are not immediately signed out of the
+    /// tab they just used.
+    ///
+    /// Returns the number of sessions ended, for the audit record.
+    /// </summary>
+    public async Task<int> RevokeAllForUserExceptAsync(Guid userId, string? keepRawToken, CancellationToken ct = default)
+    {
+        var keepHash = keepRawToken is null ? null : Hash(keepRawToken);
+
+        var doomed = await db.RefreshTokens
+            .Where(t => t.UserId == userId && t.RevokedAt == null && (keepHash == null || t.TokenHash != keepHash))
+            .ToListAsync(ct);
+
+        foreach (var token in doomed)
+        {
+            token.RevokedAt = DateTimeOffset.UtcNow;
+        }
+
+        if (doomed.Count > 0)
+        {
+            await db.SaveChangesAsync(ct);
+        }
+
+        return doomed.Count;
+    }
+
     private async Task RevokeAllForUserAsync(Guid userId, CancellationToken ct)
     {
         var active = await db.RefreshTokens

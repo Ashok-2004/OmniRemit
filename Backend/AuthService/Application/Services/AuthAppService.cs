@@ -17,6 +17,13 @@ public class SsoNotConfiguredException() : Exception("Google Sign-In is not conf
 public class SsoDomainNotAllowedException(string domain) : Exception($"The domain '{domain}' is not allowed to sign in via Google.");
 public class SsoAccountNotFoundException() : Exception("No active account is provisioned for this Google identity. Ask an administrator to create one.");
 
+/// <summary>
+/// A self-service password change was refused. Distinct from InvalidCredentialsException because the
+/// caller IS authenticated here — this must surface as a 400 (bad input), not a 401, or the frontend's
+/// refresh-and-retry interceptor treats it as an expired session and signs the user out mid-form.
+/// </summary>
+public class PasswordChangeRejectedException(string message) : Exception(message);
+
 public record AuthResult(string AccessToken, DateTimeOffset ExpiresAt, string RefreshToken, DateTimeOffset RefreshExpiresAt, CurrentUserDto User);
 
 public class AuthAppService(
@@ -26,10 +33,12 @@ public class AuthAppService(
     RefreshTokenService refreshTokenService,
     PermissionClaimsBuilder permissionClaimsBuilder,
     AuditLogAppService auditLog,
-    IOptions<GoogleAuthOptions> googleOptions)
+    IOptions<GoogleAuthOptions> googleOptions,
+    IOptions<PasswordPolicyOptions> passwordPolicyOptions)
 {
     private const string ServiceName = "AuthService";
     private readonly GoogleAuthOptions _google = googleOptions.Value;
+    private readonly PasswordPolicyOptions _passwordPolicy = passwordPolicyOptions.Value;
 
     public async Task<AuthResult> LoginAsync(string email, string password, string? clientIp, string? userAgent, CancellationToken ct = default)
     {
@@ -169,6 +178,91 @@ public class AuthAppService(
             newToken.RawToken,
             newToken.ExpiresAt,
             ToCurrentUserDto(user, permissions));
+    }
+
+    /// <summary>
+    /// Changes the authenticated caller's own password.
+    ///
+    /// Security properties, each deliberate:
+    ///  - The account is identified by <paramref name="userId"/>, taken from the caller's validated
+    ///    token by the controller. There is no user id in the request body, so this cannot be aimed
+    ///    at another account.
+    ///  - The current password is verified first, so a stolen access token alone is not enough to
+    ///    take permanent ownership of an account.
+    ///  - Google-provisioned accounts are refused: they have no local password, and silently
+    ///    creating one would produce a second, weaker way into an SSO-governed account.
+    ///  - Every OTHER session is revoked on success. Without that, a user changing their password
+    ///    because they suspect compromise leaves the attacker signed in indefinitely — the stolen
+    ///    refresh token would keep rotating itself.
+    ///  - MustChangePassword is cleared, which is what makes this endpoint usable to satisfy a
+    ///    forced first-login rotation.
+    /// </summary>
+    public async Task<ChangePasswordResponse> ChangePasswordAsync(
+        Guid userId,
+        string currentPassword,
+        string newPassword,
+        string? currentRawRefreshToken,
+        string? clientIp,
+        string? userAgent,
+        CancellationToken ct = default)
+    {
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
+
+        // The token authenticated, so the row should exist; if it doesn't (deleted mid-session) treat
+        // it as a rejection rather than a 500.
+        if (user is null || user.IsDeleted)
+        {
+            throw new PasswordChangeRejectedException("This account is no longer available.");
+        }
+
+        if (user.AuthProvider != AuthProvider.Local || user.PasswordHash is null)
+        {
+            throw new PasswordChangeRejectedException(
+                "This account signs in with Google, so it has no OmniRemit password to change.");
+        }
+
+        if (!passwordHasher.Verify(user, user.PasswordHash, currentPassword))
+        {
+            // Audited: repeated failures here are a signal that someone is using a hijacked access
+            // token and guessing at the password to make their access permanent.
+            await auditLog.WriteAsync(
+                ServiceName, user.Id, user.Name, "auth.password_change_failed", "User", user.Id.ToString(),
+                "Current password did not match.", clientIp, result: "Failure",
+                authMethod: "Local", userAgent: userAgent, ct: ct);
+
+            throw new PasswordChangeRejectedException("Your current password is incorrect.");
+        }
+
+        var policyProblem = _passwordPolicy.Validate(newPassword);
+        if (policyProblem is not null)
+        {
+            throw new PasswordChangeRejectedException(policyProblem);
+        }
+
+        if (_passwordPolicy.RejectSameAsCurrent && passwordHasher.Verify(user, user.PasswordHash, newPassword))
+        {
+            throw new PasswordChangeRejectedException("The new password must be different from your current one.");
+        }
+
+        user.PasswordHash = passwordHasher.Hash(user, newPassword);
+        user.MustChangePassword = false;
+        user.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        var sessionsEnded = await refreshTokenService.RevokeAllForUserExceptAsync(user.Id, currentRawRefreshToken, ct);
+
+        await auditLog.WriteAsync(
+            ServiceName, user.Id, user.Name, "auth.password_changed", "User", user.Id.ToString(),
+            sessionsEnded > 0
+                ? $"Password changed. {sessionsEnded} other session(s) signed out."
+                : "Password changed.",
+            clientIp, authMethod: "Local", userAgent: userAgent, ct: ct);
+
+        return new ChangePasswordResponse(
+            sessionsEnded > 0
+                ? $"Password updated. {sessionsEnded} other session(s) were signed out."
+                : "Password updated.",
+            sessionsEnded);
     }
 
     public Task LogoutAsync(string rawRefreshToken, CancellationToken ct = default) =>

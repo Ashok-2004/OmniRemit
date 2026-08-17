@@ -1,4 +1,6 @@
+using System.Security.Claims;
 using System.Security.Cryptography;
+using System.Threading.RateLimiting;
 using AuthService.Application.Services;
 using AuthService.Infrastructure;
 using AuthService.Infrastructure.Security;
@@ -6,6 +8,8 @@ using AuthService.Infrastructure.Seed;
 using AuthService.Options;
 using DotNetEnv;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
@@ -116,6 +120,70 @@ builder.Services
 
 builder.Services.AddAuthorization();
 
+// Rate limiting. Previously absent entirely, which left /api/auth/login accepting unlimited attempts
+// per second from one address — online brute force against any weak password.
+builder.Services.Configure<RateLimitOptions>(builder.Configuration.GetSection(RateLimitOptions.SectionName));
+var rateLimits = builder.Configuration.GetSection(RateLimitOptions.SectionName).Get<RateLimitOptions>()
+                 ?? new RateLimitOptions();
+
+builder.Services.AddRateLimiter(options =>
+{
+    // 429 rather than the default 503: the client is being throttled, it is not a server outage, and
+    // the frontend must not mistake this for an infrastructure failure.
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.OnRejected = async (context, ct) =>
+    {
+        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+        {
+            context.HttpContext.Response.Headers.RetryAfter = ((int)retryAfter.TotalSeconds).ToString();
+        }
+
+        await context.HttpContext.Response.WriteAsJsonAsync(
+            new ProblemDetails
+            {
+                Title = "Too many attempts. Please wait a moment and try again.",
+                Status = StatusCodes.Status429TooManyRequests,
+            }, ct);
+    };
+
+    // Partitioned by IP: there is no authenticated identity on a login request to key off.
+    options.AddPolicy(RateLimitPolicies.Authentication, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: rateLimits.Enabled
+                ? httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"
+                // A single shared partition with an enormous limit is how "disabled" is expressed;
+                // returning no limiter at all is not an option the API allows here.
+                : "disabled",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = rateLimits.Enabled ? rateLimits.AuthPermitLimit : int.MaxValue,
+                Window = TimeSpan.FromSeconds(Math.Max(1, rateLimits.AuthWindowSeconds)),
+                QueueLimit = rateLimits.AuthQueueLimit,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+            }));
+
+    // Partitioned by user id, NOT by IP. A bank branch sits behind one NAT address, so an IP
+    // partition would let one member of staff changing their password lock out the whole office.
+    options.AddPolicy(RateLimitPolicies.Sensitive, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: rateLimits.Enabled
+                ? httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier)
+                  ?? httpContext.User.FindFirstValue("sub")
+                  ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                  ?? "unknown"
+                : "disabled",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = rateLimits.Enabled ? rateLimits.SensitivePermitLimit : int.MaxValue,
+                Window = TimeSpan.FromSeconds(Math.Max(1, rateLimits.SensitiveWindowSeconds)),
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+            }));
+});
+
+builder.Services.Configure<PasswordPolicyOptions>(builder.Configuration.GetSection(PasswordPolicyOptions.SectionName));
+
 // Ensures ANY unhandled exception (a DB connection blip, a bug) becomes a safe, consistent
 // ProblemDetails JSON response instead of a bare/empty 500 the frontend can't parse — AppExceptionFilter
 // above only covers the small set of expected domain exceptions; this is the catch-all beneath it.
@@ -165,6 +233,10 @@ app.UseCors("Frontend");
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
+
+// AFTER authentication, so the Sensitive policy can partition by the authenticated user id. Placed
+// before MapControllers so a throttled request is rejected without reaching a handler.
+app.UseRateLimiter();
 app.MapControllers();
 
 // Real check — reports Unhealthy (503) when the database is unreachable, instead of the previous

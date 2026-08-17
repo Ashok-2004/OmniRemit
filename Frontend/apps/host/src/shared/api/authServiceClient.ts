@@ -34,6 +34,18 @@ export interface SsoConfigDto {
 }
 
 /** Raw calls against AuthService's /api/auth/* surface. No token/refresh orchestration here — see features/auth/store/authStore.ts for that. */
+/** Mirrors AuthService's PasswordPolicyDto. `description` is generated server-side from the same
+ *  options the server validates against, so it can never disagree with what is enforced. */
+export interface PasswordPolicyDto {
+  minimumLength: number
+  maximumLength: number
+  requireUppercase: boolean
+  requireLowercase: boolean
+  requireDigit: boolean
+  requireNonAlphanumeric: boolean
+  description: string
+}
+
 export const authServiceClient = {
   login: (email: string, password: string) =>
     apiFetch<LoginResponse>(`${base}/api/auth/login`, { method: 'POST', body: { email, password } }),
@@ -50,5 +62,17 @@ export const authServiceClient = {
   me: (accessToken: string) => apiFetch<CurrentUserDto>(`${base}/api/auth/me`, { accessToken }),
 
   changePassword: (accessToken: string, body: { currentPassword: string; newPassword: string }) =>
-    apiFetch<{ message: string }>(`${base}/api/auth/change-password`, { method: 'POST', accessToken, body }),
+    apiFetch<{ message: string; sessionsEnded: number }>(`${base}/api/auth/change-password`, {
+      method: 'POST',
+      accessToken,
+      body,
+    }),
+
+  /**
+   * The password rules this deployment enforces. Fetched rather than hardcoded: the form used to
+   * assert "at least 6 characters" while the server required twelve, so it accepted input the server
+   * then rejected.
+   */
+  passwordPolicy: (accessToken: string) =>
+    apiFetch<PasswordPolicyDto>(`${base}/api/auth/password-policy`, { accessToken }),
 }

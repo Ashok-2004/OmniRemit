@@ -4,6 +4,7 @@ using AuthService.Application.DTOs;
 using AuthService.Infrastructure.Security;
 using AuthService.Options;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 
@@ -14,11 +15,14 @@ namespace AuthService.Controllers;
 public class AuthController(
     AuthAppService authAppService,
     IOptions<AuthCookieOptions> cookieOptions,
+    IOptions<PasswordPolicyOptions> passwordPolicyOptions,
     IWebHostEnvironment env) : ControllerBase
 {
     private readonly AuthCookieOptions _cookieOptions = cookieOptions.Value;
+    private readonly PasswordPolicyOptions _passwordPolicy = passwordPolicyOptions.Value;
 
     [HttpPost("login")]
+    [EnableRateLimiting(RateLimitPolicies.Authentication)]
     [AllowAnonymous]
     public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest request, CancellationToken ct)
     {
@@ -39,6 +43,7 @@ public class AuthController(
     }
 
     [HttpPost("google")]
+    [EnableRateLimiting(RateLimitPolicies.Authentication)]
     [AllowAnonymous]
     public async Task<ActionResult<LoginResponse>> GoogleLogin([FromBody] GoogleLoginRequest request, CancellationToken ct)
     {
@@ -76,6 +81,7 @@ public class AuthController(
     public ActionResult<SsoConfigDto> SsoConfig() => Ok(authAppService.GetSsoConfig());
 
     [HttpPost("refresh")]
+    [EnableRateLimiting(RateLimitPolicies.Authentication)]
     [AllowAnonymous]
     public async Task<ActionResult<RefreshResponse>> Refresh(CancellationToken ct)
     {
@@ -115,6 +121,66 @@ public class AuthController(
 
         ClearRefreshCookie();
         return NoContent();
+    }
+
+    /// <summary>
+    /// The password rules actually enforced by this deployment, so the UI can display them instead of
+    /// hardcoding its own copy. The frontend previously told users "at least 6 characters" while the
+    /// server required twelve — the form accepted input the server then rejected.
+    ///
+    /// Non-secret (it describes a validation rule, not a credential) but authenticated, since only
+    /// signed-in users have any use for it.
+    /// </summary>
+    [HttpGet("password-policy")]
+    [Authorize]
+    public ActionResult<PasswordPolicyDto> PasswordPolicy() =>
+        Ok(new PasswordPolicyDto(
+            _passwordPolicy.MinimumLength,
+            _passwordPolicy.MaximumLength,
+            _passwordPolicy.RequireUppercase,
+            _passwordPolicy.RequireLowercase,
+            _passwordPolicy.RequireDigit,
+            _passwordPolicy.RequireNonAlphanumeric,
+            _passwordPolicy.Describe()));
+
+    /// <summary>
+    /// Changes the caller's OWN password. The account is taken from the validated token, never from
+    /// the body — there is deliberately no userId parameter here. An administrator resetting someone
+    /// else's password is a separate, permission-gated operation on UsersController.
+    /// </summary>
+    [HttpPost("change-password")]
+    [Authorize]
+    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
+    public async Task<ActionResult<ChangePasswordResponse>> ChangePassword(
+        [FromBody] ChangePasswordRequest request, CancellationToken ct)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+        if (!Guid.TryParse(userId, out var id))
+        {
+            return Unauthorized();
+        }
+
+        try
+        {
+            // The caller's own refresh token is passed so their current session survives while every
+            // other session for the account is revoked.
+            var result = await authAppService.ChangePasswordAsync(
+                id,
+                request.CurrentPassword,
+                request.NewPassword,
+                Request.Cookies[_cookieOptions.RefreshCookieName],
+                HttpContext.Connection.RemoteIpAddress?.ToString(),
+                Request.Headers.UserAgent.ToString(),
+                ct);
+
+            return Ok(result);
+        }
+        catch (PasswordChangeRejectedException ex)
+        {
+            // 400, not 401. A 401 would trip the frontend's refresh-and-retry interceptor, which
+            // would then sign the user out for mistyping their current password.
+            return BadRequest(new ProblemDetails { Title = ex.Message, Status = 400 });
+        }
     }
 
     [HttpGet("me")]
