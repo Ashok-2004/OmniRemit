@@ -3,6 +3,9 @@ import { Link } from 'react-router-dom'
 import { useClickOutside } from '../../shared/hooks/useClickOutside'
 import { useMenuKeyboardNav } from '../../shared/hooks/useMenuKeyboardNav'
 import { useSettingsDrawerStore } from '../../shared/stores/settingsDrawerStore'
+import { useAuthStore } from '../../features/auth/store/authStore'
+import { GlobalSearch } from '../../features/search/components/GlobalSearch/GlobalSearch'
+import { SecurityAlertsMenu } from '../../features/notifications/components/SecurityAlertsMenu/SecurityAlertsMenu'
 import { Icon } from '../../shared/components/Icon/Icon'
 import styles from './Topbar.module.css'
 
@@ -19,7 +22,10 @@ export interface TopbarProps {
 }
 
 function getUserInitials(name?: string | null): string {
-  if (!name) return 'SA'
+  // '?' rather than 'SA'. Falling back to "Super Admin" initials paints an identity that may not be
+  // the viewer's own — in a banking console, showing someone the wrong identity is worse than
+  // showing none.
+  if (!name) return '?'
   const parts = name.trim().split(/\s+/)
   if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase()
   return name.slice(0, 2).toUpperCase()
@@ -31,6 +37,8 @@ export function Topbar({ userName, settingsAccess, onLogout }: TopbarProps) {
   const triggerRef   = useRef<HTMLButtonElement>(null)
 
   const openSettings = useSettingsDrawerStore((s) => s.open)
+  // The signed-in user's real role, for the menu header. See the comment on that header below.
+  const user = useAuthStore((s) => s.user)
 
   useClickOutside([menuRef], () => setMenuOpen(false), menuOpen)
   const handleKeyDown = useMenuKeyboardNav(menuRef, () => setMenuOpen(false), triggerRef)
@@ -38,21 +46,17 @@ export function Topbar({ userName, settingsAccess, onLogout }: TopbarProps) {
   const canAccessSettings = Boolean(
     settingsAccess?.users || settingsAccess?.roles || settingsAccess?.applications
   )
-  const displayName = userName || 'Super Admin'
+  const displayName = userName || user?.name || '—'
 
   return (
     <header className={styles.topbar}>
 
-      {/* Search */}
-      <div className={styles.search}>
-        <Icon.Search width={15} height={15} className={styles.searchIcon} />
-        <input
-          type="search"
-          className={styles.searchInput}
-          placeholder="Search..."
-          aria-label="Search"
-        />
-      </div>
+      {/*
+        Real search. This was a bare <input> with no handler — typing in it did nothing at all.
+        GlobalSearch queries GET /api/search, which filters results per entity type against the
+        caller's own permissions, so a user never sees a record they could not open.
+      */}
+      <GlobalSearch />
 
       {/* Right actions */}
       <div className={styles.actions}>
@@ -70,16 +74,13 @@ export function Topbar({ userName, settingsAccess, onLogout }: TopbarProps) {
           </button>
         )}
 
-        {/* Notifications */}
-        <button
-          type="button"
-          className={styles.iconButton}
-          aria-label="Notifications"
-          title="Notifications"
-        >
-          <Icon.Bell width={17} height={17} />
-          <span className={styles.notificationDot} />
-        </button>
+        {/*
+          Real notifications. The bell was a dead button with a red dot that was ALWAYS lit — it
+          signalled "you have alerts" permanently, whether or not anything had happened, which trains
+          an operator to ignore it. SecurityAlertsMenu reads genuine failed sign-ins from the audit log
+          and shows the dot only when there are recent ones.
+        */}
+        <SecurityAlertsMenu />
 
         <div className={styles.actionsDivider} aria-hidden="true" />
 
@@ -110,7 +111,15 @@ export function Topbar({ userName, settingsAccess, onLogout }: TopbarProps) {
                 </span>
                 <div className={styles.menuUserHeaderInfo}>
                   <span className={styles.menuUserHeaderName}>{displayName}</span>
-                  <span className={styles.menuUserHeaderRole}>Platform Administrator</span>
+                  {/*
+                    The user's ACTUAL role. This was the literal string "Platform Administrator" for
+                    everyone — a View-only teller opened this menu and was told they were a platform
+                    administrator. Misreporting someone's own privilege level in a banking console is
+                    worse than showing nothing, so an unassigned role now says so plainly.
+                  */}
+                  <span className={styles.menuUserHeaderRole}>
+                    {user?.roleName ?? 'No role assigned'}
+                  </span>
                 </div>
               </div>
               <div className={styles.menuDivider} />

@@ -1,0 +1,54 @@
+import { env } from '../../../config/env'
+import { apiFetch } from '../../../shared/api/httpClient'
+import { moduleRegistryClient, type HealthEntryDto } from '../../../shared/api/moduleRegistryClient'
+
+const base = env.authServiceUrl
+
+/**
+ * Period-over-period change. Absent (null) when the previous period had no baseline — growth from
+ * zero has no defined percentage, so the card renders without a trend rather than inventing one.
+ */
+export interface TrendDto {
+  percent: number
+  caption: string
+}
+
+export interface RoleDistributionDto {
+  roleName: string
+  userCount: number
+}
+
+/** Audit-event volume per service in the last 30 days. Real recorded activity, not an estimate. */
+export interface ServiceActivityDto {
+  serviceName: string
+  eventCount: number
+}
+
+/**
+ * Aggregate counts for the dashboard.
+ *
+ * A null count means "you don't have permission to see this" — deliberately distinct from 0, which
+ * means you can see it and it is genuinely zero. The dashboard omits the card entirely for a null
+ * rather than rendering a fabricated zero.
+ */
+export interface DashboardStatsDto {
+  users: number | null
+  activeUsers: number | null
+  roles: number | null
+  auditEvents: number | null
+  usersTrend: TrendDto | null
+  rolesTrend: TrendDto | null
+  auditEventsTrend: TrendDto | null
+  roleDistribution: RoleDistributionDto[]
+  serviceActivity: ServiceActivityDto[]
+}
+
+export type { HealthEntryDto }
+
+export const dashboardApi = {
+  /** One round trip. Replaces three list calls that fetched a throwaway row each just to read `total`. */
+  stats: (accessToken: string) => apiFetch<DashboardStatsDto>(`${base}/api/dashboard/stats`, { accessToken }),
+
+  /** Real reachability per registered remote app, from ModuleRegistry's background probe. */
+  health: (accessToken: string) => moduleRegistryClient.health(accessToken),
+}
