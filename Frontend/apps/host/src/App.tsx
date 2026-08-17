@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react'
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, type Location } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useParams, type Location } from 'react-router-dom'
 import { AppShell } from './layout/AppShell/AppShell'
 import { RequireAuth } from './features/auth/components/RequireAuth'
 import { RequireCapability } from './features/auth/components/RequireCapability'
@@ -8,6 +8,7 @@ import { useIdleTimeout } from './features/auth/hooks/useIdleTimeout'
 import { IdleWarningModal } from './features/auth/components/IdleWarningModal'
 import { useAuthStore } from './features/auth/store/authStore'
 import { useModuleRegistryStore } from './shared/stores/moduleRegistryStore'
+import { useSettingsDrawerStore, type SettingsTab } from './shared/stores/settingsDrawerStore'
 import { RouteFallback } from './shared/components/RouteFallback/RouteFallback'
 
 /**
@@ -26,14 +27,7 @@ const LoginPage = lazy(() => import('./pages/LoginPage/LoginPage').then((m) => (
 const MaintenancePage = lazy(() => import('./pages/MaintenancePage/MaintenancePage').then((m) => ({ default: m.MaintenancePage })))
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage/NotFoundPage').then((m) => ({ default: m.NotFoundPage })))
 const RemoteAppPage = lazy(() => import('./pages/RemoteAppPage/RemoteAppPage').then((m) => ({ default: m.RemoteAppPage })))
-const UsersListPage = lazy(() => import('./features/settings-users/pages/UsersListPage').then((m) => ({ default: m.UsersListPage })))
-const UserFormPage = lazy(() => import('./features/settings-users/pages/UserFormPage').then((m) => ({ default: m.UserFormPage })))
-const RolesListPage = lazy(() => import('./features/settings-roles/pages/RolesListPage').then((m) => ({ default: m.RolesListPage })))
-const RoleFormPage = lazy(() => import('./features/settings-roles/pages/RoleFormPage').then((m) => ({ default: m.RoleFormPage })))
-const RemoteAppsListPage = lazy(() => import('./features/settings-applications/pages/RemoteAppsListPage').then((m) => ({ default: m.RemoteAppsListPage })))
-const RemoteAppFormPage = lazy(() => import('./features/settings-applications/pages/RemoteAppFormPage').then((m) => ({ default: m.RemoteAppFormPage })))
 const AuditLogsPage = lazy(() => import('./features/system-audit-logs/pages/AuditLogsPage').then((m) => ({ default: m.AuditLogsPage })))
-const SettingsOverviewPage = lazy(() => import('./features/settings-overview/pages/SettingsOverviewPage').then((m) => ({ default: m.SettingsOverviewPage })))
 const ProfilePage = lazy(() => import('./features/profile/pages/ProfilePage').then((m) => ({ default: m.ProfilePage })))
 
 const FEATURE_KEYS = {
@@ -42,6 +36,43 @@ const FEATURE_KEYS = {
   applications: 'host.settings.applications',
   auditLogs: 'host.system.audit-logs',
 } as const
+
+/**
+ * Opens the settings drawer for a `/settings/...` URL, then returns to the dashboard.
+ *
+ * Users, Roles and Applications used to exist twice over: once as routed full pages and once as tabs
+ * inside the gear drawer. Both were live, so the same CRUD was implemented and maintained twice and
+ * the two were free to disagree. The drawer is now the only settings UI.
+ *
+ * These routes are kept rather than deleted so existing bookmarks and links keep working: the URL
+ * resolves to the same destination it always did, just rendered as a drawer layer. `replace` is used
+ * so the redirect doesn't leave a dead entry that Back would bounce off.
+ */
+function SettingsDeepLink({ tab }: { tab: SettingsTab }) {
+  const { id } = useParams<{ id: string }>()
+  const openTab = useSettingsDrawerStore((s) => s.open)
+  const pushLayer = useSettingsDrawerStore((s) => s.pushLayer)
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  useEffect(() => {
+    openTab(tab)
+
+    // A trailing /new or /:id opens the corresponding form layer straight away, matching what the
+    // old routed form pages did.
+    const isNew = location.pathname.endsWith('/new')
+    if (isNew || id) {
+      const entityId = isNew ? undefined : id
+      if (tab === 'users') pushLayer({ type: 'user-form', userId: entityId })
+      else if (tab === 'roles') pushLayer({ type: 'role-form', roleId: entityId })
+      else if (tab === 'applications') pushLayer({ type: 'app-form', appId: entityId })
+    }
+
+    navigate('/', { replace: true })
+  }, [tab, id, location.pathname, openTab, pushLayer, navigate])
+
+  return <RouteFallback />
+}
 
 function LoginRoute() {
   const status = useAuthStore((s) => s.status)
@@ -176,94 +207,49 @@ function AppRoutes() {
         />
 
         {/*
-          SetupPanel removed. It rendered a THIRD navigation layer — a nested 220px "Setup" nav
-          inside the content area, listing the same Users/Roles/Applications links the topbar gear
-          menu already showed, on top of the main sidebar. Those destinations are now first-class
-          sidebar entries, so the settings routes need no layout wrapper of their own.
+          Settings has no pages of its own — it is the gear drawer, rendered globally by AppShell.
+          These routes exist only so old /settings/* links resolve: each opens the drawer on the
+          right tab (and the right form layer) and then hands the URL back to the dashboard.
+
+          The capability guards are kept here so an unauthorised deep link is refused at the route,
+          exactly as before, rather than opening a drawer that then renders an error inside itself.
         */}
         <Route path="settings">
-          <Route index element={<SettingsOverviewPage />} />
-          <Route
-            path="users"
-            element={
-              <RequireCapability featureKey={FEATURE_KEYS.users}>
-                <UsersListPage />
-              </RequireCapability>
-            }
-          >
-            <Route
-              path="new"
-              element={
-                <RequireCapability featureKey={FEATURE_KEYS.users} capability="Create">
-                  <UserFormPage />
-                </RequireCapability>
-              }
-            />
-            <Route
-              path=":id"
-              element={
-                <RequireCapability featureKey={FEATURE_KEYS.users} capability="Edit">
-                  <UserFormPage />
-                </RequireCapability>
-              }
-            />
-          </Route>
-          {/*
-            The form routes are NESTED inside the list route and rendered through the list page's
-            <Outlet />, so /settings/roles/:id shows the drawer OVER the list rather than on a blank
-            page. The URLs are unchanged, so deep links still work and Back closes the drawer by
-            returning to the list route.
-          */}
-          <Route
-            path="roles"
-            element={
-              <RequireCapability featureKey={FEATURE_KEYS.roles}>
-                <RolesListPage />
-              </RequireCapability>
-            }
-          >
-            <Route
-              path="new"
-              element={
-                <RequireCapability featureKey={FEATURE_KEYS.roles} capability="Create">
-                  <RoleFormPage />
-                </RequireCapability>
-              }
-            />
-            <Route
-              path=":id"
-              element={
-                <RequireCapability featureKey={FEATURE_KEYS.roles} capability="Edit">
-                  <RoleFormPage />
-                </RequireCapability>
-              }
-            />
-          </Route>
-          <Route
-            path="applications"
-            element={
-              <RequireCapability featureKey={FEATURE_KEYS.applications}>
-                <RemoteAppsListPage />
-              </RequireCapability>
-            }
-          >
-            <Route
-              path="new"
-              element={
-                <RequireCapability featureKey={FEATURE_KEYS.applications} capability="Register">
-                  <RemoteAppFormPage />
-                </RequireCapability>
-              }
-            />
-            <Route
-              path=":id"
-              element={
-                <RequireCapability featureKey={FEATURE_KEYS.applications} capability="Edit">
-                  <RemoteAppFormPage />
-                </RequireCapability>
-              }
-            />
-          </Route>
+          <Route index element={<SettingsDeepLink tab="overview" />} />
+          {(
+            [
+              ['users', FEATURE_KEYS.users, 'Create'],
+              ['roles', FEATURE_KEYS.roles, 'Create'],
+              ['applications', FEATURE_KEYS.applications, 'Register'],
+            ] as const
+          ).map(([tab, featureKey, createCapability]) => (
+            <Route key={tab} path={tab}>
+              <Route
+                index
+                element={
+                  <RequireCapability featureKey={featureKey}>
+                    <SettingsDeepLink tab={tab} />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="new"
+                element={
+                  <RequireCapability featureKey={featureKey} capability={createCapability}>
+                    <SettingsDeepLink tab={tab} />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path=":id"
+                element={
+                  <RequireCapability featureKey={featureKey} capability="Edit">
+                    <SettingsDeepLink tab={tab} />
+                  </RequireCapability>
+                }
+              />
+            </Route>
+          ))}
         </Route>
       </Route>
 

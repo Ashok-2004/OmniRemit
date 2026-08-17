@@ -2,15 +2,25 @@ import { useEffect, useState } from 'react'
 import { useAuthStore } from '../../features/auth/store/authStore'
 import { rolesApi, type RoleListItemDto } from '../../features/settings-roles/api/rolesApi'
 import { useSettingsDrawerStore } from '../../shared/stores/settingsDrawerStore'
+import { useDebouncedValue } from '../../shared/hooks/useDebouncedValue'
 import { Icon } from '../../shared/components/Icon/Icon'
 import { SkeletonBlock } from '../../shared/components/Skeleton'
+import { Pagination } from '../../shared/components/Pagination/Pagination'
+import { Modal } from '../../shared/components/Modal/Modal'
+import { Button } from '../../shared/components/Button/Button'
+import { ApiError } from '../../shared/api/httpClient'
 import styles from './SettingsRolesTab.module.css'
+
+const PAGE_SIZE = 10
 
 export function SettingsRolesTab() {
   const accessToken = useAuthStore((s) => s.accessToken)
   const isAdministrator = Boolean(useAuthStore((s) => s.user)?.isAdministrator)
   const hasCapability = useAuthStore((s) => s.hasCapability)
   const pushLayer = useSettingsDrawerStore((s) => s.pushLayer)
+  // Bumped by every form layer that saves, so closing an editor refreshes this list.
+  const mutationCount = useSettingsDrawerStore((s) => s.mutationCount)
+  const notifyMutation = useSettingsDrawerStore((s) => s.notifyMutation)
 
   const canCreate = isAdministrator || hasCapability('host.settings.roles', 'Create')
   const canEdit = isAdministrator || hasCapability('host.settings.roles', 'Edit')
@@ -19,21 +29,39 @@ export function SettingsRolesTab() {
   const [roles, setRoles] = useState<RoleListItemDto[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [pendingDelete, setPendingDelete] = useState<RoleListItemDto | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
+  // Every keystroke previously fired its own request. On a large directory that is a request storm
+  // against the database for results the operator never sees.
+  const debouncedSearch = useDebouncedValue(search, 300)
 
   useEffect(() => {
     if (!accessToken) return
     let cancelled = false
 
     async function load() {
+      setLoading(true)
       try {
-        const res = await rolesApi.list(accessToken!, { search: search || undefined })
-        if (!cancelled) {
-          setRoles(res.items)
-          setTotal(res.total)
-        }
+        const res = await rolesApi.list(accessToken!, {
+          page,
+          pageSize: PAGE_SIZE,
+          search: debouncedSearch || undefined,
+        })
+        if (cancelled) return
+        setRoles(res.items)
+        setTotal(res.total)
+        setError(null)
       } catch (err) {
-        console.error('Failed to load roles:', err)
+        if (cancelled) return
+        // Previously only console.error'd, so a failed load was indistinguishable from "no roles
+        // exist" — an operator would conclude the roles had been deleted.
+        setError(err instanceof ApiError ? err.message : 'Could not load roles.')
+        setRoles([])
+        setTotal(0)
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -43,25 +71,32 @@ export function SettingsRolesTab() {
     return () => {
       cancelled = true
     }
-  }, [accessToken, search])
+  }, [accessToken, debouncedSearch, page, mutationCount])
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!window.confirm(`Are you sure you want to delete role "${name}"?`)) return
-    if (!accessToken) return
+  // A new search term invalidates the current page number.
+  useEffect(() => {
+    setPage(1)
+  }, [debouncedSearch])
+
+  async function confirmDelete() {
+    if (!pendingDelete || !accessToken) return
+    setDeleting(true)
     try {
-      await rolesApi.remove(accessToken, id)
-      const res = await rolesApi.list(accessToken, { search: search || undefined })
-      setRoles(res.items)
-      setTotal(res.total)
+      await rolesApi.remove(accessToken, pendingDelete.id)
+      setPendingDelete(null)
+      // If the last row on the final page just went, step back rather than showing an empty page.
+      if (roles.length === 1 && page > 1) setPage((p) => p - 1)
+      else notifyMutation()
     } catch (err) {
-      console.error('Failed to delete role:', err)
-      window.alert('Failed to delete role.')
+      setError(err instanceof ApiError ? err.message : 'Could not delete this role.')
+      setPendingDelete(null)
+    } finally {
+      setDeleting(false)
     }
   }
 
   return (
     <div className={styles.container}>
-      {/* Header */}
       <div className={styles.header}>
         <div>
           <h3 className={styles.title}>Roles</h3>
@@ -79,7 +114,6 @@ export function SettingsRolesTab() {
         )}
       </div>
 
-      {/* Search Input */}
       <div className={styles.searchWrap}>
         <input
           type="text"
@@ -91,7 +125,12 @@ export function SettingsRolesTab() {
         <Icon.Search width={16} height={16} className={styles.searchIcon} />
       </div>
 
-      {/* Roles List */}
+      {error && (
+        <div className={styles.errorBanner} role="alert">
+          {error}
+        </div>
+      )}
+
       <div className={styles.rolesList}>
         {loading ? (
           Array.from({ length: 3 }).map((_, i) => (
@@ -109,15 +148,12 @@ export function SettingsRolesTab() {
               <div className={styles.roleInfo}>
                 <div className={styles.roleNameRow}>
                   <span className={styles.roleName}>{role.name}</span>
-                  {role.isAdministrator && (
-                    <span className={styles.adminBadge}>Administrator</span>
-                  )}
-                  {role.isSystemRole && (
-                    <span className={styles.systemBadge}>System</span>
-                  )}
+                  {role.isAdministrator && <span className={styles.adminBadge}>Administrator</span>}
+                  {role.isSystemRole && <span className={styles.systemBadge}>System</span>}
                 </div>
                 <span className={styles.roleDesc}>
-                  {role.description || (role.isAdministrator ? 'Full platform administrator access' : 'Custom defined role')}
+                  {role.description ||
+                    (role.isAdministrator ? 'Full platform administrator access' : 'Custom defined role')}
                 </span>
               </div>
 
@@ -136,7 +172,7 @@ export function SettingsRolesTab() {
                   <button
                     type="button"
                     className={styles.deleteBtn}
-                    onClick={() => handleDelete(role.id, role.name)}
+                    onClick={() => setPendingDelete(role)}
                     title="Delete Role"
                   >
                     <Icon.Trash width={16} height={16} />
@@ -147,26 +183,39 @@ export function SettingsRolesTab() {
           ))
         ) : (
           <div className={styles.emptyState}>
-            <p>No roles found.</p>
+            <p>{search ? 'No roles match this search.' : 'No roles found.'}</p>
           </div>
         )}
       </div>
 
-      {/* Footer */}
-      <div className={styles.footer}>
-        <span className={styles.footerText}>
-          Showing 1 to {roles.length} of {total} roles
-        </span>
-        <div className={styles.pagination}>
-          <button type="button" className={styles.pageBtn} disabled>
-            &lt;
-          </button>
-          <span className={styles.pageActive}>1</span>
-          <button type="button" className={styles.pageBtn} disabled>
-            &gt;
-          </button>
-        </div>
-      </div>
+      {/*
+        Real pagination. The footer previously rendered a permanently disabled prev/next either side
+        of a literal "1", so with more roles than one page the remainder was simply unreachable —
+        the server defaults to 25 per page and there was no way to ask for page 2.
+      */}
+      {total > 0 && (
+        <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} itemLabel="role" />
+      )}
+
+      {/* window.confirm replaced: it can't be styled, isn't keyboard-trapped with the drawer, and in
+          some browsers is suppressed entirely, which would have made deletion silently do nothing. */}
+      <Modal
+        open={Boolean(pendingDelete)}
+        title={`Delete ${pendingDelete?.name}?`}
+        onClose={() => setPendingDelete(null)}
+        actions={
+          <>
+            <Button variant="secondary" onClick={() => setPendingDelete(null)}>
+              Cancel
+            </Button>
+            <Button variant="danger" loading={deleting} onClick={confirmDelete}>
+              Delete
+            </Button>
+          </>
+        }
+      >
+        Any user currently holding this role loses the permissions it grants. This cannot be undone.
+      </Modal>
     </div>
   )
 }

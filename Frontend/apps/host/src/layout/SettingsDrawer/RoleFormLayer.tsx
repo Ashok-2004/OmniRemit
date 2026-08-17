@@ -23,6 +23,7 @@ export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
   const ensureFreshAccessToken = useAuthStore((s) => s.ensureFreshAccessToken)
   const refreshSession = useAuthStore((s) => s.refreshSession)
   const popLayer = useSettingsDrawerStore((s) => s.popLayer)
+  const notifyMutation = useSettingsDrawerStore((s) => s.notifyMutation)
 
   const [activeTab, setActiveTab] = useState<TabType>((initialTab as TabType) || 'basic')
   const [loading, setLoading] = useState(true)
@@ -264,6 +265,9 @@ export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
       }
 
       void refreshSession()
+      // Tells the roles list underneath to refetch. Without this the drawer closed onto stale rows
+      // and the only way to see the change you just saved was a full page reload.
+      notifyMutation()
       popLayer()
     } catch (err: any) {
       setError(err?.message || 'Could not save role.')

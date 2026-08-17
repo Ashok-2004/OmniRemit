@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useSettingsDrawerStore } from '../../shared/stores/settingsDrawerStore'
 import { Icon } from '../../shared/components/Icon/Icon'
+import { SettingsOverviewTab } from './SettingsOverviewTab'
 import { SettingsUsersTab } from './SettingsUsersTab'
 import { SettingsRolesTab } from './SettingsRolesTab'
 import { SettingsApplicationsTab } from './SettingsApplicationsTab'
@@ -86,6 +87,14 @@ export function SettingsDrawer() {
             <div className={styles.tabsNav}>
               <button
                 type="button"
+                className={`${styles.tabBtn} ${activeTab === 'overview' ? styles.tabBtnActive : ''}`}
+                onClick={() => setActiveTab('overview')}
+              >
+                <Icon.Home width={16} height={16} />
+                <span>Overview</span>
+              </button>
+              <button
+                type="button"
                 className={`${styles.tabBtn} ${activeTab === 'users' ? styles.tabBtnActive : ''}`}
                 onClick={() => setActiveTab('users')}
               >
@@ -112,6 +121,7 @@ export function SettingsDrawer() {
 
             {/* Tab Body */}
             <div className={styles.tabBody}>
+              {activeTab === 'overview' && <SettingsOverviewTab />}
               {activeTab === 'users' && <SettingsUsersTab />}
               {activeTab === 'roles' && <SettingsRolesTab />}
               {activeTab === 'applications' && <SettingsApplicationsTab />}

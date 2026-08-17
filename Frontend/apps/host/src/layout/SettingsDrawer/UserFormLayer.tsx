@@ -25,7 +25,9 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
   const isEdit = Boolean(userId)
   const accessToken = useAuthStore((s) => s.accessToken)
   const ensureFreshAccessToken = useAuthStore((s) => s.ensureFreshAccessToken)
+  const refreshSession = useAuthStore((s) => s.refreshSession)
   const popLayer = useSettingsDrawerStore((s) => s.popLayer)
+  const notifyMutation = useSettingsDrawerStore((s) => s.notifyMutation)
 
   const [currentStep, setCurrentStep] = useState<Step>('basic')
   const [loading, setLoading] = useState(true)
@@ -362,6 +364,11 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
           roleId: roleId || null,
         })
         await usersApi.replaceOverrides(token, userId, computedOverrides)
+        // The acting admin may have just changed their OWN role or permissions, so the session has
+        // to be re-read or the UI keeps gating on the permissions they had a moment ago.
+        void refreshSession()
+        // Tells the users list underneath to refetch, instead of closing onto stale rows.
+        notifyMutation()
         popLayer()
       } else {
         const res = await usersApi.create(token, {
@@ -376,6 +383,9 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
           await usersApi.replaceOverrides(token, res.user.id, computedOverrides)
         }
 
+        // Notified here rather than on close: the layer deliberately stays open to show the one-time
+        // temporary password, but the list behind it is already out of date.
+        notifyMutation()
         setCreatedResult(res)
       }
     } catch (err: any) {
