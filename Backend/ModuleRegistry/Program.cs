@@ -94,6 +94,14 @@ builder.Services
             ValidAudience = jwtAudience,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
+
+            // Pin the signature algorithm explicitly. The RsaSecurityKey above already makes an HMAC
+
+            // confusion attack fail, but naming the accepted algorithm is the belt-and-braces form and
+
+            // is what an auditor looks for: it makes "alg" non-negotiable rather than key-type-dependent.
+
+            ValidAlgorithms = [SecurityAlgorithms.RsaSha256],
             IssuerSigningKey = new RsaSecurityKey(validationRsa),
             ClockSkew = TimeSpan.FromSeconds(30),
         };
