@@ -838,3 +838,35 @@
 .version {
   color: #94a3b8;
 }
+
+/* A negative period-over-period change. The dashboard previously had only a green up-arrow, so a
+   decline had no way to render truthfully. */
+.trendRed {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--omni-color-danger-600, #dc2626);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Metric load failure. Without this the page rendered zeroes, which reads as "the platform has no
+   users" rather than "the request failed". */
+.errorBanner {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--omni-color-danger-200, #fecaca);
+  border-radius: var(--omni-radius-lg, 12px);
+  background: var(--omni-color-danger-50, #fef2f2);
+  color: var(--omni-color-danger-700, #b91c1c);
+  font-size: 13px;
+}
+
+/* Shown when there are genuinely no role assignments, instead of the invented slices this chart
+   used to fall back to. */
+.legendEmpty {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--omni-color-text-secondary, #64748b);
+}
