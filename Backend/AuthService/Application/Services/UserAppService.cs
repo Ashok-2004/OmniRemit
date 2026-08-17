@@ -133,6 +133,23 @@ public class UserAppService(AuthDbContext db, PasswordHasher passwordHasher, Aud
         user.Email = email;
         user.PhoneNumber = request.PhoneNumber?.Trim();
         user.RoleId = request.RoleId;
+
+        /*
+         * Account status is part of the update.
+         *
+         * UpdateUserRequest previously had no IsActive field at all, so the "Account is Active" toggle
+         * in the edit form had nothing to save into — it moved, the form saved, and the status silently
+         * did not change. Status is now edited in one place (the user form) rather than from a list row,
+         * so this is the only path that sets it apart from the dedicated status endpoint.
+         *
+         * A status change is recorded as its own audit action. "user.updated" does not convey that
+         * someone's ability to sign in was revoked, and that is exactly the event an auditor looks for.
+         */
+        var previousStatus = user.Status;
+        var requestedStatus = request.IsActive ? UserStatus.Active : UserStatus.Inactive;
+        var statusChanged = previousStatus != requestedStatus;
+        user.Status = requestedStatus;
+
         user.UpdatedAt = DateTimeOffset.UtcNow;
         user.UpdatedBy = actingUserId;
 
@@ -140,6 +157,15 @@ public class UserAppService(AuthDbContext db, PasswordHasher passwordHasher, Aud
 
         var actorName = await ResolveActorNameAsync(actingUserId, ct);
         await auditLog.WriteAsync(ServiceName, actingUserId, actorName, "user.updated", "User", user.Id.ToString(), $"Updated {user.Email}", ct: ct);
+
+        if (statusChanged)
+        {
+            await auditLog.WriteAsync(
+                ServiceName, actingUserId, actorName,
+                request.IsActive ? "user.activated" : "user.deactivated",
+                "User", user.Id.ToString(),
+                $"{user.Email} was {(request.IsActive ? "activated" : "deactivated")}.", ct: ct);
+        }
 
         var overrides = await LoadOverridesAsync(id, ct);
         return ToDetailDto(user, overrides);
@@ -198,16 +224,30 @@ public class UserAppService(AuthDbContext db, PasswordHasher passwordHasher, Aud
         }
 
         var existing = await db.UserPermissionOverrides.Where(o => o.UserId == userId).ToListAsync(ct);
-        db.UserPermissionOverrides.RemoveRange(existing);
 
+        /*
+         * Validate and resolve EVERYTHING before removing anything.
+         *
+         * The previous version removed all existing overrides first, then validated each incoming one
+         * inside the same loop that added it. So a request containing a single invalid grant — which is
+         * exactly what the UI was sending with `remote.employee:View` — threw partway through, after
+         * the removals were already tracked. The exception rolled the transaction back, but the
+         * ordering was only accidentally safe; a rejected save must never be able to leave a user with
+         * fewer permissions than they started with.
+         *
+         * It also removed and re-inserted rows that had not changed. UserPermissionOverrides has a
+         * unique index on (UserId, FeatureId, Capability) and EF does not guarantee DELETEs are
+         * batched before INSERTs, so re-saving a user while keeping an override they already had could
+         * hit a unique violation. Diffing avoids both problems.
+         */
         var featureKeys = overrides.Select(o => o.FeatureKey).Distinct().ToList();
         var features = await db.PermissionFeatures
             .Include(f => f.Capabilities)
             .Where(f => featureKeys.Contains(f.Key))
             .ToDictionaryAsync(f => f.Key, ct);
 
-        var now = DateTimeOffset.UtcNow;
-        foreach (var o in overrides)
+        var resolved = new List<(Guid FeatureId, string Capability, PermissionEffect Effect)>();
+        foreach (var o in overrides.DistinctBy(o => (o.FeatureKey, o.Capability)))
         {
             if (!features.TryGetValue(o.FeatureKey, out var feature))
             {
@@ -224,12 +264,43 @@ public class UserAppService(AuthDbContext db, PasswordHasher passwordHasher, Aud
                 throw new ValidationAppException($"Unknown effect '{o.Effect}'.");
             }
 
+            resolved.Add((feature.Id, o.Capability, effect));
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var requested = resolved.ToDictionary(r => (r.FeatureId, r.Capability), r => r.Effect);
+
+        foreach (var row in existing)
+        {
+            if (requested.TryGetValue((row.FeatureId, row.Capability), out var effect))
+            {
+                // Kept. Update the effect in place if it flipped between Grant and Revoke, rather than
+                // deleting and re-adding the same unique key.
+                if (row.Effect != effect)
+                {
+                    row.Effect = effect;
+                }
+            }
+            else
+            {
+                db.UserPermissionOverrides.Remove(row);
+            }
+        }
+
+        var kept = existing.Select(r => (r.FeatureId, r.Capability)).ToHashSet();
+        foreach (var (featureId, capability, effect) in resolved)
+        {
+            if (kept.Contains((featureId, capability)))
+            {
+                continue;
+            }
+
             db.UserPermissionOverrides.Add(new UserPermissionOverride
             {
                 Id = Guid.NewGuid(),
                 UserId = userId,
-                FeatureId = feature.Id,
-                Capability = o.Capability,
+                FeatureId = featureId,
+                Capability = capability,
                 Effect = effect,
                 CreatedAt = now,
                 CreatedBy = actingUserId,

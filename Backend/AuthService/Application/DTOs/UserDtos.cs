@@ -86,7 +86,16 @@ public record UpdateUserRequest(
     [RegularExpression(@"^[0-9+()\-.\s]*$", ErrorMessage = "Phone number may contain only digits, spaces and + ( ) - . characters.")]
     string? PhoneNumber,
 
-    Guid? RoleId);
+    Guid? RoleId,
+
+    /// <summary>
+    /// Whether the account may sign in. Added because the edit form's "Account is Active" toggle had
+    /// nothing to persist into — it moved, the form saved, and the status silently did not change.
+    ///
+    /// Defaults to true so an older client that omits the field cannot accidentally deactivate the
+    /// account it is editing.
+    /// </summary>
+    bool IsActive = true);
 
 public record UpdateUserStatusRequest(bool IsActive);
 

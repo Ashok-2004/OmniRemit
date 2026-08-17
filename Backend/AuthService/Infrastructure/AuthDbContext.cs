@@ -25,7 +25,15 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
 
         modelBuilder.Entity<User>(entity =>
         {
-            entity.HasIndex(u => u.Email).IsUnique();
+            // PARTIAL unique index — uniqueness applies only to rows that are actually live.
+            //
+            // Deletion here is soft (see the HasQueryFilter below), so an unfiltered unique index made
+            // a deleted user's address unusable forever: the duplicate check respects the query filter
+            // and sees nothing, while the index still holds the address, and the INSERT fails with a
+            // raw DbUpdateException. The filter string must stay in sync with the migration
+            // 20260818090000_PartialUniqueEmailForSoftDelete, or EF will scaffold a migration to
+            // undo it.
+            entity.HasIndex(u => u.Email).IsUnique().HasFilter("\"IsDeleted\" = false");
             entity.Property(u => u.Name).HasMaxLength(200);
             entity.Property(u => u.Email).HasMaxLength(320);
             entity.Property(u => u.PhoneNumber).HasMaxLength(32);

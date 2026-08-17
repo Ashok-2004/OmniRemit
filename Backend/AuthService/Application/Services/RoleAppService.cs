@@ -86,9 +86,7 @@ public class RoleAppService(AuthDbContext db, AuditLogAppService auditLog)
         role.IsAdministrator = request.IsAdministrator;
         role.UpdatedAt = DateTimeOffset.UtcNow;
 
-        var existingGrants = await db.RolePermissions.Where(rp => rp.RoleId == id).ToListAsync(ct);
-        db.RolePermissions.RemoveRange(existingGrants);
-        await ApplyPermissionsAsync(id, request.Permissions, ct);
+        await SyncPermissionsAsync(id, request.Permissions, ct);
 
         await db.SaveChangesAsync(ct);
 
@@ -151,6 +149,103 @@ public class RoleAppService(AuthDbContext db, AuditLogAppService auditLog)
             .ToListAsync(ct);
 
         return new RoleUsersDto(users, total);
+    }
+
+    /// <summary>
+    /// Brings a role's grants in line with <paramref name="grants"/> by DIFFING, not by deleting every
+    /// row and re-inserting.
+    ///
+    /// The previous approach removed all existing grants and added the new set inside a single
+    /// SaveChanges. RolePermissions has a unique index on (RoleId, FeatureId, Capability), and EF Core
+    /// does not guarantee that the DELETEs in a batch are ordered before the INSERTs — so re-saving a
+    /// role while keeping a permission it already had could hit a unique violation, which surfaced as
+    /// an opaque DbUpdateException.
+    ///
+    /// Diffing removes the collision by construction: a grant that is kept is simply never touched. It
+    /// also writes far fewer rows — editing a role's name previously rewrote every one of its
+    /// permissions.
+    /// </summary>
+    private async Task SyncPermissionsAsync(Guid roleId, IReadOnlyList<RolePermissionGrantDto> grants, CancellationToken ct)
+    {
+        var existing = await db.RolePermissions
+            .Include(rp => rp.Feature)
+            .Where(rp => rp.RoleId == roleId)
+            .ToListAsync(ct);
+
+        // Validate and resolve the requested set first, so an invalid grant aborts before anything is
+        // removed — a rejected save must leave the role exactly as it was.
+        var resolved = await ResolveGrantsAsync(grants, ct);
+
+        var requested = resolved
+            .Select(r => (r.FeatureId, r.Capability))
+            .ToHashSet();
+
+        foreach (var row in existing)
+        {
+            if (!requested.Contains((row.FeatureId, row.Capability)))
+            {
+                db.RolePermissions.Remove(row);
+            }
+        }
+
+        var kept = existing
+            .Select(r => (r.FeatureId, r.Capability))
+            .ToHashSet();
+
+        foreach (var (featureId, capability) in resolved)
+        {
+            if (!kept.Contains((featureId, capability)))
+            {
+                db.RolePermissions.Add(new RolePermission
+                {
+                    Id = Guid.NewGuid(),
+                    RoleId = roleId,
+                    FeatureId = featureId,
+                    Capability = capability,
+                });
+            }
+        }
+    }
+
+    /// <summary>
+    /// Validates grants against the catalog and resolves them to (FeatureId, Capability) pairs.
+    ///
+    /// This is where "'remote.employee' does not declare a 'View' capability" comes from, and it is
+    /// correct to reject it: a parent feature that delegates everything to its sub-modules declares no
+    /// capabilities of its own, so a grant against the PARENT key is meaningless. The UI must offer the
+    /// child keys (remote.employee.department) instead.
+    /// </summary>
+    private async Task<List<(Guid FeatureId, string Capability)>> ResolveGrantsAsync(
+        IReadOnlyList<RolePermissionGrantDto> grants, CancellationToken ct)
+    {
+        var resolved = new List<(Guid, string)>();
+        if (grants.Count == 0)
+        {
+            return resolved;
+        }
+
+        var featureKeys = grants.Select(g => g.FeatureKey).Distinct().ToList();
+        var features = await db.PermissionFeatures
+            .Include(f => f.Capabilities)
+            .Where(f => featureKeys.Contains(f.Key) && f.IsActive)
+            .ToDictionaryAsync(f => f.Key, ct);
+
+        foreach (var grant in grants.DistinctBy(g => (g.FeatureKey, g.Capability)))
+        {
+            if (!features.TryGetValue(grant.FeatureKey, out var feature))
+            {
+                throw new NotFoundAppException($"Permission feature '{grant.FeatureKey}' was not found or is no longer active.");
+            }
+
+            if (!feature.Capabilities.Any(c => c.Key == grant.Capability))
+            {
+                throw new ValidationAppException($"'{feature.Key}' does not declare a '{grant.Capability}' capability.");
+            }
+
+            resolved.Add((feature.Id, grant.Capability));
+        }
+
+        return resolved;
     }
 
     private async Task ApplyPermissionsAsync(Guid roleId, IReadOnlyList<RolePermissionGrantDto> grants, CancellationToken ct)

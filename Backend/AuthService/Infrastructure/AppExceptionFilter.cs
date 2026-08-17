@@ -1,12 +1,17 @@
 using AuthService.Application.Exceptions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace AuthService.Infrastructure;
 
 /// <summary>Maps the small set of domain exceptions Application/Services throws onto the right HTTP status, as ProblemDetails.</summary>
-public class AppExceptionFilter : IExceptionFilter
+public class AppExceptionFilter(ILogger<AppExceptionFilter> logger) : IExceptionFilter
 {
+    /// <summary>PostgreSQL SQLSTATE for unique_violation.</summary>
+    private const string UniqueViolation = "23505";
+
     public void OnException(ExceptionContext context)
     {
         var (status, title) = context.Exception switch
@@ -14,6 +19,14 @@ public class AppExceptionFilter : IExceptionFilter
             NotFoundAppException ex => (StatusCodes.Status404NotFound, ex.Message),
             ConflictAppException ex => (StatusCodes.Status409Conflict, ex.Message),
             ValidationAppException ex => (StatusCodes.Status400BadRequest, ex.Message),
+
+            // A constraint the application layer did not anticipate. This used to fall through to the
+            // default handler, which in development returns the raw exception TYPE NAME as the
+            // ProblemDetails title — the UI showed users a literal
+            // "Microsoft.EntityFrameworkCore.DbUpdateException", which is both meaningless to them and
+            // an internal-implementation leak.
+            DbUpdateException ex => TranslateDbUpdate(ex),
+
             _ => (0, string.Empty),
         };
 
@@ -22,7 +35,28 @@ public class AppExceptionFilter : IExceptionFilter
             return; // not ours — let the default developer/production exception handling deal with it
         }
 
+        // Logged at the server with the real exception, so making the client-facing message safe does
+        // not also make the failure invisible to whoever operates the platform.
+        if (status >= StatusCodes.Status500InternalServerError)
+        {
+            logger.LogError(context.Exception, "Unhandled database error on {Path}", context.HttpContext.Request.Path);
+        }
+
         context.Result = new ObjectResult(new ProblemDetails { Title = title, Status = status }) { StatusCode = status };
         context.ExceptionHandled = true;
+    }
+
+    private static (int, string) TranslateDbUpdate(DbUpdateException ex)
+    {
+        // A unique violation is a genuine conflict the caller can act on, so it earns a 409 and a
+        // readable message. Anything else is a server-side fault and must not describe itself.
+        if (ex.InnerException is PostgresException { SqlState: UniqueViolation })
+        {
+            return (StatusCodes.Status409Conflict,
+                "That value is already in use by another record.");
+        }
+
+        return (StatusCodes.Status500InternalServerError,
+            "The change could not be saved. Please try again, or contact your administrator if it persists.");
     }
 }
