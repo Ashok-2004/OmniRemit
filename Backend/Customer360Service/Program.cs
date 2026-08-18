@@ -1,9 +1,11 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.IdentityModel.Tokens;
 using backend.Data;
 using backend.Controllers;
+using backend.Middleware;
 
 // ---------------------------------------------------------------------------
 // Load local .env file if present
@@ -50,19 +52,18 @@ builder.Services.AddSingleton<AuditRepository>();
 // ---------------------------------------------------------------------------
 // CORS Policy
 // ---------------------------------------------------------------------------
-var configuredOrigins = builder.Configuration
-    .GetSection("AllowedOrigins")
-    .Get<string[]>();
-
-var corsOrigins = (configuredOrigins != null && configuredOrigins.Length > 0)
-    ? configuredOrigins
-    : new[] { "http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:5174", "http://localhost:3000", "http://localhost:5001", "http://localhost:5002", "http://localhost:5003" };
-
+// Reads Cors:AllowedOrigins, matching AuthService/ModuleRegistry/EmployeeService/LeadService exactly
+// — this service previously used a differently-named flat "AllowedOrigins" key, computed it into
+// `corsOrigins`, and then never used that variable: the actual policy was
+// SetIsOriginAllowed(_ => true), i.e. any origin, regardless of what was configured. Fail-closed
+// (WithOrigins, no wildcard fallback) matches the platform's other services rather than LeadService's
+// permissive-if-empty fallback — appropriate here because real origins are now set in .env.
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.SetIsOriginAllowed(origin => true)
+        var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+        policy.WithOrigins(allowedOrigins)
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -118,6 +119,23 @@ builder.Services.AddAuthorization();
 // Build and configure the middleware pipeline
 // ---------------------------------------------------------------------------
 var app = builder.Build();
+
+// First middleware, matching AuthService/ModuleRegistry/EmployeeService: behind a TLS-terminating
+// proxy the real scheme and client IP arrive only as X-Forwarded-* headers. KnownNetworks/KnownProxies
+// are cleared because the platform assigns the proxy address dynamically; safe only because this
+// container is reachable solely via that proxy.
+var forwardedHeaders = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+};
+forwardedHeaders.KnownNetworks.Clear();
+forwardedHeaders.KnownProxies.Clear();
+app.UseForwardedHeaders(forwardedHeaders);
+
+// Before CORS/auth, matching EmployeeService — otherwise anything thrown by the auth handler bypasses
+// it entirely and comes back as a bare 500 with no CORS headers, which the browser reports as an
+// opaque CORS failure rather than the real error.
+app.UseMiddleware<ExceptionMiddleware>();
 
 app.UseCors("AllowFrontend");
 app.UseAuthentication();

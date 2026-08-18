@@ -144,7 +144,10 @@ app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
 
-if (app.Environment.IsDevelopment() || true)
+// `|| true` previously made the environment check dead code, exposing Swagger — and with it every
+// route, request/response shape, and the fact that /token exists — in every environment, production
+// included. Every other service in this repo gates Swagger the same way.
+if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
