@@ -193,7 +193,7 @@ export function SettingsOverviewTab() {
                         {formatLogAction(log)}
                       </span>
                       <span className={styles.activityTime}>
-                        by {log.actorName || 'Super Admin'} • {formatLogTime(log.occurredAt)}
+                        by {log.actorName || 'System'} • {formatLogTime(log.occurredAt)}
                       </span>
                     </div>
                   </div>

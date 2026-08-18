@@ -849,3 +849,11 @@
   color: var(--omni-color-danger-600, #dc2626);
   letter-spacing: -0.02em;
 }
+
+/* Shown when the audit query genuinely returns nothing, replacing four fabricated entries. */
+.activityEmpty {
+  padding: 24px 8px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--omni-color-text-secondary, #64748b);
+}

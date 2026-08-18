@@ -265,7 +265,7 @@ export function DashboardPage() {
             <div className={styles.heroGreetingRow}>
               <h1 className={styles.heroTitle}>
                 <span className={styles.welcomeIntro}>Welcome back,</span>{' '}
-                <span className={styles.userNameHighlight}>{user?.name || 'Super Admin'}</span>
+                <span className={styles.userNameHighlight}>{user?.name ?? 'there'}</span>
               </h1>
               <span className={styles.roleChip}>
                 <Icon.ShieldCheck width={15} height={15} className={styles.roleShieldIcon} />
@@ -573,7 +573,7 @@ export function DashboardPage() {
 
                     <div className={styles.activityInfo}>
                       <span className={styles.activityActor}>
-                        {log.actorName || log.actorUserId || 'Super Admin'}
+                        {log.actorName || log.actorUserId || 'System'}
                       </span>
                       <span className={styles.activityDescription}>
                         {formatActionText(log)}
@@ -587,53 +587,19 @@ export function DashboardPage() {
                 )
               })
             ) : (
-              // Realistic fallback
-              [
-                {
-                  id: '1',
-                  actor: 'Super Admin',
-                  desc: 'Created new user "Uday Chauhan"',
-                  time: 'Today, 10:24 AM',
-                  theme: { bg: '#ecfdf5', color: '#10b981', IconElem: Icon.Users },
-                },
-                {
-                  id: '2',
-                  actor: 'Super Admin',
-                  desc: 'Updated role "Employee Manager"',
-                  time: 'Today, 09:15 AM',
-                  theme: { bg: '#f3e8ff', color: '#8b5cf6', IconElem: Icon.ShieldCheck },
-                },
-                {
-                  id: '3',
-                  actor: 'Super Admin',
-                  desc: 'Registered "Employee Management"',
-                  time: 'Yesterday, 04:38 PM',
-                  theme: { bg: '#fff7ed', color: '#f97316', IconElem: Icon.Grid },
-                },
-                {
-                  id: '4',
-                  actor: 'Super Admin',
-                  desc: 'Exported security audit logs to CSV',
-                  time: 'Yesterday, 11:20 AM',
-                  theme: { bg: '#eff6ff', color: '#3b82f6', IconElem: Icon.FileText },
-                },
-              ].map((item) => (
-                <div key={item.id} className={styles.activityRow}>
-                  <div
-                    className={styles.activityIconWrap}
-                    style={{ background: item.theme.bg, color: item.theme.color }}
-                  >
-                    <item.theme.IconElem width={16} height={16} />
-                  </div>
-
-                  <div className={styles.activityInfo}>
-                    <span className={styles.activityActor}>{item.actor}</span>
-                    <span className={styles.activityDescription}>{item.desc}</span>
-                  </div>
-
-                  <span className={styles.activityTime}>{item.time}</span>
-                </div>
-              ))
+              /*
+               * Honest empty state.
+               *
+               * This branch used to render FOUR fabricated audit entries — invented actors, invented
+               * timestamps ("Today, 10:24 AM") and invented actions ("Exported security audit logs to
+               * CSV") — styled identically to real ones. On a compliance dashboard that is the most
+               * dangerous kind of placeholder: an operator reading the audit trail cannot tell which
+               * entries actually happened, and the fallback appears exactly when the real query
+               * returned nothing or failed.
+               */
+              <div className={styles.activityEmpty}>
+                <span>No recent activity in this period.</span>
+              </div>
             )}
           </div>
         </div>

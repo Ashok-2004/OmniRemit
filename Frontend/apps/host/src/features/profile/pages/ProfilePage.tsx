@@ -22,7 +22,8 @@ function formatDateTime(iso: string | null) {
 }
 
 function getUserInitials(name?: string | null): string {
-  if (!name) return 'SA'
+  // '?' rather than 'SA' — inventing initials shows an identity that may not be the viewer's own.
+  if (!name) return '?'
   const parts = name.trim().split(/\s+/)
   if (parts.length >= 2) {
     return `${parts[0][0]}${parts[1][0]}`.toUpperCase()
@@ -130,8 +131,8 @@ export function ProfilePage() {
       setPasswordError('Current password is required.')
       return
     }
-    if (!newPassword || newPassword.length < 6) {
-      setPasswordError('New password must be at least 6 characters.')
+    if (!newPassword) {
+      setPasswordError('New password is required.')
       return
     }
     if (newPassword !== confirmPassword) {
@@ -565,13 +566,13 @@ export function ProfilePage() {
                   <Input
                     label="New Password"
                     type={showNewPw ? 'text' : 'password'}
-                    placeholder="Enter new password (min. 6 chars)"
+                    placeholder="Enter a new password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     required
                     disabled={savingPassword}
                     leading={<Icon.Lock width={16} height={16} />}
-                    helperText="Password must be at least 6 characters."
+                    helperText="Your organisation's password policy is applied when you save."
                     trailing={
                       <button
                         type="button"
