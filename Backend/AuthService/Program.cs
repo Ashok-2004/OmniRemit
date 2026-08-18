@@ -8,6 +8,7 @@ using AuthService.Infrastructure.Seed;
 using AuthService.Options;
 using DotNetEnv;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -199,6 +200,37 @@ builder.Services.AddProblemDetails();
 
 var app = builder.Build();
 
+/*
+ * MUST be the first middleware: everything downstream reads the values it rewrites.
+ *
+ * In production this service runs behind a TLS-terminating reverse proxy (Render), which forwards
+ * plain HTTP and puts the original scheme and client IP in X-Forwarded-Proto / X-Forwarded-For.
+ * Without this, three things break, none of them obviously:
+ *
+ *   1. Request.Scheme reads "http", so UseHttpsRedirection() 307s every API call — including the
+ *      CORS preflight OPTIONS, which the browser then reports as an opaque CORS failure. (That
+ *      middleware is now gone from this pipeline for the same reason; the proxy already enforces
+ *      HTTPS at the edge.)
+ *   2. Connection.RemoteIpAddress is the PROXY's address, identical for every user on the platform.
+ *      The login rate limiter partitions on it, so 10 attempts/minute stops being per-client and
+ *      becomes one shared bucket — one user's retries lock out everyone.
+ *   3. Audit entries record that same proxy address as the source IP of every action, which for a
+ *      compliance audit trail is worse than recording nothing at all.
+ *
+ * KnownNetworks/KnownProxies are cleared because the proxy's address is assigned dynamically by the
+ * platform and is not knowable ahead of time. That is safe HERE, and only here, because the
+ * container accepts traffic solely from that proxy — it is not publicly routable. Do not copy this
+ * clearing into a service that is directly reachable from the internet: it would let a caller spoof
+ * both its own IP and the request scheme.
+ */
+var forwardedHeaders = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+};
+forwardedHeaders.KnownNetworks.Clear();
+forwardedHeaders.KnownProxies.Clear();
+app.UseForwardedHeaders(forwardedHeaders);
+
 if (app.Environment.IsDevelopment())
 {
     app.UseDeveloperExceptionPage();
@@ -238,7 +270,9 @@ if (app.Environment.IsDevelopment())
 // Compression before CORS/auth so it wraps every response the pipeline produces.
 app.UseResponseCompression();
 app.UseCors("Frontend");
-app.UseHttpsRedirection();
+// No UseHttpsRedirection(): this runs behind a TLS-terminating proxy that already enforces HTTPS at
+// the edge. Redirecting in-app would 307 every call (preflight included) — see UseForwardedHeaders
+// above. Locally the services are plain HTTP, so it was never doing useful work there either.
 app.UseAuthentication();
 app.UseAuthorization();
 

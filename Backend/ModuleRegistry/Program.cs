@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using DotNetEnv;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using ModuleRegistry.Application.Services;
@@ -115,6 +116,20 @@ builder.Services.AddProblemDetails();
 
 var app = builder.Build();
 
+// First middleware, for the reasons documented at length in AuthService/Program.cs: behind a
+// TLS-terminating proxy the real scheme and client IP arrive only as X-Forwarded-* headers, and
+// without restoring them UseHttpsRedirection 307s every API call (preflight included), which the
+// browser surfaces as an opaque CORS error. That redirect is removed below — the proxy enforces
+// HTTPS at the edge. KnownNetworks/KnownProxies are cleared because the platform assigns the proxy
+// address dynamically; safe only because this container is reachable solely via that proxy.
+var forwardedHeaders = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+};
+forwardedHeaders.KnownNetworks.Clear();
+forwardedHeaders.KnownProxies.Clear();
+app.UseForwardedHeaders(forwardedHeaders);
+
 if (app.Environment.IsDevelopment())
 {
     app.UseDeveloperExceptionPage();
@@ -151,7 +166,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseResponseCompression();
 app.UseCors("Frontend");
-app.UseHttpsRedirection();
+// No UseHttpsRedirection() — see the UseForwardedHeaders comment above.
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

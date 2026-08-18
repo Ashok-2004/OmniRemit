@@ -4,6 +4,7 @@ using EmployeeService.Extensions;
 using EmployeeService.Infrastructure;
 using EmployeeService.Options;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
@@ -95,6 +96,17 @@ builder.Services
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
+
+// Before everything else, including UsePathBase — see AuthService/Program.cs for the full rationale.
+// This service has no UseHttpsRedirection to break, but it still needs the real client IP rather
+// than the proxy's for any logging or diagnostics, and the correct scheme for URLs it generates.
+var forwardedHeaders = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+};
+forwardedHeaders.KnownNetworks.Clear();
+forwardedHeaders.KnownProxies.Clear();
+app.UseForwardedHeaders(forwardedHeaders);
 
 app.UsePathBase("/api/employee-service");
 

@@ -199,11 +199,30 @@ public class AuthController(
 
     private void SetRefreshCookie(string rawToken, DateTimeOffset expiresAt)
     {
+        var sameSite = _cookieOptions.SameSite.Trim() switch
+        {
+            var s when string.Equals(s, "None", StringComparison.OrdinalIgnoreCase) => SameSiteMode.None,
+            var s when string.Equals(s, "Strict", StringComparison.OrdinalIgnoreCase) => SameSiteMode.Strict,
+            _ => SameSiteMode.Lax,
+        };
+
+        // SameSite=None is only honoured on a Secure cookie — every current browser drops it
+        // outright otherwise. Silently issuing a cookie the browser discards would look exactly like
+        // a working login that loses its session on the next refresh, so fail loudly at the point of
+        // misconfiguration instead.
+        var secure = !env.IsDevelopment();
+        if (sameSite == SameSiteMode.None && !secure)
+        {
+            throw new InvalidOperationException(
+                "Auth__SameSite=None requires a Secure cookie, which is not issued in the Development " +
+                "environment. Use Lax locally, or run with ASPNETCORE_ENVIRONMENT=Production behind HTTPS.");
+        }
+
         var options = new CookieOptions
         {
             HttpOnly = true,
-            Secure = !env.IsDevelopment(),
-            SameSite = SameSiteMode.Lax,
+            Secure = secure,
+            SameSite = sameSite,
             Expires = expiresAt,
             Path = "/api/auth",
         };
@@ -216,7 +235,34 @@ public class AuthController(
         Response.Cookies.Append(_cookieOptions.RefreshCookieName, rawToken, options);
     }
 
-    private void ClearRefreshCookie() => Response.Cookies.Delete(_cookieOptions.RefreshCookieName, new CookieOptions { Path = "/api/auth" });
+    /// <summary>
+    /// Deletion must repeat the attributes the cookie was WRITTEN with. A browser matches a deletion
+    /// against name + path + domain, so clearing with a bare Path while the cookie was issued with a
+    /// Domain leaves the original in place — logout would appear to succeed while the refresh token
+    /// stayed valid in the browser. Secure/SameSite are mirrored for the same reason: a SameSite=None
+    /// deletion sent without Secure is itself rejected.
+    /// </summary>
+    private void ClearRefreshCookie()
+    {
+        var options = new CookieOptions
+        {
+            Path = "/api/auth",
+            Secure = !env.IsDevelopment(),
+            SameSite = _cookieOptions.SameSite.Trim() switch
+            {
+                var s when string.Equals(s, "None", StringComparison.OrdinalIgnoreCase) => SameSiteMode.None,
+                var s when string.Equals(s, "Strict", StringComparison.OrdinalIgnoreCase) => SameSiteMode.Strict,
+                _ => SameSiteMode.Lax,
+            },
+        };
+
+        if (!string.IsNullOrWhiteSpace(_cookieOptions.RefreshCookieDomain))
+        {
+            options.Domain = _cookieOptions.RefreshCookieDomain;
+        }
+
+        Response.Cookies.Delete(_cookieOptions.RefreshCookieName, options);
+    }
 
     private string? ClientIp() => HttpContext.Connection.RemoteIpAddress?.ToString();
 
