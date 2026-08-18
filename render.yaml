@@ -1,0 +1,133 @@
+# Render Blueprint — the three OmniRemit backend services.
+#
+# Create once via Render Dashboard -> New -> Blueprint, pointed at this repo. Render then reads this
+# file on every push to main and keeps the services in sync.
+#
+# WHY A BLUEPRINT RATHER THAN `render services create`:
+# the CLI has no flag for dockerfilePath / dockerContext, and these services need a build context
+# (Backend/) different from where their Dockerfile lives. AuthService.csproj and
+# ModuleRegistry.csproj inherit TargetFramework from Backend/Directory.Build.props, so a context of
+# the service folder fails with NETSDK1013 ("TargetFramework value ''").
+#
+# SECRETS: every value marked `sync: false` is NOT stored here. Render prompts for it in the
+# dashboard on first apply, and the value lives only in Render. Never commit a connection string,
+# signing key or API key to this file.
+
+services:
+  # ─────────────────────────────────────────────────────────────────────────────
+  - type: web
+    name: omniremit-auth
+    runtime: docker
+    plan: free
+    region: singapore # closest Render region to India; must match across services
+    branch: main
+    dockerfilePath: ./Backend/AuthService/Dockerfile
+    dockerContext: ./Backend
+    healthCheckPath: /health
+    autoDeploy: true
+    # Only rebuild when backend code changes — a frontend-only commit should not redeploy the API.
+    buildFilter:
+      paths:
+        - Backend/**
+        - render.yaml
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: Jwt__Issuer
+        value: omniremit-auth-service
+      - key: Jwt__Audience
+        value: omniremit-host
+      - key: Auth__RefreshCookieName
+        value: omniremit_refresh
+      # Host and API are on different registrable domains (*.vercel.app vs *.onrender.com), so the
+      # request is cross-site and a Lax cookie would be withheld on refresh — login would succeed and
+      # then drop the session moments later. None requires Secure, which is enforced at startup.
+      # Change to Lax once both move under one parent domain.
+      - key: Auth__SameSite
+        value: None
+      # Host-only cookie on this service's own domain. Deliberately blank: setting a parent domain
+      # would broadcast the refresh token to every subdomain, frontends included.
+      - key: Auth__RefreshCookieDomain
+        value: ""
+      # Set after the host is deployed and its stable Vercel URL is known. Wildcards are not
+      # supported, so this must be the exact origin, no trailing slash.
+      - key: Cors__AllowedOrigins__0
+        sync: false
+      - key: ConnectionStrings__AuthDb
+        sync: false
+      # This service is the only one holding the PRIVATE key — the other two verify only.
+      - key: Jwt__SigningKeyPrivate
+        sync: false
+      - key: Jwt__SigningKeyPublic
+        sync: false
+      - key: Internal__ApiKey
+        sync: false
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  - type: web
+    name: omniremit-registry
+    runtime: docker
+    plan: free
+    region: singapore
+    branch: main
+    dockerfilePath: ./Backend/ModuleRegistry/Dockerfile
+    dockerContext: ./Backend
+    healthCheckPath: /health
+    autoDeploy: true
+    buildFilter:
+      paths:
+        - Backend/**
+        - render.yaml
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: Jwt__Issuer
+        value: omniremit-auth-service
+      - key: Jwt__Audience
+        value: omniremit-host
+      - key: Cors__AllowedOrigins__0
+        sync: false
+      - key: ConnectionStrings__RegistryDb
+        sync: false
+      # Public key only — this service verifies tokens, it never issues them.
+      - key: Jwt__SigningKeyPublic
+        sync: false
+      # Base URL of omniremit-auth, filled in once that service has its onrender.com address.
+      - key: AuthService__BaseUrl
+        sync: false
+      # Must equal AuthService's Internal__ApiKey.
+      - key: AuthService__InternalApiKey
+        sync: false
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  - type: web
+    name: omniremit-employee
+    runtime: docker
+    plan: free
+    region: singapore
+    branch: main
+    dockerfilePath: ./Backend/EmployeeService/Dockerfile
+    dockerContext: ./Backend
+    healthCheckPath: /health
+    autoDeploy: true
+    buildFilter:
+      paths:
+        - Backend/**
+        - render.yaml
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: Jwt__Issuer
+        value: omniremit-auth-service
+      - key: Jwt__Audience
+        value: omniremit-host
+      - key: Cors__AllowedOrigins__0
+        sync: false
+      - key: ConnectionStrings__EmployeeDb
+        sync: false
+      - key: Jwt__SigningKeyPublic
+        sync: false
+      - key: AuthService__BaseUrl
+        sync: false
+      - key: AuthService__InternalApiKey
+        sync: false
