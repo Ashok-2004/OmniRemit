@@ -27,14 +27,26 @@ export default defineConfig(({ mode }) => {
     },
 
     server: {
-      host: '0.0.0.0',
+      // `true`, not the string '0.0.0.0': the string binds the IPv4 wildcard ONLY. ModuleRegistry's
+      // background health prober is a .NET HttpClient resolving "localhost", which on this platform
+      // sometimes tries ::1 first — with no IPv6 listener that attempt is refused, and if the IPv4
+      // fallback doesn't complete inside the prober's 5s timeout the app flaps to "Unreachable" even
+      // though it's actually up (observed live: 4 consecutive Healthy probes, then one Unreachable).
+      // `true` listens on both address families, removing the race entirely.
+      host: true,
       port,
       strictPort: true,
       cors: true,
     },
 
     preview: {
-      host: '0.0.0.0',
+      // `true`, not the string '0.0.0.0': the string binds the IPv4 wildcard ONLY. ModuleRegistry's
+      // background health prober is a .NET HttpClient resolving "localhost", which on this platform
+      // sometimes tries ::1 first — with no IPv6 listener that attempt is refused, and if the IPv4
+      // fallback doesn't complete inside the prober's 5s timeout the app flaps to "Unreachable" even
+      // though it's actually up (observed live: 4 consecutive Healthy probes, then one Unreachable).
+      // `true` listens on both address families, removing the race entirely.
+      host: true,
       port,
       strictPort: true,
       cors: true,
