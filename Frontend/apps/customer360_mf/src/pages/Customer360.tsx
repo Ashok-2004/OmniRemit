@@ -11,7 +11,7 @@ import CompanyOverview from '../components/CompanyOverview';
 import SectionContainer from '../components/SectionContainer';
 import CaseDetailsModal from '../components/CaseDetailsModal';
 import ProductDetailsModal from '../components/ProductDetailsModal';
-import { Eye, EyeOff, ChevronRight, ChevronDown, SlidersHorizontal, Building2, Layers, User, Briefcase, Globe, Shield, FileText, Calendar, DollarSign, MapPin, Mail, Phone, TrendingUp, ArrowLeft, Search, RotateCcw, AlertCircle, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, ChevronRight, ChevronDown, SlidersHorizontal, Building2, Layers, User, Briefcase, Globe, Shield, FileText, Calendar, DollarSign, MapPin, Mail, Phone, TrendingUp, Search, RotateCcw, AlertCircle, Loader2 } from 'lucide-react';
 import { useNavigationStore } from '../store/navigationStore';
 import type {
   IndividualProfile,
@@ -259,21 +259,24 @@ export default function Customer360() {
       if (searchIdType === 'Name') apiType = 'FULLNAME';
       if (searchIdType === 'SecondaryID') apiType = 'SECONDARYID';
 
-      await loadProfileById(searchVal, apiType, searchSubtype);
-      setIsSearched(true);
+      const loadedProfile = await loadProfileById(searchVal, apiType, searchSubtype);
+      // `loadedProfile` is null when the store's own staleness guard silently discarded this
+      // response (a newer Individual search was fired before this one resolved) — NOT a real
+      // failure. Only flip to the "profile loaded" view, and only log success, when a profile
+      // actually came back; otherwise leave it to whichever search superseded this one.
+      if (loadedProfile) {
+        setIsSearched(true);
 
-      // Log success
-      const latestProfile = useCustomerStore.getState().profile as IndividualProfile | null;
-      const customerName = latestProfile?.fullName || searchVal;
-      const customerId = latestProfile?.nationalId || searchVal;
-      await api.logAudit({
-        action: "SEARCH",
-        customerName: customerName,
-        customerType: "Individual",
-        status: "Success",
-        description: `Searched for '${searchVal}' by ${searchIdType}`,
-        customerId: customerId
-      }).catch(e => console.error("Search audit error:", e));
+        // Log success
+        await api.logAudit({
+          action: "SEARCH",
+          customerName: loadedProfile.fullName || searchVal,
+          customerType: "Individual",
+          status: "Success",
+          description: `Searched for '${searchVal}' by ${searchIdType}`,
+          customerId: loadedProfile.nationalId || searchVal
+        }).catch(e => console.error("Search audit error:", e));
+      }
 
     } catch (err) {
       const error = err as ApiError;
@@ -304,21 +307,22 @@ export default function Customer360() {
       // getCorporateProfile here too (then loadActiveProfile again) previously
       // fired two identical /v1/corpprofile requests per search.
       const { loadCorporateProfileById } = useCustomerStore.getState();
-      await loadCorporateProfileById(corpSearchVal, corpSearchType);
-      setIsSearchedCorp(true);
+      const loadedProfile = await loadCorporateProfileById(corpSearchVal, corpSearchType);
+      // Same reasoning as handleSearch above: null here means the store's staleness guard
+      // discarded this response because a newer Corporate search superseded it — not a failure.
+      if (loadedProfile) {
+        setIsSearchedCorp(true);
 
-      // Log success
-      const latestProfile = useCustomerStore.getState().profile as CorporateProfile | null;
-      const customerName = latestProfile?.organizationName || corpSearchVal;
-      const customerId = latestProfile?.brn || corpSearchVal;
-      await api.logAudit({
-        action: "SEARCH",
-        customerName: customerName,
-        customerType: "Non-Individual",
-        status: "Success",
-        description: `Searched for '${corpSearchVal}' by ${corpSearchType}`,
-        customerId: customerId
-      }).catch(e => console.error("Search audit error:", e));
+        // Log success
+        await api.logAudit({
+          action: "SEARCH",
+          customerName: loadedProfile.organizationName || corpSearchVal,
+          customerType: "Non-Individual",
+          status: "Success",
+          description: `Searched for '${corpSearchVal}' by ${corpSearchType}`,
+          customerId: loadedProfile.brn || corpSearchVal
+        }).catch(e => console.error("Search audit error:", e));
+      }
 
     } catch (err) {
       const error = err as ApiError;
@@ -621,15 +625,34 @@ export default function Customer360() {
   };
 
   const renderIndividualSearchPanel = () => (
-    <div className="c360-search-panel" style={{ marginBottom: 20 }}>
-      <div className="c360-search-header">
-        <div className="c360-search-title-box">
-          <div className="c360-search-icon-badge">
-            <User size={18} />
+    <>
+      {/* Hero Banner — same treatment as AllProducts.tsx / AllInteractions.tsx / AuditLogs.tsx
+          (.c360-hero-banner, matching the host's own dashboard banner gradient) so this page's
+          "upper part" is standardized with the rest of the app instead of its own one-off look. */}
+      <div className="c360-hero-banner" style={{ marginBottom: 20 }}>
+        <div style={{ position: 'absolute', top: '-40px', right: '-40px', width: '180px', height: '180px', borderRadius: '50%', background: 'rgba(255, 255, 255, 0.08)', pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', bottom: '-50px', right: '120px', width: '130px', height: '130px', borderRadius: '50%', background: 'rgba(255, 255, 255, 0.05)', pointerEvents: 'none' }} />
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '18px', position: 'relative', zIndex: 1 }}>
+          <div
+            style={{
+              width: '50px',
+              height: '50px',
+              borderRadius: '14px',
+              background: 'rgba(255, 255, 255, 0.18)',
+              border: '1.5px solid rgba(255, 255, 255, 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#ffffff',
+              flexShrink: 0,
+            }}
+          >
+            <User size={24} />
           </div>
           <div>
-            <h2 className="c360-search-title">Individual Customer Search</h2>
-            <p className="c360-search-subtitle">
+            <h1 className="c360-hero-title">Individual Customer Search</h1>
+            <p className="c360-hero-subtitle">
               {!searchIdType ? 'Select an ID type and enter value to look up customer profile.' :
                searchIdType === 'Phone' ? 'Search customer by phone number.' :
                searchIdType === 'Name' ? 'Search customer by full registered name.' :
@@ -638,18 +661,38 @@ export default function Customer360() {
             </p>
           </div>
         </div>
+
         {isSearched && (
-          <button 
+          <button
             type="button"
             onClick={handleBackToSearch}
-            className="c360-btn-secondary"
-            style={{ height: '36px', padding: '0 14px', fontSize: '13px' }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '7px',
+              height: '40px',
+              padding: '0 18px',
+              borderRadius: '12px',
+              border: '1px solid rgba(255, 255, 255, 0.35)',
+              background: 'rgba(255, 255, 255, 0.95)',
+              color: '#1d4ed8',
+              fontSize: '13.5px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              boxShadow: '0 2px 10px rgba(0, 0, 0, 0.12)',
+              transition: 'all 0.15s ease',
+              fontFamily: 'inherit',
+              flexShrink: 0,
+              position: 'relative',
+              zIndex: 1,
+            }}
           >
             <RotateCcw size={14} /> New Search
           </button>
         )}
       </div>
 
+      <div className="c360-search-panel" style={{ marginBottom: 20 }}>
       <form onSubmit={(e) => { e.preventDefault(); handleSearch(); }}>
         <div className="c360-search-form-row">
           {/* ID Type Select */}
@@ -765,19 +808,37 @@ export default function Customer360() {
           </div>
         )}
       </form>
-    </div>
+      </div>
+    </>
   );
 
   const renderCorporateSearchPanel = () => (
-    <div className="c360-search-panel" style={{ marginBottom: 20 }}>
-      <div className="c360-search-header">
-        <div className="c360-search-title-box">
-          <div className="c360-search-icon-badge">
-            <Building2 size={18} />
+    <>
+      {/* Hero Banner — same treatment as AllProducts.tsx / AllInteractions.tsx / AuditLogs.tsx. */}
+      <div className="c360-hero-banner" style={{ marginBottom: 20 }}>
+        <div style={{ position: 'absolute', top: '-40px', right: '-40px', width: '180px', height: '180px', borderRadius: '50%', background: 'rgba(255, 255, 255, 0.08)', pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', bottom: '-50px', right: '120px', width: '130px', height: '130px', borderRadius: '50%', background: 'rgba(255, 255, 255, 0.05)', pointerEvents: 'none' }} />
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '18px', position: 'relative', zIndex: 1 }}>
+          <div
+            style={{
+              width: '50px',
+              height: '50px',
+              borderRadius: '14px',
+              background: 'rgba(255, 255, 255, 0.18)',
+              border: '1.5px solid rgba(255, 255, 255, 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#ffffff',
+              flexShrink: 0,
+            }}
+          >
+            <Building2 size={24} />
           </div>
           <div>
-            <h2 className="c360-search-title">Non-Individual (Corporate) Search</h2>
-            <p className="c360-search-subtitle">
+            <h1 className="c360-hero-title">Non-Individual (Corporate) Search</h1>
+            <p className="c360-hero-subtitle">
               {!corpSearchType ? 'Select a search type and enter a value to look up a company profile.' :
                corpSearchType === 'BRN' ? 'Search registered company by Business Registration Number (BRN).' :
                corpSearchType === 'OLDBRN' ? 'Search registered company by Old BRN.' :
@@ -785,18 +846,38 @@ export default function Customer360() {
             </p>
           </div>
         </div>
+
         {isSearchedCorp && (
           <button
             type="button"
             onClick={handleBackToSearchCorp}
-            className="c360-btn-secondary"
-            style={{ height: '36px', padding: '0 14px', fontSize: '13px' }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '7px',
+              height: '40px',
+              padding: '0 18px',
+              borderRadius: '12px',
+              border: '1px solid rgba(255, 255, 255, 0.35)',
+              background: 'rgba(255, 255, 255, 0.95)',
+              color: '#1d4ed8',
+              fontSize: '13.5px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              boxShadow: '0 2px 10px rgba(0, 0, 0, 0.12)',
+              transition: 'all 0.15s ease',
+              fontFamily: 'inherit',
+              flexShrink: 0,
+              position: 'relative',
+              zIndex: 1,
+            }}
           >
             <RotateCcw size={14} /> New Search
           </button>
         )}
       </div>
 
+      <div className="c360-search-panel" style={{ marginBottom: 20 }}>
       <form onSubmit={(e) => { e.preventDefault(); handleCorpSearch(); }}>
         <div className="c360-search-form-row">
           {/* Search Type Select */}
@@ -881,7 +962,8 @@ export default function Customer360() {
           </div>
         )}
       </form>
-    </div>
+      </div>
+    </>
   );
 
   if (isIndividual && (!isSearched || !profile)) {
@@ -964,31 +1046,6 @@ export default function Customer360() {
 
       {isIndividual ? (
         <div>
-          {/* Back to Search strip */}
-          <div style={{ marginBottom: 16 }}>
-            <button
-              onClick={handleBackToSearch}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '7px 16px',
-                backgroundColor: '#FFFFFF',
-                color: '#374151',
-                border: '1px solid #D1D5DB',
-                borderRadius: 8,
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = '#004EEB'; e.currentTarget.style.color = '#004EEB'; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = '#D1D5DB'; e.currentTarget.style.color = '#374151'; }}
-            >
-              <ArrowLeft size={15} />
-              Back to Search
-            </button>
-          </div>
           <div className="customer-layout-container">
 
           {/* Left Column: Summary Card */}
@@ -1695,31 +1752,6 @@ export default function Customer360() {
         </div>
       ) : (
         <div>
-          {/* Back to Search strip */}
-          <div style={{ marginBottom: 16 }}>
-            <button
-              onClick={handleBackToSearchCorp}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '7px 16px',
-                backgroundColor: '#FFFFFF',
-                color: '#374151',
-                border: '1px solid #D1D5DB',
-                borderRadius: 8,
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = '#004EEB'; e.currentTarget.style.color = '#004EEB'; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = '#D1D5DB'; e.currentTarget.style.color = '#374151'; }}
-            >
-              <ArrowLeft size={15} />
-              Back to Search
-            </button>
-          </div>
           <div className="customer-layout-container">
           {/* Left Column: Summary Card */}
           <div className="customer-left-column">

@@ -74,7 +74,9 @@
 }
 
 .c360-workspace-viewport {
-  max-width: 1380px;
+  /* Matches the host's own page content cap exactly (DashboardPage.module.css) — this remote's
+     own pages should never be a different width than the host's, "standardized" per the ask. */
+  max-width: 1340px;
   width: 100%;
   margin: 0 auto;
   padding: 0 0 40px 0;
@@ -101,50 +103,11 @@
   box-shadow: 0 4px 16px -2px rgba(15, 23, 42, 0.06);
 }
 
-.c360-search-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-/* Host-matching header treatment: a solid blue accent bar to the left of the title, the same
-   convention the host uses on its own card/section headers (and the one this app already uses for
-   "Personal Details" etc. via .info-section-title) — replaces the earlier filled icon-badge square,
-   which was this app's own look and didn't match anything in the host shell. */
-.c360-search-title-box {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding-left: 12px;
-  border-left: 3px solid var(--primary-600);
-}
-
-.c360-search-icon-badge {
-  width: 20px;
-  height: 20px;
-  border-radius: 0;
-  background: transparent;
-  color: var(--primary-600);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.c360-search-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--primary-700);
-  letter-spacing: -0.01em;
-  margin: 0;
-}
-
-.c360-search-subtitle {
-  font-size: 12.5px;
-  color: var(--text-secondary);
-  margin: 2px 0 0 0;
-}
+/* The Individual/Non-Individual search panel's own title/subtitle/icon-badge header row
+   (.c360-search-header / .c360-search-title-box / .c360-search-icon-badge / .c360-search-title /
+   .c360-search-subtitle) was removed — that content now lives in a .c360-hero-banner above the
+   panel instead, matching AllProducts.tsx / AllInteractions.tsx / AuditLogs.tsx. This card is now
+   just the plain functional form (see .c360-search-form-row below). */
 
 .c360-search-form-row {
   display: grid;

@@ -3,7 +3,7 @@ import { api, ApiError } from '../services/api';
 import type { CorporateProfile, CustomerProfile, CustomerType, IndividualProfile, ContactDetail } from '../types/api';
 
 // ---------------------------------------------------------------------------
-// Request version counter for stale-response prevention.
+// Request version counters for stale-response prevention — ONE PER CUSTOMER TYPE.
 //
 // Race condition scenario (without this fix):
 //   1. User searches Customer A  → request #1 starts
@@ -13,8 +13,18 @@ import type { CorporateProfile, CustomerProfile, CustomerType, IndividualProfile
 //
 // Fix: each search increments a version counter. A response is only committed
 // to state if the version it captured is still the current version.
+//
+// This USED to be a single shared counter for both Individual and Corporate searches. Since
+// Individual and Corporate are two independent, non-conflicting sessions (see the per-type slots
+// below), that shared counter meant switching tabs and searching the OTHER type bumped the SAME
+// counter — so a still-in-flight Individual response arriving after a Corporate search had started
+// got silently discarded (no error, just `return null`), even though nothing about it was actually
+// stale. That's what produced the intermittent "data disappears, but only sometimes" bug: it
+// depended purely on which of the two unrelated requests happened to resolve last. Two independent
+// counters mean an Individual search can never invalidate a Corporate one, or vice versa.
 // ---------------------------------------------------------------------------
-let _searchVersion = 0;
+let _individualSearchVersion = 0;
+let _corporateSearchVersion = 0;
 
 // ---------------------------------------------------------------------------
 // Active-customer identifier persistence (sessionStorage).
@@ -155,7 +165,7 @@ export const useCustomerStore = create<CustomerStoreState>((set, get) => ({
       // Nothing to load yet — wait for user search or saved session restore
       return;
     }
-    const version = ++_searchVersion;
+    const version = customerType === 'individual' ? ++_individualSearchVersion : ++_corporateSearchVersion;
     set({ loading: true, error: null });
 
     try {
@@ -173,8 +183,9 @@ export const useCustomerStore = create<CustomerStoreState>((set, get) => ({
         contactData = (await api.getContactInfo(brn, 'CORPORATE')).data;
       }
 
-      // Discard if a newer search was started while this one was in-flight
-      if (version !== _searchVersion) return;
+      // Discard if a newer search of the SAME type was started while this one was in-flight
+      const currentVersion = customerType === 'individual' ? _individualSearchVersion : _corporateSearchVersion;
+      if (version !== currentVersion) return;
 
       if (customerType === 'individual') {
         set({
@@ -201,7 +212,8 @@ export const useCustomerStore = create<CustomerStoreState>((set, get) => ({
         saveActiveCustomer(customerType, savedId);
       }
     } catch (err) {
-      if (version !== _searchVersion) return;
+      const currentVersion = customerType === 'individual' ? _individualSearchVersion : _corporateSearchVersion;
+      if (version !== currentVersion) return;
       const error = err as ApiError;
       set({ error: error.message, errorStatus: error.status, loading: false });
       console.error('Error loading customer profile:', err);
@@ -209,7 +221,7 @@ export const useCustomerStore = create<CustomerStoreState>((set, get) => ({
   },
 
   loadProfileById: async (id, type, subtype = '') => {
-    const version = ++_searchVersion;
+    const version = ++_individualSearchVersion;
     set({ loading: true, error: null });
     try {
       const profileRes = await api.getIndividualProfile(id, type, subtype);
@@ -220,8 +232,8 @@ export const useCustomerStore = create<CustomerStoreState>((set, get) => ({
       const contactRes = await api.getContactInfo(profileData.nationalId as string);
       const contactData = contactRes.data;
 
-      // Discard stale response — user may have triggered another search
-      if (version !== _searchVersion) return null;
+      // Discard stale response — user may have triggered another Individual search
+      if (version !== _individualSearchVersion) return null;
 
       set({
         individualProfile: profileData,
@@ -238,7 +250,7 @@ export const useCustomerStore = create<CustomerStoreState>((set, get) => ({
       saveActiveCustomer('individual', profileData.nationalId);
       return profileData;
     } catch (err) {
-      if (version !== _searchVersion) return null;
+      if (version !== _individualSearchVersion) return null;
       const error = err as ApiError;
       set({ error: error.message, loading: false });
       throw err;
@@ -246,7 +258,7 @@ export const useCustomerStore = create<CustomerStoreState>((set, get) => ({
   },
 
   loadCorporateProfileById: async (id, type) => {
-    const version = ++_searchVersion;
+    const version = ++_corporateSearchVersion;
     set({ loading: true, error: null });
     try {
       const profileRes = await api.getCorporateProfile(id, type);
@@ -257,8 +269,8 @@ export const useCustomerStore = create<CustomerStoreState>((set, get) => ({
       const contactRes = await api.getContactInfo(profileData.brn as string, 'CORPORATE');
       const contactData = contactRes.data;
 
-      // Discard stale response
-      if (version !== _searchVersion) return null;
+      // Discard stale response — user may have triggered another Corporate search
+      if (version !== _corporateSearchVersion) return null;
 
       set({
         corporateProfile: profileData,
@@ -272,7 +284,7 @@ export const useCustomerStore = create<CustomerStoreState>((set, get) => ({
       saveActiveCustomer('corporate', profileData.brn);
       return profileData;
     } catch (err) {
-      if (version !== _searchVersion) return null;
+      if (version !== _corporateSearchVersion) return null;
       const error = err as ApiError;
       set({ error: error.message, loading: false });
       throw err;
