@@ -171,7 +171,13 @@ else
     {
         using var scope = app.Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        await dbContext.Database.EnsureCreatedAsync();
+        // EnsureCreatedAsync() bypasses EF's migration system entirely — it cannot apply future
+        // schema changes and leaves no history of what's been applied, unlike every other service in
+        // this repo. The live database has been baselined onto a real InitialCreate migration
+        // (Migrations/20260818182525_InitialCreate.cs, verified column-for-column identical to the
+        // schema EnsureCreatedAsync had already produced before switching), so MigrateAsync is a
+        // no-op here and a real migration path from now on.
+        await dbContext.Database.MigrateAsync();
         await LeadDbSeeder.SeedAsync(dbContext);
         app.Logger.LogInformation("Database initialized and seeded successfully.");
     }
