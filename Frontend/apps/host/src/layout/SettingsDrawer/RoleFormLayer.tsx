@@ -64,7 +64,7 @@ export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
 
         // Expand first remote app by default
         if (appsRes.items.length > 0) {
-          setExpandedApps({ [appsRes.items[0].key]: true })
+          setExpandedApps({ [`remote.${appsRes.items[0].key}`]: true })
         }
 
         if (roleId) {

@@ -24,19 +24,6 @@ export const LIMITS = {
   department: 150,
 } as const
 
-/**
- * Deliberately permissive. Full RFC 5322 is not worth implementing client-side and stricter patterns
- * reject legitimate addresses; the server's EmailAddress attribute is the real gate. This only catches
- * the obvious "no @" / "no domain" typo while the user is still looking at the field.
- */
-const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-/**
- * Indian phone numbers are written as +91 98765 43210, 098765-43210, (022) 2222 3333 and more, so the
- * shape is left loose and only the character set is constrained — same rule as the server's.
- */
-const PHONE_CHARS = /^[0-9+()\-.\s]*$/
-
 /** Application keys become Module Federation container names and permission-key roots. See below. */
 const APP_KEY_SHAPE = /^[a-z][a-z0-9-]*$/
 
@@ -50,16 +37,86 @@ export function maxLength(value: string | null | undefined, max: number, label: 
   return value != null && value.length > max ? `${label} cannot exceed ${max} characters.` : undefined
 }
 
+/**
+ * Email shape. Deliberately not a full RFC 5322 implementation — that pattern is famously
+ * unmaintainable and rejects addresses that are actually valid. This requires a local part, an @, a
+ * domain, and a dot-separated TLD of 2–24 letters, which is what the server's EmailAddress attribute
+ * effectively accepts too.
+ */
+const EMAIL_SHAPE = /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)*\.[A-Za-z]{2,24}$/
+
+/**
+ * Domains that are almost always a typo when something is appended to them.
+ *
+ * `ashok246@gmail.comsssssssss` is SYNTACTICALLY valid — `.comsssssssss` is a well-formed label, and
+ * no regex can prove it is not a real TLD. But nobody has ever meant to type it. Catching the
+ * near-miss against a handful of providers that account for most real addresses turns a silent
+ * mistake into a specific, correctable message. This is the same approach mail-check libraries take,
+ * kept to a short list so it stays honest rather than pretending to know every valid domain.
+ */
+const COMMON_DOMAINS = [
+  'gmail.com',
+  'googlemail.com',
+  'yahoo.com',
+  'yahoo.co.in',
+  'outlook.com',
+  'hotmail.com',
+  'live.com',
+  'icloud.com',
+  'rediffmail.com',
+  'protonmail.com',
+]
+
+/**
+ * Indian numbers are written as +91 98765 43210, 098765-43210, (022) 2222 3333 and more, so the SHAPE
+ * is left loose — but the digit count is not. E.164 caps a full international number at 15 digits, and
+ * nothing shorter than 7 is dialable, so anything outside that is a typo rather than a format we have
+ * not thought of.
+ *
+ * The previous rule only checked the character set, which meant it rejected letters but happily
+ * accepted "1" or a 40-digit string.
+ */
+const PHONE_CHARS = /^[0-9+()\-.\s]+$/
+const PHONE_MIN_DIGITS = 7
+const PHONE_MAX_DIGITS = 15
+
 export function email(value: string | null | undefined): string | undefined {
   if (value == null || value.trim() === '') return undefined
-  return EMAIL_SHAPE.test(value.trim()) ? undefined : 'Enter a valid email address.'
+  const trimmed = value.trim()
+
+  if (!EMAIL_SHAPE.test(trimmed)) return 'Enter a valid email address.'
+
+  const domain = trimmed.slice(trimmed.lastIndexOf('@') + 1).toLowerCase()
+
+  // Exact match against a known provider is fine; a near miss with junk appended is not.
+  if (!COMMON_DOMAINS.includes(domain)) {
+    const nearMiss = COMMON_DOMAINS.find((d) => domain.startsWith(d) && domain.length > d.length)
+    if (nearMiss) {
+      return `Did you mean @${nearMiss}? "${domain}" has extra characters.`
+    }
+  }
+
+  return undefined
 }
 
+/**
+ * Phone number. Required — an account with no reachable contact number is not much use to an
+ * administrator trying to reach the person, and it is a common control requirement.
+ */
 export function phone(value: string | null | undefined): string | undefined {
-  if (value == null || value.trim() === '') return undefined
-  return PHONE_CHARS.test(value)
-    ? undefined
-    : 'Phone number may contain only digits, spaces and + ( ) - . characters.'
+  if (value == null || value.trim() === '') return 'Phone number is required.'
+
+  const trimmed = value.trim()
+  if (!PHONE_CHARS.test(trimmed)) {
+    return 'Phone number may contain only digits, spaces and + ( ) - . characters.'
+  }
+
+  const digits = trimmed.replace(/\D/g, '').length
+  if (digits < PHONE_MIN_DIGITS || digits > PHONE_MAX_DIGITS) {
+    return `Enter a valid phone number (${PHONE_MIN_DIGITS}–${PHONE_MAX_DIGITS} digits).`
+  }
+
+  return undefined
 }
 
 /**
