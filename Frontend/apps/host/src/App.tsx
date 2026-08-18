@@ -1,12 +1,12 @@
 import { lazy, Suspense, useEffect } from 'react'
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, type Location } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useParams, type Location } from 'react-router-dom'
 import { AppShell } from './layout/AppShell/AppShell'
 import { RequireAuth } from './features/auth/components/RequireAuth'
 import { RequireCapability } from './features/auth/components/RequireCapability'
 import { useSilentRefresh } from './features/auth/hooks/useSilentRefresh'
 import { useAuthStore } from './features/auth/store/authStore'
 import { useModuleRegistryStore } from './shared/stores/moduleRegistryStore'
-import { SetupPanel } from './layout/SetupPanel/SetupPanel'
+import { useSettingsDrawerStore, type SettingsTab } from './shared/stores/settingsDrawerStore'
 import { RouteFallback } from './shared/components/RouteFallback/RouteFallback'
 import { lazyWithPreload, preloadWhenIdle } from './shared/utils/lazyWithPreload'
 
@@ -18,7 +18,7 @@ import { lazyWithPreload, preloadWhenIdle } from './shared/utils/lazyWithPreload
  * screen was downloading and parsing the audit-logs page, the permission matrix, and all three
  * settings CRUD flows before they had typed a password.
  *
- * AppShell / SetupPanel / the route guards stay eager: they are the frame around every authenticated
+ * AppShell and the route guards stay eager: they are the frame around every authenticated
  * route, so splitting them would only add a waterfall.
  */
 // Preloadable: nearly every sign-in lands here, so the chunk is fetched during idle time on the login
@@ -30,12 +30,6 @@ const LoginPage = lazy(() => import('./pages/LoginPage/LoginPage').then((m) => (
 const MaintenancePage = lazy(() => import('./pages/MaintenancePage/MaintenancePage').then((m) => ({ default: m.MaintenancePage })))
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage/NotFoundPage').then((m) => ({ default: m.NotFoundPage })))
 const RemoteAppPage = lazy(() => import('./pages/RemoteAppPage/RemoteAppPage').then((m) => ({ default: m.RemoteAppPage })))
-const UsersListPage = lazy(() => import('./features/settings-users/pages/UsersListPage').then((m) => ({ default: m.UsersListPage })))
-const UserFormPage = lazy(() => import('./features/settings-users/pages/UserFormPage').then((m) => ({ default: m.UserFormPage })))
-const RolesListPage = lazy(() => import('./features/settings-roles/pages/RolesListPage').then((m) => ({ default: m.RolesListPage })))
-const RoleFormPage = lazy(() => import('./features/settings-roles/pages/RoleFormPage').then((m) => ({ default: m.RoleFormPage })))
-const RemoteAppsListPage = lazy(() => import('./features/settings-applications/pages/RemoteAppsListPage').then((m) => ({ default: m.RemoteAppsListPage })))
-const RemoteAppFormPage = lazy(() => import('./features/settings-applications/pages/RemoteAppFormPage').then((m) => ({ default: m.RemoteAppFormPage })))
 const AuditLogsPage = lazy(() => import('./features/system-audit-logs/pages/AuditLogsPage').then((m) => ({ default: m.AuditLogsPage })))
 const ProfilePage = lazy(() => import('./features/profile/pages/ProfilePage').then((m) => ({ default: m.ProfilePage })))
 
@@ -45,6 +39,46 @@ const FEATURE_KEYS = {
   applications: 'host.settings.applications',
   auditLogs: 'host.system.audit-logs',
 } as const
+
+/**
+ * Opens the settings drawer for a `/settings/...` URL, then returns to the dashboard.
+ *
+ * Users, Roles and Applications used to exist twice over: once as routed full pages behind SetupPanel,
+ * and once as tabs inside the gear drawer. Both were live, so the same CRUD was maintained in two
+ * places and they had drifted badly — the routed forms never received the validation or the
+ * catalog-driven permission grid, which is why every bug reported against those screens reproduced
+ * there and not in the drawer.
+ *
+ * The URLs are kept rather than deleted so bookmarks keep working AND so global search keeps working:
+ * SearchAppService builds routes like "/settings/users/{id}" server-side, and this is what turns one
+ * into an open drawer. `replace` is used so the redirect leaves no dead history entry for Back to
+ * bounce off.
+ */
+function SettingsDeepLink({ tab }: { tab: SettingsTab }) {
+  const { id } = useParams<{ id: string }>()
+  const openTab = useSettingsDrawerStore((s) => s.open)
+  const pushLayer = useSettingsDrawerStore((s) => s.pushLayer)
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  useEffect(() => {
+    openTab(tab)
+
+    // A trailing /new or /:id opens the matching form layer straight away, which is what the routed
+    // form pages used to do.
+    const isNew = location.pathname.endsWith('/new')
+    if (isNew || id) {
+      const entityId = isNew ? undefined : id
+      if (tab === 'users') pushLayer({ type: 'user-form', userId: entityId })
+      else if (tab === 'roles') pushLayer({ type: 'role-form', roleId: entityId })
+      else if (tab === 'applications') pushLayer({ type: 'app-form', appId: entityId })
+    }
+
+    navigate('/', { replace: true })
+  }, [tab, id, location.pathname, openTab, pushLayer, navigate])
+
+  return <RouteFallback />
+}
 
 function LoginRoute() {
   const status = useAuthStore((s) => s.status)
@@ -166,80 +200,57 @@ function AppRoutes() {
           }
         />
 
-        <Route path="settings" element={<SetupPanel />}>
-          <Route index element={<Navigate to="users" replace />} />
-          <Route
-            path="users"
-            element={
-              <RequireCapability featureKey={FEATURE_KEYS.users}>
-                <UsersListPage />
-              </RequireCapability>
-            }
-          />
-          <Route
-            path="users/new"
-            element={
-              <RequireCapability featureKey={FEATURE_KEYS.users} capability="Create">
-                <UserFormPage />
-              </RequireCapability>
-            }
-          />
-          <Route
-            path="users/:id"
-            element={
-              <RequireCapability featureKey={FEATURE_KEYS.users} capability="Edit">
-                <UserFormPage />
-              </RequireCapability>
-            }
-          />
-          <Route
-            path="roles"
-            element={
-              <RequireCapability featureKey={FEATURE_KEYS.roles}>
-                <RolesListPage />
-              </RequireCapability>
-            }
-          />
-          <Route
-            path="roles/new"
-            element={
-              <RequireCapability featureKey={FEATURE_KEYS.roles} capability="Create">
-                <RoleFormPage />
-              </RequireCapability>
-            }
-          />
-          <Route
-            path="roles/:id"
-            element={
-              <RequireCapability featureKey={FEATURE_KEYS.roles} capability="Edit">
-                <RoleFormPage />
-              </RequireCapability>
-            }
-          />
-          <Route
-            path="applications"
-            element={
-              <RequireCapability featureKey={FEATURE_KEYS.applications}>
-                <RemoteAppsListPage />
-              </RequireCapability>
-            }
-          />
-          <Route
-            path="applications/new"
-            element={
-              <RequireCapability featureKey={FEATURE_KEYS.applications} capability="Create">
-                <RemoteAppFormPage />
-              </RequireCapability>
-            }
-          />
-          <Route
-            path="applications/:id"
-            element={
-              <RequireCapability featureKey={FEATURE_KEYS.applications} capability="Edit">
-                <RemoteAppFormPage />
-              </RequireCapability>
-            }
-          />
+        {/*
+          Settings has no pages of its own — it IS the gear drawer, rendered globally by AppShell.
+
+          These routes exist so every /settings/* URL still resolves: each opens the drawer on the right
+          tab and, for /new or /:id, pushes the matching form layer, then hands the URL back to the
+          dashboard. That keeps bookmarks, the back button and — importantly — global search working,
+          since SearchAppService builds "/settings/users/{id}" style routes server-side.
+
+          The routed page components and SetupPanel are gone. They were a second, older implementation
+          of the same CRUD, and every bug reported against these screens came from them rather than the
+          drawer: the user form there had no validation at all (so it accepted "989898989sssss" and
+          "ashok246@gmail.comsssssssss"), and the role form's permission grid still read capabilities off
+          the PARENT feature — which for remote.employee declares none, so every column rendered a dash.
+          Deleting them is what fixes those, not patching them twice.
+        */}
+        <Route path="settings">
+          <Route index element={<SettingsDeepLink tab="users" />} />
+          {(
+            [
+              ['users', FEATURE_KEYS.users, 'Create'],
+              ['roles', FEATURE_KEYS.roles, 'Create'],
+              ['applications', FEATURE_KEYS.applications, 'Register'],
+            ] as const
+          ).map(([tab, featureKey, createCapability]) => (
+            <Route key={tab} path={tab}>
+              <Route
+                index
+                element={
+                  <RequireCapability featureKey={featureKey}>
+                    <SettingsDeepLink tab={tab} />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="new"
+                element={
+                  <RequireCapability featureKey={featureKey} capability={createCapability}>
+                    <SettingsDeepLink tab={tab} />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path=":id"
+                element={
+                  <RequireCapability featureKey={featureKey} capability="Edit">
+                    <SettingsDeepLink tab={tab} />
+                  </RequireCapability>
+                }
+              />
+            </Route>
+          ))}
         </Route>
       </Route>
 
