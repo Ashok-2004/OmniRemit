@@ -4,11 +4,12 @@ import { rolesApi, type RoleListItemDto } from '../../features/settings-roles/ap
 import { useSettingsDrawerStore } from '../../shared/stores/settingsDrawerStore'
 import { useDebouncedValue } from '../../shared/hooks/useDebouncedValue'
 import { Icon } from '../../shared/components/Icon/Icon'
-import { SkeletonBlock } from '../../shared/components/Skeleton'
+import { SkeletonRoleCard } from '../../shared/components/Skeleton'
 import { Pagination } from '../../shared/components/Pagination/Pagination'
 import { Modal } from '../../shared/components/Modal/Modal'
 import { Button } from '../../shared/components/Button/Button'
 import { ApiError } from '../../shared/api/httpClient'
+import { toast } from '../../shared/stores/toastStore'
 import styles from './SettingsRolesTab.module.css'
 
 const PAGE_SIZE = 10
@@ -80,10 +81,12 @@ export function SettingsRolesTab() {
 
   async function confirmDelete() {
     if (!pendingDelete || !accessToken) return
+    const roleName = pendingDelete.name
     setDeleting(true)
     try {
       await rolesApi.remove(accessToken, pendingDelete.id)
       setPendingDelete(null)
+      toast.success(`Role '${roleName}' deleted successfully.`)
       // If the last row on the final page just went, step back rather than showing an empty page.
       if (roles.length === 1 && page > 1) setPage((p) => p - 1)
       else notifyMutation()
@@ -133,10 +136,8 @@ export function SettingsRolesTab() {
 
       <div className={styles.rolesList}>
         {loading ? (
-          Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className={styles.skeletonCard}>
-              <SkeletonBlock height={52} width="100%" />
-            </div>
+          Array.from({ length: 4 }).map((_, i) => (
+            <SkeletonRoleCard key={i} />
           ))
         ) : roles.length > 0 ? (
           roles.map((role) => (

@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+
+    /* Bundler mode — matches this project's Vite build, not tsc emit */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    /* Incremental JSX -> TSX migration: .jsx files must keep compiling
+       alongside .ts/.tsx ones (allowJs), and are intentionally NOT held to
+       the same strictness as converted files yet (checkJs stays off) so
+       this migration can proceed file-by-file without first fixing every
+       untyped .jsx file's implicit `any` usage. Converted .ts/.tsx files
+       ARE fully strict — see "strict" below. */
+    "allowJs": true,
+    "checkJs": false,
+
+    "strict": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["src"]
+}

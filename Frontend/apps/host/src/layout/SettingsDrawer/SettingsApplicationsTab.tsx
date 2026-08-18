@@ -5,11 +5,12 @@ import { useSettingsDrawerStore } from '../../shared/stores/settingsDrawerStore'
 import { useDebouncedValue } from '../../shared/hooks/useDebouncedValue'
 import { useModuleRegistryStore } from '../../shared/stores/moduleRegistryStore'
 import { Icon } from '../../shared/components/Icon/Icon'
-import { SkeletonBlock } from '../../shared/components/Skeleton'
+import { SkeletonAppCard } from '../../shared/components/Skeleton'
 import { Pagination } from '../../shared/components/Pagination/Pagination'
 import { Modal } from '../../shared/components/Modal/Modal'
 import { Button } from '../../shared/components/Button/Button'
 import { ApiError } from '../../shared/api/httpClient'
+import { toast } from '../../shared/stores/toastStore'
 import styles from './SettingsApplicationsTab.module.css'
 
 const PAGE_SIZE = 10
@@ -87,10 +88,12 @@ export function SettingsApplicationsTab() {
 
   async function confirmDelete() {
     if (!pendingDelete || !accessToken) return
+    const deletedName = pendingDelete.displayName
     setDeleting(true)
     try {
       await remoteAppsApi.remove(accessToken, pendingDelete.id)
       setPendingDelete(null)
+      toast.success(`Application '${deletedName}' removed successfully.`)
       // The sidebar lists registered apps, so it has to be refreshed or the removed app lingers
       // there until the next full page load.
       void useModuleRegistryStore.getState().fetchForSidebar(accessToken)
@@ -111,9 +114,8 @@ export function SettingsApplicationsTab() {
     setResyncResult(null)
     try {
       const res = await remoteAppsApi.resyncPermissions(accessToken)
-      // Reported in the panel rather than through window.alert, which can be suppressed by the
-      // browser and would then make a successful resync look like nothing happened.
       setResyncResult(`Resynced permissions for ${res.resyncedCount} application(s).`)
+      toast.success(`Resynced permissions for ${res.resyncedCount} application(s).`)
       notifyMutation()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not resync permissions.')
@@ -132,6 +134,7 @@ export function SettingsApplicationsTab() {
 
   const handleSaveStatus = async () => {
     if (!accessToken || !statusTargetApp) return
+    const appName = statusTargetApp.displayName
     setUpdatingStatus(true)
     try {
       await remoteAppsApi.updateStatus(
@@ -141,6 +144,7 @@ export function SettingsApplicationsTab() {
         newStatus === 'Maintenance' ? maintenanceMessage || 'Application is temporarily down for maintenance.' : null
       )
       setStatusTargetApp(null)
+      toast.success(`Application '${appName}' status updated to ${newStatus}.`)
       // The sidebar has to be refreshed too: an app moved to Maintenance must stop being navigable
       // immediately, without waiting for a page reload.
       void useModuleRegistryStore.getState().fetchForSidebar(accessToken)
@@ -199,10 +203,8 @@ export function SettingsApplicationsTab() {
       {/* Apps List */}
       <div className={styles.appList}>
         {loading ? (
-          Array.from({ length: 2 }).map((_, i) => (
-            <div key={i} className={styles.skeletonCard}>
-              <SkeletonBlock height={64} width="100%" />
-            </div>
+          Array.from({ length: 3 }).map((_, i) => (
+            <SkeletonAppCard key={i} />
           ))
         ) : apps.length > 0 ? (
           apps.map((app) => {

@@ -19,6 +19,8 @@ export interface TopbarProps {
   userName?: string
   settingsAccess?: TopbarSettingsAccess
   onLogout?: () => void
+  /** Mobile: callback to toggle the sidebar open/closed */
+  onMobileMenuToggle?: () => void
 }
 
 function getUserInitials(name?: string | null): string {
@@ -31,7 +33,7 @@ function getUserInitials(name?: string | null): string {
   return name.slice(0, 2).toUpperCase()
 }
 
-export function Topbar({ userName, settingsAccess, onLogout }: TopbarProps) {
+export function Topbar({ userName, settingsAccess, onLogout, onMobileMenuToggle }: TopbarProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef      = useRef<HTMLDivElement>(null)
   const triggerRef   = useRef<HTMLButtonElement>(null)
@@ -50,6 +52,16 @@ export function Topbar({ userName, settingsAccess, onLogout }: TopbarProps) {
 
   return (
     <header className={styles.topbar}>
+
+      {/* Hamburger — only visible on mobile via CSS, always mounted for clean transitions */}
+      <button
+        type="button"
+        className={styles.hamburgerBtn}
+        onClick={onMobileMenuToggle}
+        aria-label="Toggle navigation menu"
+      >
+        <Icon.Menu width={20} height={20} />
+      </button>
 
       {/*
         Real search. This was a bare <input> with no handler — typing in it did nothing at all.
@@ -133,18 +145,6 @@ export function Topbar({ userName, settingsAccess, onLogout }: TopbarProps) {
                 <Icon.Users width={15} height={15} />
                 <span>My Profile</span>
               </Link>
-
-              {canAccessSettings && (
-                <button
-                  type="button"
-                  role="menuitem"
-                  className={styles.menuItem}
-                  onClick={() => { setMenuOpen(false); openSettings('users') }}
-                >
-                  <Icon.Settings width={15} height={15} />
-                  <span>Settings</span>
-                </button>
-              )}
 
               <div className={styles.menuDivider} />
 

@@ -299,3 +299,50 @@
 
 .menuItemDanger { color: #dc2626; }
 .menuItemDanger:hover { background: #fef2f2; color: #b91c1c; }
+
+/* ── Mobile hamburger button ──────────────────────────────────── */
+.hamburgerBtn {
+  /* Hidden on desktop — sidebar is always visible */
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  color: #475569;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.hamburgerBtn:hover { background: #f1f5f9; color: #0f172a; }
+
+/* ── Mobile / tablet breakpoints ──────────────────────────────── */
+@media (max-width: 768px) {
+  .topbar {
+    padding: 0 14px;
+    gap: 10px;
+  }
+
+  /* Show hamburger on mobile */
+  .hamburgerBtn { display: flex; }
+
+  /* Let search shrink to fill remaining space */
+  .search {
+    flex: 1;
+    min-width: 0;
+    width: auto;
+  }
+
+  /* Reduce avatar label on very small screens */
+  .userName { display: none; }
+}
+
+@media (max-width: 480px) {
+  .topbar { padding: 0 10px; gap: 6px; }
+  /* Compress actions gap */
+  .actions { gap: 2px; }
+}
+

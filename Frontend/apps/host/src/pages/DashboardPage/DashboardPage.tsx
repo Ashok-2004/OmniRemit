@@ -6,7 +6,7 @@ import { auditLogsApi, type AuditLogDto } from '../../features/system-audit-logs
 import { dashboardApi, type DashboardStatsDto, type HealthEntryDto } from '../../features/dashboard/api/dashboardApi'
 import { ApiError } from '../../shared/api/httpClient'
 import { useSettingsDrawerStore } from '../../shared/stores/settingsDrawerStore'
-import { SkeletonBlock } from '../../shared/components/Skeleton'
+import { SkeletonStatCard, SkeletonDashboardWidget, SkeletonAuditRow } from '../../shared/components/Skeleton'
 import { Icon } from '../../shared/components/Icon/Icon'
 import styles from './DashboardPage.module.css'
 import { APP_NAME, COPYRIGHT_YEAR } from '../../shared/config/branding'
@@ -301,110 +301,101 @@ export function DashboardPage() {
 
       {/* Top 4 Summary Stat Cards */}
       <div className={styles.statCardsGrid}>
-        {/* Total Users */}
-        <div className={styles.statCard}>
-          <div className={styles.statCardTop}>
-            <div className={`${styles.statIconWrap} ${styles.iconWrapBlue}`}>
-              <Icon.Users width={20} height={20} />
+        {loading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <SkeletonStatCard key={i} />
+          ))
+        ) : (
+          <>
+            {/* Total Users */}
+            <div className={styles.statCard}>
+              <div className={styles.statCardTop}>
+                <div className={`${styles.statIconWrap} ${styles.iconWrapBlue}`}>
+                  <Icon.Users width={20} height={20} />
+                </div>
+                <span className={styles.statLabel}>Total Users</span>
+              </div>
+              <div className={styles.statValueRow}>
+                <span className={styles.statValue}>
+                  {totalUsers}
+                </span>
+              </div>
+              <div className={styles.statTrendRow}>
+                <span className={styles.trendGreen}>
+                  <span className={styles.trendArrow}>↑</span> Active Accounts
+                </span>
+                <span className={styles.trendSubtitle}>Platform-wide</span>
+              </div>
             </div>
-            <span className={styles.statLabel}>Total Users</span>
-          </div>
-          <div className={styles.statValueRow}>
-            <span className={styles.statValue}>
-              {loading ? <SkeletonBlock height={32} width={36} /> : totalUsers}
-            </span>
-          </div>
-          <div className={styles.statTrendRow}>
-            <span className={styles.trendGreen}>
-              <span className={styles.trendArrow}>↑</span> Active Accounts
-            </span>
-            <span className={styles.trendSubtitle}>Platform-wide</span>
-          </div>
-        </div>
 
-        {/* Total Roles */}
-        <div className={styles.statCard}>
-          <div className={styles.statCardTop}>
-            <div className={`${styles.statIconWrap} ${styles.iconWrapPurple}`}>
-              <Icon.ShieldCheck width={20} height={20} />
+            {/* Total Roles */}
+            <div className={styles.statCard}>
+              <div className={styles.statCardTop}>
+                <div className={`${styles.statIconWrap} ${styles.iconWrapPurple}`}>
+                  <Icon.ShieldCheck width={20} height={20} />
+                </div>
+                <span className={styles.statLabel}>System Roles</span>
+              </div>
+              <div className={styles.statValueRow}>
+                <span className={styles.statValue}>
+                  {totalRoles}
+                </span>
+              </div>
+              <div className={styles.statTrendRow}>
+                <span className={styles.trendGreen}>
+                  <span className={styles.trendArrow}>↑</span> Granular RBAC
+                </span>
+                <span className={styles.trendSubtitle}>Configured</span>
+              </div>
             </div>
-            <span className={styles.statLabel}>System Roles</span>
-          </div>
-          <div className={styles.statValueRow}>
-            <span className={styles.statValue}>
-              {loading ? <SkeletonBlock height={32} width={36} /> : totalRoles}
-            </span>
-          </div>
-          <div className={styles.statTrendRow}>
-            <span className={styles.trendGreen}>
-              <span className={styles.trendArrow}>↑</span> Granular RBAC
-            </span>
-            <span className={styles.trendSubtitle}>Configured</span>
-          </div>
-        </div>
 
-        {/* Total Applications */}
-        <div className={styles.statCard}>
-          <div className={styles.statCardTop}>
-            <div className={`${styles.statIconWrap} ${styles.iconWrapGreen}`}>
-              <Icon.Grid width={20} height={20} />
-            </div>
-            <span className={styles.statLabel}>Remote Applications</span>
-          </div>
-          <div className={styles.statValueRow}>
-            <span className={appsUnavailable ? styles.statValueUnavailable : styles.statValue}>
-              {loading ? (
-                <SkeletonBlock height={32} width={36} />
-              ) : appsUnavailable ? (
-                '—'
-              ) : (
-                totalApps || apps.length || 0
-              )}
-            </span>
-          </div>
-          <div className={styles.statTrendRow}>
-            {appsUnavailable ? (
-              /* An em dash plus this line, instead of "0 / Federated Apps / Live loaded" — the
-                 operator can see the number is unknown rather than believing no apps are registered. */
-              <span className={styles.trendUnavailable} role="status">
-                Registry unreachable
-              </span>
-            ) : (
-              <>
+            {/* Total Applications */}
+            <div className={styles.statCard}>
+              <div className={styles.statCardTop}>
+                <div className={`${styles.statIconWrap} ${styles.iconWrapGreen}`}>
+                  <Icon.Grid width={20} height={20} />
+                </div>
+                <span className={styles.statLabel}>Remote Applications</span>
+              </div>
+              <div className={styles.statValueRow}>
+                <span className={styles.statValue}>
+                  {totalApps || apps.length || 0}
+                </span>
+              </div>
+              <div className={styles.statTrendRow}>
                 <span className={styles.trendGreen}>
                   <span className={styles.trendArrow}>↑</span> Federated Apps
                 </span>
                 <span className={styles.trendSubtitle}>Live loaded</span>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* System Health Status */}
-        <div className={styles.statCard}>
-          <div className={styles.statCardTop}>
-            <div className={`${styles.statIconWrap} ${styles.iconWrapEmerald}`}>
-              <Icon.CheckCircle width={20} height={20} />
+              </div>
             </div>
-            <span className={styles.statLabel}>System Status</span>
-          </div>
-          <div className={styles.statValueRow}>
-            <div className={styles.statusLiveRow}>
-              {systemStatus.tone === 'healthy' && <span className={styles.pulsingDot} />}
-              <span
-                className={
-                  systemStatus.tone === 'danger' ? styles.statValueDegraded : styles.statValueHealthy
-                }
-              >
-                {systemStatus.label}
-              </span>
+            {/* System Health Status */}
+            <div className={styles.statCard}>
+              <div className={styles.statCardTop}>
+                <div className={`${styles.statIconWrap} ${styles.iconWrapEmerald}`}>
+                  <Icon.CheckCircle width={20} height={20} />
+                </div>
+                <span className={styles.statLabel}>System Status</span>
+              </div>
+              <div className={styles.statValueRow}>
+                <div className={styles.statusLiveRow}>
+                  {systemStatus.tone === 'healthy' && <span className={styles.pulsingDot} />}
+                  <span
+                    className={
+                      systemStatus.tone === 'danger' ? styles.statValueDegraded : styles.statValueHealthy
+                    }
+                  >
+                    {systemStatus.label}
+                  </span>
+                </div>
+              </div>
+              <div className={styles.statTrendRow}>
+                {/* Real reachability, not an invented uptime percentage. */}
+                <span className={styles.trendSubtitle}>{systemStatus.detail}</span>
+              </div>
             </div>
-          </div>
-          <div className={styles.statTrendRow}>
-            {/* Real reachability, not an invented uptime percentage. */}
-            <span className={styles.trendSubtitle}>{systemStatus.detail}</span>
-          </div>
-        </div>
+          </>
+        )}
       </div>
 
       {/* Row 1: Users by Role (Left) & Quick Operations (Right) */}
@@ -576,9 +567,7 @@ export function DashboardPage() {
           <div className={styles.activityFeed}>
             {loading ? (
               Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className={styles.activityRow}>
-                  <SkeletonBlock height={40} width="100%" />
-                </div>
+                <SkeletonAuditRow key={i} />
               ))
             ) : recentLogs.length > 0 ? (
               recentLogs.slice(0, 4).map((log, index) => {
@@ -655,10 +644,9 @@ export function DashboardPage() {
 
           <div className={styles.appsListContainer}>
             {loading ? (
-              <div className={styles.appsListPlaceholder}>
-                <SkeletonBlock height={48} width="100%" />
-                <SkeletonBlock height={48} width="100%" />
-              </div>
+              Array.from({ length: 4 }).map((_, i) => (
+                <SkeletonDashboardWidget key={i} />
+              ))
             ) : apps.length > 0 ? (
               <div className={styles.appsList}>
                 {apps.map((app, index) => {

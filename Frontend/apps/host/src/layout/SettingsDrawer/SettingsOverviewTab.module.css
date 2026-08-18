@@ -16,6 +16,8 @@
   color: #0f172a;
   margin: 0;
   letter-spacing: -0.01em;
+  border-left: 3px solid #2563eb;
+  padding-left: 10px;
 }
 
 .sectionSubtitle {
@@ -38,22 +40,43 @@
 }
 
 .statCard {
+  position: relative;
+  overflow: hidden;
   background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 12px 14px;
+  border: 1px solid #eaecf0;
+  border-radius: 14px;
+  padding: 14px 14px 12px;
   display: flex;
   align-items: center;
   gap: 10px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
-  transition: all 0.15s ease;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
   min-width: 0;
 }
 
-.statCard:hover {
-  border-color: #cbd5e1;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.04);
+.statCard::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: 14px 14px 0 0;
+  background: linear-gradient(90deg, #2563eb, #60a5fa);
 }
+
+.statCard:nth-child(1)::before { background: linear-gradient(90deg, #7c3aed, #a78bfa); }
+.statCard:nth-child(2)::before { background: linear-gradient(90deg, #059669, #34d399); }
+.statCard:nth-child(3)::before { background: linear-gradient(90deg, #2563eb, #60a5fa); }
+.statCard:nth-child(4)::before { background: linear-gradient(90deg, #059669, #10b981); }
+.statCard:nth-child(5)::before { background: linear-gradient(90deg, #d97706, #fbbf24); }
+
+.statCard:hover {
+  border-color: #c8d4e4;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+
 
 .iconWrap {
   width: 36px;
@@ -179,6 +202,8 @@
   font-weight: 700;
   color: #0f172a;
   margin: 0;
+  border-left: 3px solid #2563eb;
+  padding-left: 10px;
 }
 
 .panelSubtitle {
@@ -193,10 +218,15 @@
   flex-direction: column;
   gap: 8px;
   background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  border: 1px solid #eaecf0;
+  border-radius: 14px;
   padding: 14px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  transition: all 0.15s ease;
+}
+
+.activityList:hover {
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
 }
 
 .activitySkeleton {
@@ -261,7 +291,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: #4f46e5;
+  color: #2563eb;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -270,7 +300,7 @@
 }
 
 .viewAllButton:hover {
-  color: #4338ca;
+  color: #1d4ed8;
   text-decoration: underline;
 }
 
@@ -286,8 +316,8 @@
   align-items: center;
   gap: 10px;
   background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  border: 1px solid #eaecf0;
+  border-radius: 14px;
   padding: 9px 12px;
   width: 100%;
   cursor: pointer;
@@ -300,6 +330,7 @@
   background: #f8fafc;
   border-color: #cbd5e1;
   transform: translateX(2px);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
 }
 
 .actionIcon {
@@ -329,12 +360,17 @@
   align-items: flex-start;
   gap: 10px;
   background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  border: 1px solid #eaecf0;
+  border-radius: 14px;
   padding: 12px 14px;
   color: #475569;
   font-size: 12px;
   line-height: 1.4;
+  transition: all 0.15s ease;
+}
+
+.infoBox:hover {
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
 }
 
 .infoIcon {

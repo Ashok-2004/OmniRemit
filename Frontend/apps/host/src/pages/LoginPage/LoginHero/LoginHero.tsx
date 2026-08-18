@@ -78,7 +78,7 @@ export function LoginHero() {
             Every line below is a real, implemented behaviour a reader can verify in the code, and each
             was exercised against the running services.
           */}
-          <div className={styles.stats}>
+          {/* <div className={styles.stats}>
             <div className={styles.stat}>
               <span className={styles.statValue}>
                 Role<span className={styles.statAccent}>-based</span>
@@ -97,7 +97,7 @@ export function LoginHero() {
               </span>
               <span className={styles.statLabel}>Idle sessions signed out</span>
             </div>
-          </div>
+          </div> */}
         </div>
 
         {/* 3D Illustration */}

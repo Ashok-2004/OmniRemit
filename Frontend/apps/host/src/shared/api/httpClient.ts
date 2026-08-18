@@ -1,10 +1,13 @@
 export class ApiError extends Error {
   status: number
+  /** Field-level validation errors from ASP.NET ValidationProblemDetails `errors` dictionary. */
+  errors: Record<string, string[]> | null
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, errors: Record<string, string[]> | null = null) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.errors = errors
   }
 }
 
@@ -87,8 +90,8 @@ export async function apiFetch<T>(url: string, options: ApiFetchOptions = {}): P
   }
 
   if (!response.ok) {
-    const title = await readErrorTitle(response)
-    throw new ApiError(response.status, title)
+    const { title, errors } = await readErrorBody(response)
+    throw new ApiError(response.status, title, errors)
   }
 
   if (response.status === 204) {
@@ -98,11 +101,14 @@ export async function apiFetch<T>(url: string, options: ApiFetchOptions = {}): P
   return (await response.json()) as T
 }
 
-async function readErrorTitle(response: Response): Promise<string> {
+async function readErrorBody(response: Response): Promise<{ title: string; errors: Record<string, string[]> | null }> {
   try {
-    const problem = (await response.json()) as { title?: string }
-    return problem.title ?? response.statusText
+    const problem = (await response.json()) as { title?: string; errors?: Record<string, string[]> }
+    return {
+      title: problem.title ?? response.statusText,
+      errors: problem.errors && Object.keys(problem.errors).length > 0 ? problem.errors : null,
+    }
   } catch {
-    return response.statusText || `Request failed with status ${response.status}`
+    return { title: response.statusText || `Request failed with status ${response.status}`, errors: null }
   }
 }

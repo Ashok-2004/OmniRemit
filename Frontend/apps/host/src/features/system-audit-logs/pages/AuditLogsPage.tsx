@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuthStore } from '../../auth/store/authStore'
 import { Badge, type BadgeTone } from '../../../shared/components/Badge/Badge'
-import { SkeletonTable } from '../../../shared/components/Skeleton'
+import { SkeletonBlock } from '../../../shared/components/Skeleton'
 import { Modal } from '../../../shared/components/Modal/Modal'
 import { PermissionGate } from '../../../shared/components/PermissionGate/PermissionGate'
 import { ApiError } from '../../../shared/api/httpClient'
@@ -11,7 +11,8 @@ import { Icon } from '../../../shared/components/Icon/Icon'
 import styles from './AuditLogsPage.module.css'
 
 const FEATURE = 'host.system.audit-logs'
-const PAGE_SIZE = 25
+const DEFAULT_PAGE_SIZE = 10
+const PAGE_SIZE_OPTIONS = [5, 10, 15, 20] as const
 
 const SERVICE_TONES: Record<string, BadgeTone> = {
   AuthService: 'primary',
@@ -34,6 +35,44 @@ function formatTimestamp(iso: string) {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+interface ParsedUserAgent {
+  browser: string
+  os: string
+}
+
+function parseUserAgent(ua?: string | null): ParsedUserAgent | null {
+  if (!ua) return null
+  let browser = 'Browser'
+  let os = 'Device'
+
+  // OS detection
+  if (/Windows NT 10.0|Windows NT 11/i.test(ua)) os = 'Windows 10/11'
+  else if (/Windows/i.test(ua)) os = 'Windows'
+  else if (/iPhone|iPad/i.test(ua)) os = 'iOS'
+  else if (/Android/i.test(ua)) os = 'Android'
+  else if (/Mac OS X|Macintosh/i.test(ua)) os = 'macOS'
+  else if (/Linux/i.test(ua)) os = 'Linux'
+
+  // Browser detection (order matters: Edge contains Chrome, Chrome contains Safari)
+  if (/Edg\/([\d.]+)/i.test(ua)) {
+    const m = ua.match(/Edg\/([\d.]+)/i)
+    browser = m ? `Edge ${m[1].split('.')[0]}` : 'Edge'
+  } else if (/Chrome\/([\d.]+)/i.test(ua)) {
+    const m = ua.match(/Chrome\/([\d.]+)/i)
+    browser = m ? `Chrome ${m[1].split('.')[0]}` : 'Chrome'
+  } else if (/Firefox\/([\d.]+)/i.test(ua)) {
+    const m = ua.match(/Firefox\/([\d.]+)/i)
+    browser = m ? `Firefox ${m[1].split('.')[0]}` : 'Firefox'
+  } else if (/Version\/([\d.]+).*Safari/i.test(ua)) {
+    const m = ua.match(/Version\/([\d.]+)/i)
+    browser = m ? `Safari ${m[1].split('.')[0]}` : 'Safari'
+  } else if (/Safari/i.test(ua)) {
+    browser = 'Safari'
+  }
+
+  return { browser, os }
 }
 
 type DateRangePreset = 'today' | 'yesterday' | 'week' | 'month' | 'all'
@@ -99,6 +138,9 @@ export function AuditLogsPage() {
   const [activeTab, setActiveTab] = useState<TabId>(TAB_IDS.auditEvents)
   const [dateRange, setDateRange] = useState<DateRangePreset>('week')
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
+  const [isCustomPageSize, setIsCustomPageSize] = useState(false)
+  const [customPageSizeInput, setCustomPageSizeInput] = useState('')
   const [service, setService] = useState('')
   // Debounced so typing a service name does not fire one audit-log query per keystroke. The audit
   // table is the largest in the platform, so this is the query least worth running on every letter.
@@ -110,6 +152,8 @@ export function AuditLogsPage() {
   const [error, setError] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const [selectedFailure, setSelectedFailure] = useState<AuditLogDto | null>(null)
+  /** Which audit-event row has its Details expanded (by id). Click again to collapse. */
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null)
 
   // Bumped by the Refresh button to force a refetch of the current query. A counter rather than calling
   // a loader directly, so refreshing goes through exactly the same effect — and therefore the same
@@ -162,7 +206,7 @@ export function AuditLogsPage() {
       try {
         const result = await auditLogsApi.list(accessToken!, {
           page,
-          pageSize: PAGE_SIZE,
+          pageSize,
           service: debouncedService || undefined,
           action: TAB_ACTION_FILTER[activeTab],
           ...range,
@@ -182,13 +226,12 @@ export function AuditLogsPage() {
     return () => {
       cancelled = true
     }
-  }, [accessToken, page, debouncedService, activeTab, range, refreshKey])
+  }, [accessToken, page, pageSize, debouncedService, activeTab, range, refreshKey])
 
-  // Changing the filter invalidates the page number. Separate from the fetch effect so it cannot cause
-  // a second request: setting page while already on page 1 is a no-op that React bails out of.
+  // Changing the filter or page size invalidates the page number.
   useEffect(() => {
     setPage(1)
-  }, [activeTab, dateRange, debouncedService])
+  }, [activeTab, dateRange, debouncedService, pageSize])
 
   async function handleExport() {
     if (!accessToken) return
@@ -207,7 +250,30 @@ export function AuditLogsPage() {
     }
   }
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  // Handler for the page-size preset or custom selection
+  function handlePageSizeSelect(value: string) {
+    if (value === 'custom') {
+      setIsCustomPageSize(true)
+      setCustomPageSizeInput(String(pageSize))
+    } else {
+      const size = Number(value)
+      setIsCustomPageSize(false)
+      setCustomPageSizeInput('')
+      setPageSize(size)
+      setPage(1)
+    }
+  }
+
+  function handleCustomPageSizeChange(val: string) {
+    setCustomPageSizeInput(val)
+    const parsed = parseInt(val, 10)
+    if (!Number.isNaN(parsed) && parsed >= 1 && parsed <= 500) {
+      setPageSize(parsed)
+      setPage(1)
+    }
+  }
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const isLoginTab = activeTab === TAB_IDS.loginErrors || activeTab === TAB_IDS.loginSuccesses
 
   return (
@@ -320,6 +386,47 @@ export function AuditLogsPage() {
         </div>
 
         <div className={styles.toolbarActions}>
+          {/* Rows-per-page dropdown */}
+          <div className={styles.rowsDropdownWrap}>
+            <label htmlFor="audit-rows-select" className={styles.rowsDropdownLabel}>
+              Rows
+            </label>
+            <div className={styles.rowsSelectWrap}>
+              <select
+                id="audit-rows-select"
+                className={styles.rowsSelect}
+                value={isCustomPageSize ? 'custom' : pageSize}
+                onChange={(e) => handlePageSizeSelect(e.target.value)}
+                aria-label="Rows per page"
+              >
+                {PAGE_SIZE_OPTIONS.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+                <option value="custom">Custom</option>
+              </select>
+              <span className={styles.rowsSelectChevron} aria-hidden="true">▾</span>
+            </div>
+            {isCustomPageSize && (
+              <input
+                type="number"
+                min={1}
+                max={500}
+                className={styles.rowsCustomInput}
+                value={customPageSizeInput}
+                placeholder="e.g. 50"
+                onChange={(e) => handleCustomPageSizeChange(e.target.value)}
+                onBlur={() => {
+                  const parsed = parseInt(customPageSizeInput, 10)
+                  if (Number.isNaN(parsed) || parsed < 1 || parsed > 500) {
+                    setCustomPageSizeInput(String(pageSize))
+                  }
+                }}
+                aria-label="Custom row count"
+                autoFocus
+              />
+            )}
+          </div>
+
           <div className={styles.searchBox}>
             <input
               type="text"
@@ -362,109 +469,274 @@ export function AuditLogsPage() {
 
       {/* Logs Table Container */}
       <div className={styles.tableContainer}>
-        {logs === null ? (
-          <SkeletonTable rows={8} columns={isLoginTab ? 6 : 6} />
-        ) : (
-          <table className={styles.logTable}>
-            <thead>
-              {isLoginTab ? (
-                <tr>
-                  <th>TIME</th>
-                  <th>ACTOR / EMAIL</th>
-                  <th>AUTH METHOD</th>
-                  <th>IP ADDRESS</th>
-                  <th>BROWSER / DEVICE</th>
-                  <th>RESULT</th>
-                  {activeTab === TAB_IDS.loginErrors && <th aria-label="Actions" />}
+        <table className={styles.logTable}>
+          <thead>
+            {isLoginTab ? (
+              <tr>
+                <th>TIME</th>
+                <th>ACTOR / EMAIL</th>
+                <th>AUTH METHOD</th>
+                <th>IP ADDRESS</th>
+                <th>BROWSER / DEVICE</th>
+                <th>RESULT</th>
+                <th>DETAILS</th>
+              </tr>
+            ) : (
+              <tr>
+                <th>TIME</th>
+                <th>SERVICE</th>
+                <th>ACTOR</th>
+                <th>ACTION</th>
+                <th>ENTITY</th>
+                <th>DETAILS</th>
+              </tr>
+            )}
+          </thead>
+          <tbody>
+            {logs === null ? (
+              Array.from({ length: pageSize > 15 ? 10 : pageSize }).map((_, i) => (
+                <tr key={i} className={styles.skeletonTableRow}>
+                  {isLoginTab ? (
+                    <>
+                      <td><SkeletonBlock width={130} height={16} radius="4px" /></td>
+                      <td>
+                        <div className={styles.actorCell}>
+                          <SkeletonBlock width={28} height={28} radius="8px" />
+                          <SkeletonBlock width={110} height={16} radius="4px" />
+                        </div>
+                      </td>
+                      <td><SkeletonBlock width={60} height={22} radius="999px" /></td>
+                      <td><SkeletonBlock width={95} height={22} radius="6px" /></td>
+                      <td>
+                        <div className={styles.devicePillGroup}>
+                          <SkeletonBlock width={75} height={22} radius="6px" />
+                          <SkeletonBlock width={60} height={22} radius="6px" />
+                        </div>
+                      </td>
+                      <td><SkeletonBlock width={70} height={22} radius="999px" /></td>
+                      <td><SkeletonBlock width={52} height={26} radius="7px" /></td>
+                    </>
+                  ) : (
+                    <>
+                      <td><SkeletonBlock width={130} height={16} radius="4px" /></td>
+                      <td><SkeletonBlock width={90} height={22} radius="999px" /></td>
+                      <td>
+                        <div className={styles.actorCell}>
+                          <SkeletonBlock width={28} height={28} radius="8px" />
+                          <SkeletonBlock width={100} height={16} radius="4px" />
+                        </div>
+                      </td>
+                      <td><SkeletonBlock width={120} height={22} radius="6px" /></td>
+                      <td>
+                        <div className={styles.entityWrap}>
+                          <SkeletonBlock width={70} height={16} radius="4px" />
+                          <SkeletonBlock width={45} height={16} radius="4px" />
+                        </div>
+                      </td>
+                      <td><SkeletonBlock width={52} height={26} radius="7px" /></td>
+                    </>
+                  )}
                 </tr>
-              ) : (
-                <tr>
-                  <th>TIME</th>
-                  <th>SERVICE</th>
-                  <th>ACTOR</th>
-                  <th>ACTION</th>
-                  <th>ENTITY</th>
-                  <th>DETAILS</th>
-                </tr>
-              )}
-            </thead>
-            <tbody>
-              {logs.length === 0 && (
-                <tr>
-                  <td colSpan={7} className={styles.emptyCell}>
-                    No audit records found matching the selected filters.
-                  </td>
-                </tr>
-              )}
-              {logs.map((log) => {
+              ))
+            ) : logs.length === 0 ? (
+              <tr>
+                <td colSpan={isLoginTab ? 7 : 6} className={styles.emptyCell}>
+                  No audit records found matching the selected filters.
+                </td>
+              </tr>
+            ) : (
+              logs.map((log) => {
                 const initial = (log.actorName || log.actorUserId || 'S').charAt(0).toUpperCase()
+                const isExpanded = expandedRowId === log.id
 
                 return isLoginTab ? (
-                  <tr key={log.id}>
-                    <td className={styles.timeCell}>{formatTimestamp(log.occurredAt)}</td>
-                    <td>
-                      <div className={styles.actorCell}>
-                        <span className={styles.actorAvatar}>{initial}</span>
-                        <span className={styles.actorName}>
-                          {log.actorName ?? <span className={styles.mutedText}>Unknown</span>}
-                        </span>
-                      </div>
-                    </td>
-                    <td>
-                      <span className={styles.authPill}>{log.authMethod ?? 'Local'}</span>
-                    </td>
-                    <td className={styles.monoText}>{log.sourceIp ?? '—'}</td>
-                    <td className={styles.deviceCell} title={log.userAgent ?? undefined}>
-                      {log.userAgent ?? '—'}
-                    </td>
-                    <td>
-                      <Badge tone={log.result === 'Success' ? 'success' : 'danger'} dot>
-                        {log.result}
-                      </Badge>
-                    </td>
-                    {activeTab === TAB_IDS.loginErrors && (
+                  <>
+                    <tr key={log.id} className={isExpanded ? styles.rowExpanded : undefined}>
+                      <td className={styles.timeCell}>{formatTimestamp(log.occurredAt)}</td>
+                      <td>
+                        <div className={styles.actorCell}>
+                          <span className={styles.actorAvatar}>{initial}</span>
+                          <span className={styles.actorName}>
+                            {log.actorName ?? <span className={styles.mutedText}>Unknown</span>}
+                          </span>
+                        </div>
+                      </td>
+                      <td>
+                        <span className={styles.authPill}>{log.authMethod ?? 'Local'}</span>
+                      </td>
+                      <td>
+                        {log.sourceIp ? (
+                          <span className={styles.ipBadge}>
+                            <span className={styles.ipDot} aria-hidden="true" />
+                            {log.sourceIp}
+                          </span>
+                        ) : (
+                          <span className={styles.mutedText}>—</span>
+                        )}
+                      </td>
+                      <td
+                        className={`${styles.deviceCell} ${log.userAgent ? styles.deviceCellClickable : ''}`}
+                        onClick={() => {
+                          if (log.userAgent || log.failureReason || log.details) {
+                            setExpandedRowId(isExpanded ? null : log.id)
+                          }
+                        }}
+                        title={log.userAgent ? 'Click to view full browser & device details' : undefined}
+                      >
+                        {(() => {
+                          const parsed = parseUserAgent(log.userAgent)
+                          if (!parsed) return <span className={styles.mutedText}>{log.userAgent ?? '—'}</span>
+                          return (
+                            <div className={styles.devicePillGroup}>
+                              <span className={styles.browserPill}>{parsed.browser}</span>
+                              <span className={styles.osPill}>{parsed.os}</span>
+                            </div>
+                          )
+                        })()}
+                      </td>
+                      <td>
+                        <Badge tone={log.result === 'Success' ? 'success' : 'danger'} dot>
+                          {log.result}
+                        </Badge>
+                      </td>
                       <td>
                         <button
                           type="button"
                           className={styles.viewDetailBtn}
-                          onClick={() => setSelectedFailure(log)}
+                          onClick={() => setExpandedRowId(isExpanded ? null : log.id)}
+                          title="Toggle full details"
                         >
-                          Details
+                          {isExpanded ? 'Hide' : 'Details'}
                         </button>
                       </td>
+                    </tr>
+                    {isExpanded && (
+                      <tr className={styles.expandedDetailRow}>
+                        <td colSpan={7} className={styles.expandedDetailCell}>
+                          <div className={styles.expandedDetailContent}>
+                            {log.userAgent && (
+                              <div className={styles.expandedSection}>
+                                <span className={styles.expandedDetailLabel}>Browser / Device (Full User-Agent)</span>
+                                <p className={styles.expandedDetailText}>{log.userAgent}</p>
+                              </div>
+                            )}
+                            {log.failureReason && (
+                              <div className={styles.expandedSection}>
+                                <span className={styles.expandedDetailLabel}>Failure Reason</span>
+                                <p className={styles.expandedDangerVal}>{log.failureReason}</p>
+                              </div>
+                            )}
+                            {log.details && (
+                              <div className={styles.expandedSection}>
+                                <span className={styles.expandedDetailLabel}>Additional Details</span>
+                                <p className={styles.expandedDetailText}>{log.details}</p>
+                              </div>
+                            )}
+                            <div className={styles.expandedMiniMeta}>
+                              <span><strong>IP Address:</strong> {log.sourceIp || '—'}</span>
+                              <span><strong>Auth Method:</strong> {log.authMethod || 'Local'}</span>
+                              <span><strong>Correlation ID:</strong> <code>{log.correlationId}</code></span>
+                            </div>
+                            <button
+                              type="button"
+                              className={styles.collapseBtn}
+                              onClick={() => setExpandedRowId(null)}
+                            >
+                              Collapse ↑
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
                     )}
-                  </tr>
+                  </>
                 ) : (
-                  <tr key={log.id}>
-                    <td className={styles.timeCell}>{formatTimestamp(log.occurredAt)}</td>
-                    <td>
-                      <Badge tone={serviceTone(log.serviceName)}>{log.serviceName}</Badge>
-                    </td>
-                    <td>
-                      <div className={styles.actorCell}>
-                        <span className={styles.actorAvatar}>{initial}</span>
-                        <span className={styles.actorName}>
-                          {log.actorName ?? <span className={styles.mutedText}>System</span>}
-                        </span>
-                      </div>
-                    </td>
-                    <td className={styles.actionCell}>{log.action}</td>
-                    <td className={styles.mutedText}>
-                      {log.entityType ? `${log.entityType}${log.entityId ? ` · ${log.entityId.slice(0, 8)}` : ''}` : '—'}
-                    </td>
-                    <td className={styles.detailsCell} title={log.details ?? undefined}>
-                      {log.details ?? '—'}
-                    </td>
-                  </tr>
+                  <>
+                    <tr
+                      key={log.id}
+                      className={isExpanded ? styles.rowExpanded : undefined}
+                    >
+                      <td className={styles.timeCell}>{formatTimestamp(log.occurredAt)}</td>
+                      <td>
+                        <Badge tone={serviceTone(log.serviceName)}>{log.serviceName}</Badge>
+                      </td>
+                      <td>
+                        <div className={styles.actorCell}>
+                          <span className={styles.actorAvatar}>{initial}</span>
+                          <span className={styles.actorName}>
+                            {log.actorName ?? <span className={styles.mutedText}>System</span>}
+                          </span>
+                        </div>
+                      </td>
+                      <td><code className={styles.actionCell}>{log.action}</code></td>
+                      <td>
+                        {log.entityType ? (
+                          <div className={styles.entityWrap}>
+                            <span className={styles.entityType}>{log.entityType}</span>
+                            {log.entityId && (
+                              <span className={styles.entityId} title={log.entityId}>
+                                {log.entityId.slice(0, 8)}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className={styles.mutedText}>—</span>
+                        )}
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className={styles.viewDetailBtn}
+                          onClick={() => setExpandedRowId(isExpanded ? null : log.id)}
+                          title="Toggle full details"
+                        >
+                          {isExpanded ? 'Hide' : 'Details'}
+                        </button>
+                      </td>
+                    </tr>
+                    {isExpanded && (
+                      <tr className={styles.expandedDetailRow}>
+                        <td colSpan={6} className={styles.expandedDetailCell}>
+                          <div className={styles.expandedDetailContent}>
+                            {log.details && (
+                              <div className={styles.expandedSection}>
+                                <span className={styles.expandedDetailLabel}>Full details</span>
+                                <p className={styles.expandedDetailText}>{log.details}</p>
+                              </div>
+                            )}
+                            {log.userAgent && (
+                              <div className={styles.expandedSection}>
+                                <span className={styles.expandedDetailLabel}>Browser / Device (User-Agent)</span>
+                                <p className={styles.expandedDetailText}>{log.userAgent}</p>
+                              </div>
+                            )}
+                            <div className={styles.expandedMiniMeta}>
+                              {log.sourceIp && <span><strong>IP Address:</strong> {log.sourceIp}</span>}
+                              {log.authMethod && <span><strong>Auth Method:</strong> {log.authMethod}</span>}
+                              {log.correlationId && (
+                                <span><strong>Correlation ID:</strong> <code>{log.correlationId}</code></span>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              className={styles.collapseBtn}
+                              onClick={() => setExpandedRowId(null)}
+                            >
+                              Collapse ↑
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
                 )
-              })}
-            </tbody>
-          </table>
-        )}
+              })
+            )}
+          </tbody>
+        </table>
       </div>
 
       {/* Pagination */}
-      {total > PAGE_SIZE && (
+      {total > pageSize && (
         <div className={styles.pagination}>
           <button
             type="button"

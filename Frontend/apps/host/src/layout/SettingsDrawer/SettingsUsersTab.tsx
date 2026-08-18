@@ -5,11 +5,12 @@ import { rolesApi, type RoleListItemDto } from '../../features/settings-roles/ap
 import { useSettingsDrawerStore } from '../../shared/stores/settingsDrawerStore'
 import { useDebouncedValue } from '../../shared/hooks/useDebouncedValue'
 import { Icon } from '../../shared/components/Icon/Icon'
-import { SkeletonBlock } from '../../shared/components/Skeleton'
+import { SkeletonUserCard } from '../../shared/components/Skeleton'
 import { Pagination } from '../../shared/components/Pagination/Pagination'
 import { Modal } from '../../shared/components/Modal/Modal'
 import { Button } from '../../shared/components/Button/Button'
 import { ApiError } from '../../shared/api/httpClient'
+import { toast } from '../../shared/stores/toastStore'
 import styles from './SettingsUsersTab.module.css'
 
 const PAGE_SIZE = 10
@@ -34,9 +35,12 @@ export function SettingsUsersTab() {
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [selectedRoleId, setSelectedRoleId] = useState<string>('')
+  const [selectedStatus, setSelectedStatus] = useState<'all' | 'active' | 'inactive'>('all')
   const [page, setPage] = useState(1)
   const [pendingDelete, setPendingDelete] = useState<UserListItemDto | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [pendingStatusToggle, setPendingStatusToggle] = useState<UserListItemDto | null>(null)
+  const [statusUpdating, setStatusUpdating] = useState(false)
 
   // Debounced so typing a name doesn't fire one query per keystroke against the user table.
   const debouncedSearch = useDebouncedValue(search, 300)
@@ -61,7 +65,7 @@ export function SettingsUsersTab() {
     }
   }, [accessToken])
 
-  // Load users filtered by search and role
+  // Load users filtered by search, role, and status (active first)
   useEffect(() => {
     if (!accessToken) return
     let cancelled = false
@@ -74,15 +78,19 @@ export function SettingsUsersTab() {
           pageSize: PAGE_SIZE,
           search: debouncedSearch || undefined,
           roleId: selectedRoleId || undefined,
+          isActive: selectedStatus === 'all' ? undefined : selectedStatus === 'active',
         })
         if (cancelled) return
-        setUsers(res.items)
+        // Ensure active users always appear first in the list
+        const sorted = [...res.items].sort((a, b) => {
+          if (a.isActive !== b.isActive) return a.isActive ? -1 : 1
+          return (a.name || a.email).localeCompare(b.name || b.email)
+        })
+        setUsers(sorted)
         setTotal(res.total)
         setError(null)
       } catch (err) {
         if (cancelled) return
-        // Surfaced rather than console-only: a failed load previously rendered the empty state, so
-        // an operator saw "no users" and could reasonably think the directory had been wiped.
         setError(err instanceof ApiError ? err.message : 'Could not load users.')
         setUsers([])
         setTotal(0)
@@ -95,30 +103,46 @@ export function SettingsUsersTab() {
     return () => {
       cancelled = true
     }
-  }, [accessToken, debouncedSearch, selectedRoleId, page, mutationCount])
+  }, [accessToken, debouncedSearch, selectedRoleId, selectedStatus, page, mutationCount])
 
-  // Any change of filter invalidates the page number — page 4 of an unfiltered list is rarely a
-  // valid page of the filtered one, and asking for it shows a confusing empty result.
+  // Any change of filter invalidates the page number
   useEffect(() => {
     setPage(1)
-  }, [debouncedSearch, selectedRoleId])
+  }, [debouncedSearch, selectedRoleId, selectedStatus])
 
-  const handleToggleStatus = async (id: string, currentActive: boolean) => {
-    if (!accessToken) return
+  function handleToggleStatusClick(u: UserListItemDto) {
+    if (!canDisable) return
+    setPendingStatusToggle(u)
+  }
+
+  async function confirmStatusToggle() {
+    if (!pendingStatusToggle || !accessToken) return
+    const userTarget = pendingStatusToggle
+    const willBeActive = !userTarget.isActive
+    setStatusUpdating(true)
     try {
-      await usersApi.updateStatus(accessToken, id, !currentActive)
+      await usersApi.updateStatus(accessToken, userTarget.id, willBeActive)
+      setPendingStatusToggle(null)
+      toast.success(
+        `User '${userTarget.name || userTarget.email}' ${willBeActive ? 'activated' : 'deactivated'} successfully.`
+      )
       notifyMutation()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not update this user.')
+      setError(err instanceof ApiError ? err.message : 'Could not update this user status.')
+      setPendingStatusToggle(null)
+    } finally {
+      setStatusUpdating(false)
     }
   }
 
   async function confirmDelete() {
     if (!pendingDelete || !accessToken) return
+    const userName = pendingDelete.name || pendingDelete.email
     setDeleting(true)
     try {
       await usersApi.remove(accessToken, pendingDelete.id)
       setPendingDelete(null)
+      toast.success(`User '${userName}' deleted successfully.`)
       if (users.length === 1 && page > 1) setPage((p) => p - 1)
       else notifyMutation()
     } catch (err) {
@@ -167,6 +191,7 @@ export function SettingsUsersTab() {
             className={styles.roleFilterSelect}
             value={selectedRoleId}
             onChange={(e) => setSelectedRoleId(e.target.value)}
+            aria-label="Filter by role"
           >
             <option value="">All Roles</option>
             {roles.map((r) => (
@@ -174,6 +199,20 @@ export function SettingsUsersTab() {
                 {r.name} {r.isAdministrator ? '(Admin)' : ''}
               </option>
             ))}
+          </select>
+          <Icon.ChevronDown width={14} height={14} className={styles.selectChevron} />
+        </div>
+
+        <div className={styles.statusFilterWrap}>
+          <select
+            className={styles.statusFilterSelect}
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value as 'all' | 'active' | 'inactive')}
+            aria-label="Filter by status"
+          >
+            <option value="all">All Statuses</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
           </select>
           <Icon.ChevronDown width={14} height={14} className={styles.selectChevron} />
         </div>
@@ -188,10 +227,8 @@ export function SettingsUsersTab() {
       {/* Users List */}
       <div className={styles.usersList}>
         {loading ? (
-          Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className={styles.skeletonCard}>
-              <SkeletonBlock height={52} width="100%" />
-            </div>
+          Array.from({ length: 5 }).map((_, i) => (
+            <SkeletonUserCard key={i} />
           ))
         ) : users.length > 0 ? (
           users.map((u) => {
@@ -215,9 +252,9 @@ export function SettingsUsersTab() {
                 <div className={styles.userMeta}>
                   <span
                     className={isActive ? styles.activeBadge : styles.inactiveBadge}
-                    onClick={() => canDisable && handleToggleStatus(u.id, u.isActive)}
+                    onClick={() => handleToggleStatusClick(u)}
                     style={{ cursor: canDisable ? 'pointer' : 'default' }}
-                    title={canDisable ? 'Click to toggle status' : undefined}
+                    title={canDisable ? (isActive ? 'Click to deactivate user' : 'Click to activate user') : undefined}
                   >
                     <span className={isActive ? styles.badgeDotGreen : styles.badgeDotGray} />
                     {isActive ? 'Active' : 'Inactive'}
@@ -263,6 +300,36 @@ export function SettingsUsersTab() {
         <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} itemLabel="user" />
       )}
 
+      {/* Status Toggle Confirmation Modal */}
+      <Modal
+        open={Boolean(pendingStatusToggle)}
+        title={
+          pendingStatusToggle?.isActive
+            ? `Deactivate ${pendingStatusToggle?.name || pendingStatusToggle?.email}?`
+            : `Activate ${pendingStatusToggle?.name || pendingStatusToggle?.email}?`
+        }
+        onClose={() => setPendingStatusToggle(null)}
+        actions={
+          <>
+            <Button variant="secondary" onClick={() => setPendingStatusToggle(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant={pendingStatusToggle?.isActive ? 'danger' : 'primary'}
+              loading={statusUpdating}
+              onClick={confirmStatusToggle}
+            >
+              {pendingStatusToggle?.isActive ? 'Deactivate User' : 'Activate User'}
+            </Button>
+          </>
+        }
+      >
+        {pendingStatusToggle?.isActive
+          ? `Are you sure you want to deactivate ${pendingStatusToggle?.name || pendingStatusToggle?.email}? They will immediately lose access and will not be able to log in to the platform.`
+          : `Are you sure you want to activate ${pendingStatusToggle?.name || pendingStatusToggle?.email}? They will regain access to log in with their assigned roles.`}
+      </Modal>
+
+      {/* Delete User Modal */}
       <Modal
         open={Boolean(pendingDelete)}
         title={`Delete ${pendingDelete?.name || pendingDelete?.email}?`}

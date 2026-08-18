@@ -173,9 +173,9 @@ export function ProfilePage() {
         </div>
       )}
 
-      {/* Page Header */}
+      {/* Page Header — gradient */}
       <div className={styles.header}>
-        <div>
+        <div className={styles.headerLeft}>
           <h1 className={styles.pageTitle}>User Profile</h1>
           <p className={styles.pageSubtitle}>
             Identity credentials, security authentication, and assigned RBAC role permissions.

@@ -10,48 +10,65 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 24px;
+  padding: 20px 24px;
   border-bottom: 1px solid #f1f5f9;
-  background: #ffffff;
+  background: linear-gradient(120deg, #1e40af 0%, #2563eb 50%, #3b82f6 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.header::before {
+  content: '';
+  position: absolute;
+  width: 180px;
+  height: 180px;
+  top: -40px;
+  right: -40px;
+  background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 70%);
+  border-radius: 50%;
 }
 
 .headerTitleWrap {
   display: flex;
   align-items: center;
   gap: 12px;
+  position: relative;
+  z-index: 1;
 }
 
 .headerIconBox {
   width: 38px;
   height: 38px;
   border-radius: 10px;
-  background: #eff6ff;
-  color: #2563eb;
+  background: rgba(255,255,255,0.18);
+  color: #ffffff;
+  border: 1px solid rgba(255,255,255,0.28);
+  backdrop-filter: blur(4px);
+  box-shadow: none;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.8);
 }
 
 .title {
   font-size: 16px;
   font-weight: 700;
-  color: #0f172a;
+  color: #ffffff;
   margin: 0;
   line-height: 1.2;
 }
 
 .subtitle {
   font-size: 12px;
-  color: #64748b;
+  color: rgba(255,255,255,0.78);
   margin: 2px 0 0;
 }
 
 .closeBtn {
   background: none;
   border: none;
-  color: #94a3b8;
+  color: rgba(255,255,255,0.7);
   padding: 6px;
   cursor: pointer;
   border-radius: 8px;
@@ -59,11 +76,13 @@
   align-items: center;
   justify-content: center;
   transition: all 0.15s ease;
+  position: relative;
+  z-index: 1;
 }
 
 .closeBtn:hover {
-  background: #f1f5f9;
-  color: #0f172a;
+  background: rgba(255,255,255,0.15);
+  color: #ffffff;
 }
 
 .errorAlert {
@@ -71,7 +90,8 @@
   padding: 10px 14px;
   background: #fee2e2;
   border: 1px solid #fca5a5;
-  border-radius: 8px;
+  border-left: 3px solid #ef4444;
+  border-radius: 10px;
   color: #dc2626;
   font-size: 13px;
 }
@@ -154,13 +174,13 @@
 
 .formCard {
   background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  border: 1px solid #eaecf0;
+  border-radius: 14px;
   padding: 16px 18px;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  box-shadow: 0 1px 4px rgba(15,23,42,0.04);
 }
 
 .formCardTitle {
@@ -168,8 +188,10 @@
   font-weight: 700;
   color: #0f172a;
   margin: 0;
-  border-bottom: 1px solid #f1f5f9;
-  padding-bottom: 8px;
+  border-left: 3px solid #2563eb;
+  padding-left: 10px;
+  border-bottom: none;
+  padding-bottom: 0;
   letter-spacing: -0.01em;
 }
 
@@ -253,7 +275,7 @@
   gap: 16px;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  border-radius: 14px;
   padding: 14px 16px;
 }
 
@@ -299,15 +321,15 @@
 .matrixCard {
   background: #ffffff;
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  box-shadow: 0 1px 4px rgba(15,23,42,0.05);
 }
 
 .matrixHeader {
   padding: 14px 18px;
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(to right, #f8fafc, #f1f5f9);
+  border-bottom: 2px solid #eaecf0;
 }
 
 .matrixTitle {
@@ -335,16 +357,21 @@
 }
 
 .matrixTable thead {
-  background: #ffffff;
-  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(to right, #f8fafc, #f1f5f9);
+  border-bottom: 2px solid #eaecf0;
 }
 
 .matrixTable th {
   padding: 10px 14px;
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 700;
   color: #64748b;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.matrixTable tbody tr:hover {
+  background: #f8fafc;
 }
 
 .thFeature {
@@ -358,7 +385,7 @@
 
 .matrixTable td {
   padding: 10px 14px;
-  border-bottom: 1px solid #f8fafc;
+  border-bottom: 1px solid #f1f5f9;
   font-size: 12px;
 }
 
@@ -433,24 +460,30 @@
 
 .accordionCard {
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  border-radius: 14px;
   background: #ffffff;
   overflow: hidden;
+  transition: box-shadow 0.15s ease;
+}
+
+.accordionCard:hover {
+  box-shadow: 0 4px 16px rgba(15,23,42,0.07);
 }
 
 .accordionHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
-  background: #f8fafc;
+  padding: 13px 16px;
+  background: linear-gradient(to right, #f8fafc, #f1f5f9);
   cursor: pointer;
   user-select: none;
   transition: background 0.15s ease;
+  border-radius: 14px 14px 0 0;
 }
 
 .accordionHeader:hover {
-  background: #f1f5f9;
+  background: linear-gradient(to right, #f1f5f9, #eaecf0);
 }
 
 .appTitleGroup {
@@ -584,9 +617,10 @@
 }
 
 .usersTableWrap {
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  border: 1px solid #eaecf0;
+  border-radius: 14px;
   overflow: hidden;
+  box-shadow: 0 1px 4px rgba(15,23,42,0.04);
 }
 
 .usersTable {
@@ -596,22 +630,27 @@
 }
 
 .usersTable thead {
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(to right, #f8fafc, #f1f5f9);
+  border-bottom: 2px solid #eaecf0;
 }
 
 .usersTable th {
-  padding: 9px 12px;
-  font-size: 10px;
+  padding: 10px 14px;
+  font-size: 10.5px;
   font-weight: 700;
   color: #64748b;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .usersTable td {
-  padding: 9px 12px;
+  padding: 11px 14px;
   border-bottom: 1px solid #f1f5f9;
   font-size: 12px;
+}
+
+.usersTable tbody tr:hover {
+  background: #f8fafc;
 }
 
 .userCell {
@@ -671,6 +710,7 @@
   padding: 14px 28px;
   border-top: 1px solid #eaecf0;
   background: #ffffff;
+  box-shadow: 0 -2px 8px rgba(15,23,42,0.04);
 }
 
 .cancelBtn {
@@ -765,4 +805,28 @@
 
 .inputInvalid:focus {
   box-shadow: 0 0 0 3px var(--omni-color-danger-100, #fee2e2) !important;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   RESPONSIVE ADDITIONS — RoleFormLayer
+   ══════════════════════════════════════════════════════════════ */
+
+/* Tabs list wraps on narrow drawer */
+@media (max-width: 500px) {
+  .tabsList {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  /* Permission matrix: make it horizontally scrollable */
+  .permMatrixWrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Bottom bar stacks on very small screens */
+@media (max-width: 380px) {
+  .bottomBar { flex-direction: column-reverse; gap: 8px; }
+  .bottomBar > * { width: 100%; }
 }

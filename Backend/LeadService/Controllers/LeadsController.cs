@@ -1,0 +1,246 @@
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using LeadManagement.Api.Infrastructure;
+using LeadManagement.Api.Infrastructure.Security;
+using LeadManagement.Api.Models.Dtos;
+using LeadManagement.Api.Services;
+
+namespace LeadManagement.Api.Controllers
+{
+    [ApiController]
+    [Route("api/leads")]
+    [Route("api/v1/leads")]
+    [Route("leads")]
+    [Authorize]
+    public class LeadsController : ControllerBase
+    {
+        private readonly ILeadService _leadService;
+        private readonly AuthServiceClient _authServiceClient;
+
+        public LeadsController(ILeadService leadService, AuthServiceClient authServiceClient)
+        {
+            _leadService = leadService;
+            _authServiceClient = authServiceClient;
+        }
+
+        [HttpPost]
+        [RequiresCapability("Lead", "Create")]
+        public async Task<ActionResult<ApiResponseDto<LeadRecordDto>>> CreateLead([FromBody] CreateLeadDto dto)
+        {
+            if (!ModelState.IsValid)
+            {
+                var errors = ModelState
+                    .Where(x => x.Value?.Errors.Count > 0)
+                    .ToDictionary(
+                        kvp => kvp.Key,
+                        kvp => kvp.Value!.Errors.First().ErrorMessage
+                    );
+
+                return BadRequest(new ApiResponseDto<LeadRecordDto>
+                {
+                    Success = false,
+                    Message = "Validation failed for lead submission.",
+                    Errors = errors
+                });
+            }
+
+            try
+            {
+                var result = await _leadService.CreateLeadAsync(dto);
+
+                // Push central platform audit log asynchronously
+                await _authServiceClient.PushAuditLogAsync(
+                    "lead.created", "Lead", result.Id,
+                    $"Created lead for '{result.Name}' ({result.Product})",
+                    CurrentUserId(), CurrentUserName());
+
+                return CreatedAtAction(nameof(GetLeadById), new { id = result.Id }, new ApiResponseDto<LeadRecordDto>
+                {
+                    Success = true,
+                    Message = "Lead submitted successfully.",
+                    Data = result
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new ApiResponseDto<LeadRecordDto>
+                {
+                    Success = false,
+                    Message = ex.Message
+                });
+            }
+        }
+
+        [HttpGet]
+        [RequiresCapability("Lead", "View")]
+        public async Task<ActionResult<ApiResponseDto<PagedResultDto<LeadRecordDto>>>> GetLeads(
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 10,
+            [FromQuery] string? search = null,
+            [FromQuery] string? product = null,
+            [FromQuery] string? branch = null,
+            [FromQuery] string? state = null,
+            [FromQuery] string? salesExecutive = null,
+            [FromQuery] string? month = null,
+            [FromQuery] string? createdDate = null,
+            [FromQuery] string? createdFrom = null,
+            [FromQuery] string? createdTo = null,
+            [FromQuery] string? name = null,
+            [FromQuery] string? icNumber = null,
+            [FromQuery] string? phone = null,
+            [FromQuery] string? status = null,
+            [FromQuery] string? leadSource = null)
+        {
+            var result = await _leadService.GetLeadsAsync(page, pageSize, search, product, branch, state, salesExecutive, month, createdDate, createdFrom, createdTo, name, icNumber, phone, status, leadSource);
+            return Ok(new ApiResponseDto<PagedResultDto<LeadRecordDto>>
+            {
+                Success = true,
+                Data = result
+            });
+        }
+
+        [HttpGet("{id}")]
+        [RequiresCapability("Lead", "View")]
+        public async Task<ActionResult<ApiResponseDto<LeadRecordDto>>> GetLeadById(string id)
+        {
+            var lead = await _leadService.GetLeadByIdAsync(id);
+            if (lead == null)
+            {
+                return NotFound(new ApiResponseDto<LeadRecordDto>
+                {
+                    Success = false,
+                    Message = $"Lead with ID '{id}' was not found."
+                });
+            }
+
+            return Ok(new ApiResponseDto<LeadRecordDto>
+            {
+                Success = true,
+                Data = lead
+            });
+        }
+
+        [HttpPut("{id}")]
+        [RequiresCapability("Lead", "Edit")]
+        public async Task<ActionResult<ApiResponseDto<LeadRecordDto>>> UpdateLead(string id, [FromBody] UpdateLeadDto dto)
+        {
+            if (!ModelState.IsValid)
+            {
+                var errors = ModelState
+                    .Where(x => x.Value?.Errors.Count > 0)
+                    .ToDictionary(
+                        kvp => kvp.Key,
+                        kvp => kvp.Value!.Errors.First().ErrorMessage
+                    );
+
+                return BadRequest(new ApiResponseDto<LeadRecordDto>
+                {
+                    Success = false,
+                    Message = "Validation failed for lead update.",
+                    Errors = errors
+                });
+            }
+
+            try
+            {
+                var updated = await _leadService.UpdateLeadAsync(id, dto);
+
+                // Push central platform audit log asynchronously
+                await _authServiceClient.PushAuditLogAsync(
+                    "lead.updated", "Lead", id,
+                    $"Updated lead '{updated.Name}'",
+                    CurrentUserId(), CurrentUserName());
+
+                return Ok(new ApiResponseDto<LeadRecordDto>
+                {
+                    Success = true,
+                    Message = "Lead updated successfully.",
+                    Data = updated
+                });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new ApiResponseDto<LeadRecordDto>
+                {
+                    Success = false,
+                    Message = ex.Message
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new ApiResponseDto<LeadRecordDto>
+                {
+                    Success = false,
+                    Message = ex.Message
+                });
+            }
+        }
+
+        [HttpDelete("{id}")]
+        [RequiresCapability("Lead", "Delete")]
+        public async Task<ActionResult<ApiResponseDto<bool>>> DeleteLead(string id, [FromBody] DeleteLeadDto dto)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(new ApiResponseDto<bool>
+                {
+                    Success = false,
+                    Message = "Delete reason is required."
+                });
+            }
+
+            try
+            {
+                var success = await _leadService.DeleteLeadAsync(id, dto);
+                if (!success)
+                {
+                    return NotFound(new ApiResponseDto<bool>
+                    {
+                        Success = false,
+                        Message = $"Lead with ID '{id}' was not found."
+                    });
+                }
+
+                // Push central platform audit log asynchronously
+                await _authServiceClient.PushAuditLogAsync(
+                    "lead.deleted", "Lead", id,
+                    $"Deleted lead (Reason: {dto.DeleteReason})",
+                    CurrentUserId(), CurrentUserName());
+
+                return Ok(new ApiResponseDto<bool>
+                {
+                    Success = true,
+                    Data = true,
+                    Message = "This lead has been deleted."
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new ApiResponseDto<bool>
+                {
+                    Success = false,
+                    Message = ex.Message
+                });
+            }
+        }
+
+        [HttpPost("{id}/view-audit")]
+        [RequiresCapability("Lead", "View")]
+        public async Task<ActionResult<ApiResponseDto<bool>>> LogLeadView(string id)
+        {
+            await _leadService.LogLeadViewAsync(id);
+            return Ok(new ApiResponseDto<bool> { Success = true, Data = true });
+        }
+
+        private Guid? CurrentUserId()
+        {
+            var sub = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                ?? User.FindFirst("sub")?.Value;
+            return Guid.TryParse(sub, out var id) ? id : null;
+        }
+
+        private string? CurrentUserName() =>
+            User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Name)?.Value
+            ?? User.FindFirst("name")?.Value;
+    }
+}

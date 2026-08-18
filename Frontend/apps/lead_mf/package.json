@@ -1,0 +1,36 @@
+{
+  "name": "lead-mf",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ashok-2004/OmniRemit.git",
+    "directory": "Frontend/apps/lead_mf"
+  },
+  "scripts": {
+    "dev": "concurrently --kill-others \"vite build --watch\" \"vite preview\"",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@omniremit/federation-config": "workspace:*",
+    "lucide-react": "^1.16.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "recharts": "^3.10.1",
+    "zustand": "^5.0.3"
+  },
+  "devDependencies": {
+    "@module-federation/vite": "^1.20.7",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^10.0.3",
+    "postcss-prefix-selector": "^2.1.1",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.0"
+  }
+}

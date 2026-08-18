@@ -1,0 +1,187 @@
+using System.Security.Cryptography;
+using DotNetEnv;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using LeadManagement.Api.Data;
+using LeadManagement.Api.Infrastructure;
+using LeadManagement.Api.Middleware;
+using LeadManagement.Api.Options;
+using LeadManagement.Api.Services;
+
+// Load Backend/LeadService/.env before configuration is read
+var currentDir = Directory.GetCurrentDirectory();
+var candidateEnvFiles = new[]
+{
+    Path.Combine(currentDir, "Backend", "LeadService", ".env"),
+    Path.Combine(currentDir, ".env"),
+    Path.Combine(AppContext.BaseDirectory, ".env")
+};
+
+foreach (var envPath in candidateEnvFiles)
+{
+    if (File.Exists(envPath))
+    {
+        Env.Load(envPath);
+    }
+}
+Env.TraversePath().Load();
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Add Controllers & OpenAPI
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+// Response compression
+builder.Services.AddResponseCompression(options => options.EnableForHttps = true);
+
+// Configure Options
+builder.Services.Configure<CorsOptions>(builder.Configuration.GetSection(CorsOptions.SectionName));
+builder.Services.Configure<JwtValidationOptions>(builder.Configuration.GetSection(JwtValidationOptions.SectionName));
+builder.Services.Configure<AuthIntegrationOptions>(builder.Configuration.GetSection(AuthIntegrationOptions.SectionName));
+
+// Database Context
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+{
+    var connectionString = builder.Configuration.GetConnectionString("LeadDb")
+        ?? builder.Configuration.GetConnectionString("DefaultConnection");
+
+    if (!string.IsNullOrWhiteSpace(connectionString))
+    {
+        options.UseNpgsql(connectionString);
+    }
+});
+
+
+builder.Services.AddHealthChecks().AddDbContextCheck<ApplicationDbContext>("database");
+
+// Application Services & Clients
+builder.Services.AddScoped<IMasterDataService, MasterDataService>();
+builder.Services.AddScoped<IAuditLogService, AuditLogService>();
+builder.Services.AddScoped<ILeadService, LeadService>();
+builder.Services.AddHttpClient<IDashboardExternalService, DashboardExternalService>();
+builder.Services.AddScoped<IDashboardService, DashboardService>();
+builder.Services.AddHttpClient<AuthServiceClient>();
+
+// CORS Policy
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        var allowedOrigins = builder.Configuration.GetSection($"{CorsOptions.SectionName}:AllowedOrigins").Get<string[]>();
+        if (allowedOrigins != null && allowedOrigins.Length > 0)
+        {
+            policy.WithOrigins(allowedOrigins)
+                  .AllowAnyHeader()
+                  .AllowAnyMethod()
+                  .AllowCredentials();
+        }
+        else
+        {
+            policy.SetIsOriginAllowed(_ => true)
+                  .AllowAnyHeader()
+                  .AllowAnyMethod()
+                  .AllowCredentials();
+        }
+    });
+});
+
+// RS256 JWT Token Validation
+var jwtSection = builder.Configuration.GetSection(JwtValidationOptions.SectionName);
+var configuredPublicKeyPem = jwtSection["SigningKeyPublic"];
+var jwtIssuer = jwtSection["Issuer"] ?? "omniremit-auth-service";
+var jwtAudience = jwtSection["Audience"] ?? "omniremit-host";
+
+RSA validationRsa;
+if (!string.IsNullOrWhiteSpace(configuredPublicKeyPem))
+{
+    var rsa = RSA.Create();
+    rsa.ImportFromPem(configuredPublicKeyPem.Replace("\\n", "\n"));
+    validationRsa = rsa;
+}
+else
+{
+    // Ephemeral key so the app can boot cleanly before Jwt__SigningKeyPublic is configured
+    validationRsa = RSA.Create(2048);
+}
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        // Preserve short claim names ("sub", "perms", "admin") without legacy WS-Security URI remapping
+        options.MapInboundClaims = false;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = jwtIssuer,
+            ValidateAudience = true,
+            ValidAudience = jwtAudience,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidAlgorithms = [SecurityAlgorithms.RsaSha256],
+            IssuerSigningKey = new RsaSecurityKey(validationRsa),
+            ClockSkew = TimeSpan.FromSeconds(30),
+        };
+    });
+
+builder.Services.AddAuthorization();
+
+var app = builder.Build();
+
+// Service path base for remote integration
+app.UsePathBase("/api/lead-service");
+
+// Exception handling sits outside Authentication and CORS
+app.UseMiddleware<ExceptionMiddleware>();
+
+app.UseResponseCompression();
+
+app.UseCors("AllowFrontend");
+
+app.UseAuthentication();
+app.UseAuthorization();
+
+if (app.Environment.IsDevelopment() || true)
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+app.MapControllers();
+app.MapHealthChecks("/health");
+
+// Initialize database if connection string is configured
+var dbConnection = builder.Configuration.GetConnectionString("LeadDb")
+    ?? builder.Configuration.GetConnectionString("DefaultConnection");
+
+if (string.IsNullOrWhiteSpace(dbConnection))
+{
+    app.Logger.LogWarning(
+        "ConnectionStrings__LeadDb is not set — app will start, but database endpoints will fail until Backend/LeadService/.env is configured.");
+}
+else
+{
+    try
+    {
+        using var scope = app.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        await dbContext.Database.EnsureCreatedAsync();
+        await LeadDbSeeder.SeedAsync(dbContext);
+        app.Logger.LogInformation("Database initialized and seeded successfully.");
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogError(ex, "An error occurred while initializing the database.");
+    }
+}
+
+if (string.IsNullOrWhiteSpace(configuredPublicKeyPem))
+{
+    app.Logger.LogWarning(
+        "Jwt__SigningKeyPublic is not set — an ephemeral RSA key was generated for this process only.");
+}
+
+app.Run();
