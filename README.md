@@ -153,7 +153,7 @@ Any remote app registered in the Module Registry must:
   `[RequiresCapability]`-attributed actions (see "Contract for future remote apps" above), and an
   `AuthServiceClient` that writes into the shared audit log. Served under path base
   `/api/employee-service`.
-- **Host frontend**: blue "OmniRemit CRM" theme (`shared/styles/theme.css` — the only place a raw
+- **Host frontend**: blue "OmniConnect" theme (`shared/styles/theme.css` — the only place a raw
   color/spacing/radius value is allowed to live), a redesigned split-panel login page, dynamic sidebar
   (Dashboard + registered apps + a System section gated to Audit Logs) with a Module Federation
   runtime loader (zero build-time remotes), a Topbar gear-icon settings dropdown that replaces

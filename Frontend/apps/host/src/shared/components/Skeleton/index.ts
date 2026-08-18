@@ -6,3 +6,12 @@ export { SkeletonAvatar } from './SkeletonAvatar'
 export type { SkeletonAvatarProps } from './SkeletonAvatar'
 export { SkeletonTable } from './SkeletonTable'
 export type { SkeletonTableProps } from './SkeletonTable'
+
+// Card-level skeletons — exact shape matches for zero CLS
+export { SkeletonUserCard } from './SkeletonUserCard'
+export { SkeletonRoleCard } from './SkeletonRoleCard'
+export { SkeletonAppCard } from './SkeletonAppCard'
+export { SkeletonStatCard } from './SkeletonStatCard'
+export { SkeletonAuditRow } from './SkeletonAuditRow'
+export { SkeletonOverviewActivity } from './SkeletonOverviewActivity'
+export { SkeletonDashboardWidget } from './SkeletonDashboardWidget'

@@ -1,4 +1,4 @@
-# OmniRemit — Setup Guide for New Collaborators
+# OmniConnect — Setup Guide for New Collaborators
 
 Follow this top-to-bottom to get all five services running locally: **AuthService** (`:5155`),
 **ModuleRegistry** (`:5200`), **EmployeeService** (`:5285`), the **host** frontend (`:5173`), and the
@@ -30,8 +30,8 @@ Install these, then confirm each with its version command:
 ## 2. Clone and install
 
 ```bash
-git clone https://github.com/Ashok-2004/OmniRemit.git
-cd OmniRemit
+git clone https://github.com/Ashok-2004/OmniConnect.git
+cd OmniConnect
 ```
 
 ```bash
@@ -198,7 +198,7 @@ run any `dotnet ef` commands yourself. Watch the AuthService terminal for a one-
 
 ```
 warn: AuthService[0]
-      Seeded bootstrap Super Admin account. Email: superadmin@omniremit.local | Temporary password: ...
+      Seeded bootstrap Super Admin account. Email: superadmin@omniconnect.local | Temporary password: ...
 ```
 
 That only appears **once**, the very first time AuthService starts against your empty database — copy

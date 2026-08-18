@@ -10,31 +10,62 @@
 
 /* ── Section header ───────────────────────────────────────── */
 .header {
+  position: relative;
+  overflow: hidden;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  background: #ffffff;
-  border: 1px solid #eaecf0;
-  border-radius: 13px;
+  background: linear-gradient(120deg, #1e40af 0%, #2563eb 50%, #3b82f6 100%);
+  border: none;
+  border-radius: 14px;
   padding: 16px 20px;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 4px 20px rgba(37, 99, 235, 0.2), 0 1px 4px rgba(37, 99, 235, 0.12);
+}
+
+.header::before {
+  content: '';
+  position: absolute;
+  top: -40px;
+  right: -40px;
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.07);
+  pointer-events: none;
+}
+
+.header::after {
+  content: '';
+  position: absolute;
+  bottom: -50px;
+  right: 100px;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.04);
+  pointer-events: none;
 }
 
 .title {
   font-size: 15px;
   font-weight: 700;
-  color: #0f172a;
+  color: #ffffff;
   margin: 0;
   letter-spacing: -0.02em;
+  position: relative;
+  z-index: 1;
 }
 
 .subtitle {
   font-size: 12px;
-  color: #64748b;
+  color: rgba(255, 255, 255, 0.78);
   margin: 3px 0 0;
   font-weight: 400;
+  position: relative;
+  z-index: 1;
 }
+
 
 /* ── Primary create button ───────────────────────────────── */
 .createButton {
@@ -53,14 +84,22 @@
   transition: box-shadow 140ms ease, transform 120ms ease;
   box-shadow: 0 2px 8px rgba(37, 99, 235, 0.28);
   letter-spacing: -0.01em;
+  position: relative;
+  z-index: 1;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  backdrop-filter: blur(4px);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 
 .createButton:hover {
-  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.38);
+  background: rgba(255, 255, 255, 0.28);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
   transform: translateY(-1px);
 }
 
 .createButton:active { transform: translateY(0); }
+
 
 /* ── Filter toolbar ──────────────────────────────────────── */
 .filterToolbar {
@@ -114,11 +153,12 @@
 /* ── Role filter select ──────────────────────────────────── */
 .roleFilterWrap {
   position: relative;
-  width: 164px;
+  width: 145px;
   flex-shrink: 0;
 }
 
-.roleFilterSelect {
+.roleFilterSelect,
+.statusFilterSelect {
   width: 100%;
   padding: 9px 30px 9px 12px;
   background: #ffffff;
@@ -133,9 +173,16 @@
   transition: border-color 140ms ease, box-shadow 140ms ease;
 }
 
-.roleFilterSelect:focus {
+.roleFilterSelect:focus,
+.statusFilterSelect:focus {
   border-color: #2563eb;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.statusFilterWrap {
+  position: relative;
+  width: 130px;
+  flex-shrink: 0;
 }
 
 .selectChevron {
@@ -790,4 +837,27 @@
   font-weight: 700;
   font-size: 13px;
   line-height: 1;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   RESPONSIVE ADDITIONS — Settings Users Tab
+   ══════════════════════════════════════════════════════════════ */
+
+/* Filter toolbar wraps on smaller drawer viewports */
+@media (max-width: 580px) {
+  .filterToolbar { flex-wrap: wrap; }
+  .roleFilterWrap,
+  .statusFilterWrap { flex: 1; min-width: 130px; }
+}
+
+/* User card actions wrap on very narrow drawer */
+@media (max-width: 520px) {
+  .userCard { flex-wrap: wrap; padding: 12px 14px; gap: 10px; }
+  .userMeta { width: 100%; justify-content: flex-end; padding-left: 48px; }
+}
+
+/* Header flex-wrap so Add button doesn't overflow */
+@media (max-width: 400px) {
+  .header { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .createButton { align-self: flex-end; }
 }

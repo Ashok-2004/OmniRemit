@@ -7,7 +7,7 @@ import { remoteAppsApi } from '../../features/settings-applications/api/remoteAp
 import { auditLogsApi, type AuditLogDto } from '../../features/system-audit-logs/api/auditLogsApi'
 import { useSettingsDrawerStore } from '../../shared/stores/settingsDrawerStore'
 import { Icon } from '../../shared/components/Icon/Icon'
-import { SkeletonBlock } from '../../shared/components/Skeleton'
+import { SkeletonStatCard, SkeletonOverviewActivity } from '../../shared/components/Skeleton'
 import styles from './SettingsOverviewTab.module.css'
 
 interface OverviewStats {
@@ -110,58 +110,66 @@ export function SettingsOverviewTab() {
 
       {/* 4 Stat Cards in a 2x2 / 4-card Grid */}
       <div className={styles.statGrid}>
-        {/* Total Users */}
-        <div className={styles.statCard}>
-          <div className={`${styles.iconWrap} ${styles.iconPurple}`}>
-            <Icon.Users width={20} height={20} />
-          </div>
-          <div className={styles.statContent}>
-            <span className={styles.statLabel}>Total Users</span>
-            <span className={styles.statValue}>
-              {loading ? <SkeletonBlock height={26} width={36} /> : stats.totalUsers || 4}
-            </span>
-          </div>
-        </div>
-
-        {/* Total Roles */}
-        <div className={styles.statCard}>
-          <div className={`${styles.iconWrap} ${styles.iconGreen}`}>
-            <Icon.ShieldCheck width={20} height={20} />
-          </div>
-          <div className={styles.statContent}>
-            <span className={styles.statLabel}>Total Roles</span>
-            <span className={styles.statValue}>
-              {loading ? <SkeletonBlock height={26} width={36} /> : stats.totalRoles || 6}
-            </span>
-          </div>
-        </div>
-
-        {/* Total Applications */}
-        <div className={styles.statCard}>
-          <div className={`${styles.iconWrap} ${styles.iconBlue}`}>
-            <Icon.Grid width={20} height={20} />
-          </div>
-          <div className={styles.statContent}>
-            <span className={styles.statLabel}>Total Applications</span>
-            <span className={styles.statValue}>
-              {loading ? <SkeletonBlock height={26} width={36} /> : stats.totalApps || 5}
-            </span>
-          </div>
-        </div>
-
-        {/* System Status */}
-        <div className={styles.statCard}>
-          <div className={`${styles.iconWrap} ${styles.iconEmerald}`}>
-            <Icon.CheckCircle width={20} height={20} />
-          </div>
-          <div className={styles.statContent}>
-            <span className={styles.statLabel}>System Status</span>
-            <div className={styles.statusRow}>
-              <span className={styles.pulsingDot} />
-              <span className={styles.statValueHealthy}>{stats.systemStatus}</span>
+        {loading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <SkeletonStatCard key={i} />
+          ))
+        ) : (
+          <>
+            {/* Total Users */}
+            <div className={styles.statCard}>
+              <div className={`${styles.iconWrap} ${styles.iconPurple}`}>
+                <Icon.Users width={20} height={20} />
+              </div>
+              <div className={styles.statContent}>
+                <span className={styles.statLabel}>Total Users</span>
+                <span className={styles.statValue}>
+                  {stats.totalUsers || 4}
+                </span>
+              </div>
             </div>
-          </div>
-        </div>
+
+            {/* Total Roles */}
+            <div className={styles.statCard}>
+              <div className={`${styles.iconWrap} ${styles.iconGreen}`}>
+                <Icon.ShieldCheck width={20} height={20} />
+              </div>
+              <div className={styles.statContent}>
+                <span className={styles.statLabel}>Total Roles</span>
+                <span className={styles.statValue}>
+                  {stats.totalRoles || 6}
+                </span>
+              </div>
+            </div>
+
+            {/* Total Applications */}
+            <div className={styles.statCard}>
+              <div className={`${styles.iconWrap} ${styles.iconBlue}`}>
+                <Icon.Grid width={20} height={20} />
+              </div>
+              <div className={styles.statContent}>
+                <span className={styles.statLabel}>Total Applications</span>
+                <span className={styles.statValue}>
+                  {stats.totalApps || 5}
+                </span>
+              </div>
+            </div>
+
+            {/* System Status */}
+            <div className={styles.statCard}>
+              <div className={`${styles.iconWrap} ${styles.iconEmerald}`}>
+                <Icon.CheckCircle width={20} height={20} />
+              </div>
+              <div className={styles.statContent}>
+                <span className={styles.statLabel}>System Status</span>
+                <div className={styles.statusRow}>
+                  <span className={styles.pulsingDot} />
+                  <span className={styles.statValueHealthy}>{stats.systemStatus}</span>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Two-Column Layout: Recent Activity & Quick Actions */}
@@ -175,10 +183,8 @@ export function SettingsOverviewTab() {
 
           <div className={styles.activityList}>
             {loading ? (
-              Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className={styles.activitySkeleton}>
-                  <SkeletonBlock height={32} width="100%" />
-                </div>
+              Array.from({ length: 5 }).map((_, i) => (
+                <SkeletonOverviewActivity key={i} />
               ))
             ) : recentLogs.length > 0 ? (
               recentLogs.map((log) => {

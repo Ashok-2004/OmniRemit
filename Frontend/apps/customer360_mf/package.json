@@ -1,0 +1,35 @@
+{
+  "name": "customer360-mf",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ashok-2004/OmniRemit.git",
+    "directory": "Frontend/apps/customer360_mf"
+  },
+  "scripts": {
+    "dev": "concurrently --kill-others \"vite build --watch\" \"vite preview\"",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@omniremit/federation-config": "workspace:*",
+    "lucide-react": "^1.31.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@module-federation/vite": "^1.20.7",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.0.4",
+    "concurrently": "^10.0.3",
+    "postcss-prefix-selector": "^2.1.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.0"
+  }
+}

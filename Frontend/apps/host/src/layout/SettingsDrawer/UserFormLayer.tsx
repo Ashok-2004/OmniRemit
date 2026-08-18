@@ -13,6 +13,7 @@ import { Icon } from '../../shared/components/Icon/Icon'
 import { Switch } from '../../shared/components/Switch/Switch'
 import { SkeletonBlock } from '../../shared/components/Skeleton'
 import { resolveIcon } from '../../shared/components/Icon/resolveIcon'
+import { toast } from '../../shared/stores/toastStore'
 import {
   LIMITS,
   required,
@@ -360,7 +361,8 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
         // reload would show the change.
         void refreshSession()
         notifyMutation()
-        popLayer()
+        toast.success(`User '${name}' updated successfully.`)
+        useSettingsDrawerStore.getState().resetToRoot('users')
       } else {
         const res = await usersApi.create(token, {
           name,
@@ -375,6 +377,7 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
         }
 
         notifyMutation()
+        toast.success(`User '${res.user.name}' created successfully.`)
         setCreatedResult(res)
       }
     } catch (err: any) {
@@ -386,10 +389,74 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
 
   if (loading) {
     return (
-      <div className={styles.loadingContainer}>
-        <SkeletonBlock height={50} width="70%" />
-        <SkeletonBlock height={180} width="100%" />
-        <SkeletonBlock height={180} width="100%" />
+      <div className={styles.layer}>
+        {/* Skeleton Header — mirrors real gradient header */}
+        <div className={styles.header} style={{ pointerEvents: 'none' }}>
+          <div className={styles.headerTitleWrap}>
+            <div className={styles.headerIconBox} style={{ opacity: 0.55 }}>
+              <SkeletonBlock width={22} height={22} radius="6px" />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <SkeletonBlock width={160} height={16} radius="5px" />
+              <SkeletonBlock width={230} height={12} radius="4px" />
+            </div>
+          </div>
+          <div style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(255,255,255,0.18)' }} />
+        </div>
+
+        {/* Step badges skeleton */}
+        <div style={{ display: 'flex', gap: 8, padding: '14px 24px 0', alignItems: 'center' }}>
+          {[120, 140, 100].map((w, i) => (
+            <SkeletonBlock key={i} width={w} height={32} radius="9px" />
+          ))}
+        </div>
+
+        {/* Form card skeleton */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* Card 1 — Basic details */}
+          <div style={{ background: '#fff', border: '1px solid #eaecf0', borderRadius: 14, padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <SkeletonBlock width={130} height={13} radius="4px" />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {/* Name + Email row */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  <SkeletonBlock width="40%" height={11} radius="3px" />
+                  <SkeletonBlock width="100%" height={38} radius="9px" />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  <SkeletonBlock width="40%" height={11} radius="3px" />
+                  <SkeletonBlock width="100%" height={38} radius="9px" />
+                </div>
+              </div>
+              {/* Phone + Role row */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  <SkeletonBlock width="40%" height={11} radius="3px" />
+                  <SkeletonBlock width="100%" height={38} radius="9px" />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  <SkeletonBlock width="35%" height={11} radius="3px" />
+                  <SkeletonBlock width="100%" height={38} radius="9px" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 2 — Account status */}
+          <div style={{ background: '#fff', border: '1px solid #eaecf0', borderRadius: 14, padding: '18px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              <SkeletonBlock width={110} height={13} radius="4px" />
+              <SkeletonBlock width={200} height={11} radius="3px" />
+            </div>
+            <SkeletonBlock width={44} height={24} radius="999px" />
+          </div>
+        </div>
+
+        {/* Bottom bar skeleton */}
+        <div className={styles.bottomBar} style={{ pointerEvents: 'none' }}>
+          <SkeletonBlock width={90} height={36} radius="9px" />
+          <SkeletonBlock width={100} height={36} radius="9px" />
+        </div>
       </div>
     )
   }
@@ -499,7 +566,7 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
             <button
               type="button"
               className={styles.doneBtn}
-              onClick={popLayer}
+              onClick={() => useSettingsDrawerStore.getState().resetToRoot('users')}
             >
               Done & Return to Users List
             </button>
@@ -744,16 +811,18 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
                                       <span className={styles.featureName}>{row.label}</span>
                                     </td>
                                     {hostColumns.map((col) => {
-                                      const declared = row.capabilities.some((c) => c.key === col.key)
+                                      const declaredCap = row.capabilities.find(
+                                        (c) => c.key.toLowerCase() === col.key.toLowerCase(),
+                                      )
                                       return (
                                         <td key={col.key}>
-                                          {declared ? (
+                                          {declaredCap ? (
                                             <input
                                               type="checkbox"
                                               className={styles.checkbox}
-                                              checked={isOverrideGranted(row.key, col.key)}
+                                              checked={isOverrideGranted(row.key, declaredCap.key)}
                                               aria-label={`${col.displayName} on ${row.label}`}
-                                              onChange={() => toggleOverride(row.key, col.key)}
+                                              onChange={() => toggleOverride(row.key, declaredCap.key)}
                                             />
                                           ) : (
                                             <span
@@ -865,16 +934,18 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
                                           <span className={styles.featureName}>{row.label}</span>
                                         </td>
                                         {columns.map((col) => {
-                                          const declared = row.capabilities.some((c) => c.key === col.key)
+                                          const declaredCap = row.capabilities.find(
+                                            (c) => c.key.toLowerCase() === col.key.toLowerCase(),
+                                          )
                                           return (
                                             <td key={col.key}>
-                                              {declared ? (
+                                              {declaredCap ? (
                                                 <input
                                                   type="checkbox"
                                                   className={styles.checkbox}
-                                                  checked={isOverrideGranted(row.key, col.key)}
+                                                  checked={isOverrideGranted(row.key, declaredCap.key)}
                                                   aria-label={`${col.displayName} on ${row.label}`}
-                                                  onChange={() => toggleOverride(row.key, col.key)}
+                                                  onChange={() => toggleOverride(row.key, declaredCap.key)}
                                                 />
                                               ) : (
                                                 <span

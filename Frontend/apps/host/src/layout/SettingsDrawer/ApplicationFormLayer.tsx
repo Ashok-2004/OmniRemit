@@ -4,10 +4,46 @@ import { remoteAppsApi } from '../../features/settings-applications/api/remoteAp
 import { useSettingsDrawerStore } from '../../shared/stores/settingsDrawerStore'
 import { Icon } from '../../shared/components/Icon/Icon'
 import { SkeletonBlock } from '../../shared/components/Skeleton'
+import { ApiError } from '../../shared/api/httpClient'
+import { toast } from '../../shared/stores/toastStore'
 import styles from './ApplicationFormLayer.module.css'
 
 interface ApplicationFormLayerProps {
   appId?: string
+}
+
+/** Returns a human-readable field label from an ASP.NET ProblemDetails field name. */
+function humanise(field: string): string {
+  const map: Record<string, string> = {
+    ManifestUrl: 'Manifest URL',
+    PermissionsSourceUrl: 'Permissions Discovery URL',
+    Key: 'Application Key',
+    DisplayName: 'Display Name',
+    SidebarOrder: 'Sidebar Sort Order',
+    manifestUrl: 'Manifest URL',
+    permissionsSourceUrl: 'Permissions Discovery URL',
+    key: 'Application Key',
+    displayName: 'Display Name',
+    sidebarOrder: 'Sidebar Sort Order',
+  }
+  return map[field] ?? field
+}
+
+/** Flatten ASP.NET errors dict into readable bullet-list sentences. */
+function flattenErrors(errors: Record<string, string[]>): string[] {
+  return Object.entries(errors).flatMap(([field, msgs]) =>
+    msgs.map((msg) => `${humanise(field)}: ${msg}`),
+  )
+}
+
+/** Client-side URL check before hitting the server. */
+function isValidHttpUrl(value: string): boolean {
+  try {
+    const u = new URL(value)
+    return u.protocol === 'http:' || u.protocol === 'https:'
+  } catch {
+    return false
+  }
 }
 
 export function ApplicationFormLayer({ appId }: ApplicationFormLayerProps) {
@@ -18,7 +54,14 @@ export function ApplicationFormLayer({ appId }: ApplicationFormLayerProps) {
 
   const [loading, setLoading] = useState(isEdit)
   const [saving, setSaving] = useState(false)
+
+  // Generic server error (non-validation)
   const [error, setError] = useState<string | null>(null)
+  // Per-field validation errors
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({})
+  // Client-side inline field errors
+  const [manifestUrlError, setManifestUrlError] = useState<string | null>(null)
+  const [permUrlError, setPermUrlError] = useState<string | null>(null)
 
   // Fields
   const [key, setKey] = useState('')
@@ -56,9 +99,34 @@ export function ApplicationFormLayer({ appId }: ApplicationFormLayerProps) {
     }
   }, [accessToken, appId])
 
+  /** Client-side validation before submit */
+  function validate(): boolean {
+    let ok = true
+
+    if (manifestUrl && !isValidHttpUrl(manifestUrl)) {
+      setManifestUrlError('Must be a valid http:// or https:// URL.')
+      ok = false
+    } else {
+      setManifestUrlError(null)
+    }
+
+    if (permissionsSourceUrl && !isValidHttpUrl(permissionsSourceUrl)) {
+      setPermUrlError('Must be a valid http:// or https:// URL.')
+      ok = false
+    } else {
+      setPermUrlError(null)
+    }
+
+    return ok
+  }
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
+    setFieldErrors({})
+
+    if (!validate()) return
+
     setSaving(true)
 
     try {
@@ -71,6 +139,7 @@ export function ApplicationFormLayer({ appId }: ApplicationFormLayerProps) {
           permissionsSourceUrl: permissionsSourceUrl || null,
           sidebarOrder,
         })
+        toast.success(`Application '${displayName}' updated successfully.`)
       } else {
         await remoteAppsApi.create(token, {
           key,
@@ -80,27 +149,92 @@ export function ApplicationFormLayer({ appId }: ApplicationFormLayerProps) {
           permissionsSourceUrl: permissionsSourceUrl || null,
           sidebarOrder,
         })
+        toast.success(`Application '${displayName}' registered successfully.`)
       }
       const { useModuleRegistryStore } = await import('../../shared/stores/moduleRegistryStore')
       void useModuleRegistryStore.getState().fetchForSidebar(token)
       useSettingsDrawerStore.getState().notifyMutation()
-      popLayer()
+      useSettingsDrawerStore.getState().resetToRoot('applications')
     } catch (err: any) {
-      setError(err?.message || 'Could not save application.')
+      if (err instanceof ApiError && err.errors) {
+        // Show per-field validation errors from ASP.NET ValidationProblemDetails
+        setFieldErrors(err.errors)
+      } else {
+        setError(err?.message || 'Could not save application.')
+      }
     } finally {
       setSaving(false)
     }
   }
 
+  // Merge server field errors with client-side field errors for display
+  const getFieldError = (serverKey: string): string | null => {
+    const serverMsgs = fieldErrors[serverKey] ?? fieldErrors[serverKey.toLowerCase()] ?? []
+    return serverMsgs[0] ?? null
+  }
+
   if (loading) {
     return (
-      <div className={styles.loadingContainer}>
-        <SkeletonBlock height={50} width="70%" />
-        <SkeletonBlock height={180} width="100%" />
-        <SkeletonBlock height={180} width="100%" />
+      <div className={styles.layer}>
+        {/* Skeleton Header */}
+        <div className={styles.header} style={{ pointerEvents: 'none' }}>
+          <div className={styles.headerTitleWrap}>
+            <div className={styles.headerIconBox} style={{ opacity: 0.55 }}>
+              <SkeletonBlock width={22} height={22} radius="6px" />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <SkeletonBlock width={170} height={16} radius="5px" />
+              <SkeletonBlock width={250} height={12} radius="4px" />
+            </div>
+          </div>
+          <div style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(255,255,255,0.18)' }} />
+        </div>
+
+        {/* Form body */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* Card 1 */}
+          <div style={{ background: '#fff', border: '1px solid #eaecf0', borderRadius: 14, padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <SkeletonBlock width={130} height={13} radius="4px" />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                {[0, 1].map((i) => (
+                  <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    <SkeletonBlock width="45%" height={11} radius="3px" />
+                    <SkeletonBlock width="100%" height={38} radius="9px" />
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                <SkeletonBlock width="30%" height={11} radius="3px" />
+                <SkeletonBlock width="100%" height={38} radius="9px" />
+              </div>
+            </div>
+          </div>
+
+          {/* Card 2 */}
+          <div style={{ background: '#fff', border: '1px solid #eaecf0', borderRadius: 14, padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <SkeletonBlock width={160} height={13} radius="4px" />
+            {[0, 1].map((i) => (
+              <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                <SkeletonBlock width="40%" height={11} radius="3px" />
+                <SkeletonBlock width="100%" height={38} radius="9px" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Bottom bar */}
+        <div className={styles.bottomBar} style={{ pointerEvents: 'none' }}>
+          <SkeletonBlock width={90} height={36} radius="9px" />
+          <SkeletonBlock width={110} height={36} radius="9px" />
+        </div>
       </div>
     )
   }
+
+  // Has any server-side validation errors to show as a list?
+  const validationErrorList =
+    Object.keys(fieldErrors).length > 0 ? flattenErrors(fieldErrors) : null
 
   return (
     <div className={styles.layer}>
@@ -125,7 +259,28 @@ export function ApplicationFormLayer({ appId }: ApplicationFormLayerProps) {
         </button>
       </div>
 
-      {error && <div className={styles.errorAlert}>{error}</div>}
+      {/* Generic server error */}
+      {error && (
+        <div className={styles.errorAlert} role="alert">
+          <span style={{ flexShrink: 0, display: 'flex' }}><Icon.AlertCircle width={16} height={16} /></span>
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* Per-field validation errors as a readable list */}
+      {validationErrorList && (
+        <div className={styles.validationAlert} role="alert">
+          <div className={styles.validationAlertHeader}>
+            <Icon.AlertCircle width={15} height={15} />
+            <strong>Please fix the following errors:</strong>
+          </div>
+          <ul className={styles.validationList}>
+            {validationErrorList.map((msg, i) => (
+              <li key={i}>{msg}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <form id="app-form" onSubmit={(e) => void handleSubmit(e)} className={styles.form}>
         <div className={styles.contentArea}>
@@ -133,11 +288,12 @@ export function ApplicationFormLayer({ appId }: ApplicationFormLayerProps) {
           <div className={styles.formCard}>
             <h4 className={styles.formCardTitle}>Application Identity</h4>
             <div className={styles.fieldsGrid}>
+
               <div className={styles.inputGroup}>
                 <label className={styles.label}>
                   Application Key <span className={styles.req}>*</span>
                 </label>
-                <div className={styles.inputIconWrap}>
+                <div className={[styles.inputIconWrap, getFieldError('Key') ? styles.inputError : ''].join(' ')}>
                   <input
                     type="text"
                     required
@@ -145,33 +301,30 @@ export function ApplicationFormLayer({ appId }: ApplicationFormLayerProps) {
                     className={styles.inputWithIcon}
                     placeholder="e.g. employee"
                     value={key}
-                    onChange={(e) => setKey(e.target.value)}
+                    onChange={(e) => { setKey(e.target.value); setFieldErrors((p) => { const c = {...p}; delete c['Key']; delete c['key']; return c }) }}
                   />
                   <Icon.Grid width={16} height={16} className={styles.fieldLeftIcon} />
                 </div>
-                <span className={styles.fieldHint}>
-                  Identifier for routing (/apps/{key || '<key>'}) and permission features (remote.{key || '<key>'}).
-                </span>
+                {getFieldError('Key') && <span className={styles.fieldError}>{getFieldError('Key')}</span>}
+                {!isEdit && <span className={styles.fieldHint}>Used for routing and permission scoping (e.g. remote.{key || '<key>'}).</span>}
               </div>
 
               <div className={styles.inputGroup}>
                 <label className={styles.label}>
                   Display Name <span className={styles.req}>*</span>
                 </label>
-                <div className={styles.inputIconWrap}>
+                <div className={[styles.inputIconWrap, getFieldError('DisplayName') ? styles.inputError : ''].join(' ')}>
                   <input
                     type="text"
                     required
                     className={styles.inputWithIcon}
                     placeholder="e.g. Employee Management"
                     value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
+                    onChange={(e) => { setDisplayName(e.target.value); setFieldErrors((p) => { const c = {...p}; delete c['DisplayName']; delete c['displayName']; return c }) }}
                   />
                   <Icon.Layers width={16} height={16} className={styles.fieldLeftIcon} />
                 </div>
-                <span className={styles.fieldHint}>
-                  User-friendly label rendered in navigation menus and permission matrix tables.
-                </span>
+                {getFieldError('DisplayName') && <span className={styles.fieldError}>{getFieldError('DisplayName')}</span>}
               </div>
 
               <div className={styles.inputGroupFull}>
@@ -182,10 +335,9 @@ export function ApplicationFormLayer({ appId }: ApplicationFormLayerProps) {
                   value={sidebarOrder}
                   onChange={(e) => setSidebarOrder(Number(e.target.value) || 0)}
                 />
-                <span className={styles.fieldHint}>
-                  Numerical display priority in the main navigation sidebar (lower numbers appear first).
-                </span>
+                <span className={styles.fieldHint}>Lower numbers appear first in the sidebar.</span>
               </div>
+
             </div>
           </div>
 
@@ -193,42 +345,56 @@ export function ApplicationFormLayer({ appId }: ApplicationFormLayerProps) {
           <div className={styles.formCard}>
             <h4 className={styles.formCardTitle}>Integration &amp; Federation Endpoints</h4>
             <div className={styles.fieldsGrid}>
+
               <div className={styles.inputGroupFull}>
                 <label className={styles.label}>
                   Module Federation Manifest URL <span className={styles.req}>*</span>
                 </label>
-                <div className={styles.inputIconWrap}>
+                <div className={[styles.inputIconWrap, (manifestUrlError || getFieldError('ManifestUrl')) ? styles.inputError : ''].join(' ')}>
                   <input
-                    type="url"
+                    type="text"
                     required
                     className={styles.inputWithIcon}
-                    placeholder="e.g. http://localhost:5001/mf-manifest.json"
+                    placeholder="https://your-app.com/mf-manifest.json"
                     value={manifestUrl}
-                    onChange={(e) => setManifestUrl(e.target.value)}
+                    onChange={(e) => {
+                      setManifestUrl(e.target.value)
+                      setManifestUrlError(null)
+                      setFieldErrors((p) => { const c = {...p}; delete c['ManifestUrl']; delete c['manifestUrl']; return c })
+                    }}
                   />
                   <Icon.Globe width={16} height={16} className={styles.fieldLeftIcon} />
                 </div>
-                <span className={styles.fieldHint}>
-                  The live URL exposing the remote application&apos;s Module Federation 2.0 manifest.
-                </span>
+                {(manifestUrlError || getFieldError('ManifestUrl')) && (
+                  <span className={styles.fieldError}>
+                    {manifestUrlError ?? getFieldError('ManifestUrl')}
+                  </span>
+                )}
               </div>
 
               <div className={styles.inputGroupFull}>
-                <label className={styles.label}>Permissions Discovery URL (Optional)</label>
-                <div className={styles.inputIconWrap}>
+                <label className={styles.label}>Permissions Discovery URL <span className={styles.optionalTag}>Optional</span></label>
+                <div className={[styles.inputIconWrap, (permUrlError || getFieldError('PermissionsSourceUrl')) ? styles.inputError : ''].join(' ')}>
                   <input
-                    type="url"
+                    type="text"
                     className={styles.inputWithIcon}
-                    placeholder="e.g. http://localhost:5285/api/employee-service/permissions"
+                    placeholder="https://your-app.com/api/permissions"
                     value={permissionsSourceUrl}
-                    onChange={(e) => setPermissionsSourceUrl(e.target.value)}
+                    onChange={(e) => {
+                      setPermissionsSourceUrl(e.target.value)
+                      setPermUrlError(null)
+                      setFieldErrors((p) => { const c = {...p}; delete c['PermissionsSourceUrl']; delete c['permissionsSourceUrl']; return c })
+                    }}
                   />
                   <Icon.Activity width={16} height={16} className={styles.fieldLeftIcon} />
                 </div>
-                <span className={styles.fieldHint}>
-                  Anonymous REST endpoint returning declared permissions for automatic catalog synchronization.
-                </span>
+                {(permUrlError || getFieldError('PermissionsSourceUrl')) && (
+                  <span className={styles.fieldError}>
+                    {permUrlError ?? getFieldError('PermissionsSourceUrl')}
+                  </span>
+                )}
               </div>
+
             </div>
           </div>
         </div>
@@ -240,7 +406,7 @@ export function ApplicationFormLayer({ appId }: ApplicationFormLayerProps) {
           </button>
           <button type="submit" className={styles.saveBtn} disabled={saving}>
             {saving ? (
-              <span>Saving...</span>
+              <span>Saving…</span>
             ) : (
               <>
                 <Icon.CheckCircle width={16} height={16} />

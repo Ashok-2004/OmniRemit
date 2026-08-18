@@ -38,7 +38,8 @@ public class UserAppService(AuthDbContext db, PasswordHasher passwordHasher, Aud
 
         var total = await query.CountAsync(ct);
         var items = await query
-            .OrderBy(u => u.Name)
+            .OrderBy(u => u.Status)
+            .ThenBy(u => u.Name)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(u => ToListItemDto(u))

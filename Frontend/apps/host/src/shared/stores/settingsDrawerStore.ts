@@ -76,6 +76,7 @@ export const useSettingsDrawerStore = create<SettingsDrawerState>((set, get) => 
   resetToRoot: (tab) => {
     const targetTab = tab ?? get().activeTab
     set({
+      isOpen: true,
       activeTab: targetTab,
       layerStack: [{ type: 'root', tab: targetTab }],
     })

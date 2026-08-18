@@ -19,15 +19,19 @@ export interface SidebarProps {
   error?: string | null
   userName?: string
   onLogout?: () => void
+  /** Mobile: whether the sidebar is slid in over the content */
+  mobileOpen?: boolean
+  /** Mobile: called when the user taps the backdrop or a close trigger */
+  onMobileClose?: () => void
 }
 
 function navItemClass({ isActive }: { isActive: boolean }) {
   return classNames(styles.navItem, isActive && styles.navItemActive)
 }
 
-export function Sidebar({ apps, canAccessAuditLogs, error }: SidebarProps) {
+export function Sidebar({ apps, canAccessAuditLogs, error, mobileOpen }: SidebarProps) {
   return (
-    <aside className={styles.sidebar}>
+    <aside className={classNames(styles.sidebar, mobileOpen ? styles.sidebarMobileOpen : '')}>
 
       {/* ── Brand ─────────────────────────────────────────── */}
       <div className={styles.brand}>

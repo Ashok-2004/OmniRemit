@@ -857,3 +857,42 @@
   font-size: 13px;
   color: var(--omni-color-text-secondary, #64748b);
 }
+
+/* ══════════════════════════════════════════════════════════════
+   GLOBAL RESPONSIVE ADDITIONS — Mobile / Tablet breakpoints
+   ══════════════════════════════════════════════════════════════ */
+
+/* Page container — tighter horizontal padding on small screens */
+@media (max-width: 768px) {
+  .page { gap: 14px; padding-bottom: 20px; }
+  .heroCard { padding: 18px 18px; }
+  .heroLeft { gap: 12px; }
+  .heroAvatar { width: 44px; height: 44px; font-size: 15px; border-radius: 11px; }
+}
+
+/* Stat cards — already have 2-col at 1100, 1-col at 600. Add 480px tweak */
+@media (max-width: 480px) {
+  .statCardsGrid { gap: 10px; }
+  .statCard { padding: 14px 16px 12px; }
+  .statValue { font-size: 24px; }
+}
+
+/* Two-column grid — 1-col starts at 960, add 600px padding tweak */
+@media (max-width: 600px) {
+  .twoColumnGrid { gap: 12px; }
+  .widgetCard { padding: 16px 14px; }
+}
+
+/* Audit table on Dashboard — horizontal scroll on very small screens */
+@media (max-width: 640px) {
+  .auditTable { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .auditTable table { min-width: 560px; }
+  .widgetCard { padding: 14px 12px; }
+}
+
+/* Hero buttons row wrap on mobile */
+@media (max-width: 520px) {
+  .heroCard { padding: 16px 16px; gap: 12px; }
+  .heroActions { flex-wrap: wrap; gap: 8px; }
+  .heroActions > * { width: 100%; justify-content: center; }
+}

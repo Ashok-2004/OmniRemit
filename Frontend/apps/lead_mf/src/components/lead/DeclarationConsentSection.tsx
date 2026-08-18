@@ -1,0 +1,104 @@
+import React from 'react';
+import { ScrollText } from 'lucide-react';
+import { useLeadStore } from '../../store/useLeadStore';
+
+interface DeclarationConsentSectionProps {
+  isEdit?: boolean;
+}
+
+export const DeclarationConsentSection: React.FC<DeclarationConsentSectionProps> = ({ isEdit = false }) => {
+  const store = useLeadStore();
+  const formData = isEdit ? store.editFormData : store.formData;
+  const errors = isEdit ? store.editErrors : store.errors;
+  const setFieldValue = isEdit ? store.setEditFieldValue : store.setFieldValue;
+
+  return (
+    <div className="form-section">
+      <div className="form-section-title">
+        <ScrollText size={18} className="form-section-icon" />
+        <span>Declaration</span>
+      </div>
+
+      {/* Radio options for Declaration/Consent */}
+      <div style={{ marginBottom: '20px' }}>
+        <div className="form-label" style={{ marginBottom: '10px' }}>
+          Declaration/Consent <span className="required-asterisk">*</span>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <label className="custom-radio-label">
+            <input
+              type="radio"
+              name="marketingConsent"
+              className="custom-radio-input"
+              value="CONSENT"
+              checked={formData.marketingConsent === 'CONSENT'}
+              onChange={() => setFieldValue('marketingConsent', 'CONSENT')}
+            />
+            <span>
+              I hereby <strong>CONSENT and AUTHORISE</strong> the Bank to disclose and share my
+              information for the purpose of cross selling, marketing and promotional activities with
+              any party.
+            </span>
+          </label>
+
+          <label className="custom-radio-label">
+            <input
+              type="radio"
+              name="marketingConsent"
+              className="custom-radio-input"
+              value="DO_NOT_CONSENT"
+              checked={formData.marketingConsent === 'DO_NOT_CONSENT'}
+              onChange={() => setFieldValue('marketingConsent', 'DO_NOT_CONSENT')}
+            />
+            <span>
+              I hereby <strong>DO NOT CONSENT and DO NOT AUTHORISE</strong> the Bank to disclose and share
+              my information for the purpose of cross selling, marketing and promotional activities
+              with any party.
+            </span>
+          </label>
+        </div>
+
+        {errors.marketingConsent && (
+          <div className="field-error-message" style={{ marginTop: '8px' }}>
+            {errors.marketingConsent}
+          </div>
+        )}
+      </div>
+
+      {/* Mandatory Privacy Policy Agreement */}
+      <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #f1f5f9' }}>
+        <label className="custom-checkbox-label">
+          <input
+            type="checkbox"
+            className="custom-checkbox-input"
+            checked={formData.agreedToPrivacyPolicy}
+            onChange={(e) => setFieldValue('agreedToPrivacyPolicy', e.target.checked)}
+          />
+          <span style={{ fontSize: '12.5px', color: '#475569' }}>
+            I have read and agree to Bank Simpanan Nasional&apos;s{' '}
+            <a
+              href="#privacy-policy"
+              onClick={(e) => {
+                e.preventDefault();
+                alert('Bank Simpanan Nasional Privacy Policy: Your data is collected and processed in accordance with the Malaysian Personal Data Protection Act (PDPA) 2010.');
+              }}
+              style={{ color: '#2563eb', textDecoration: 'underline', fontWeight: 600 }}
+            >
+              Privacy Policy
+            </a>
+            . I consent and acknowledge that Bank Simpanan Nasional may, inter alia, collect, store
+            and process the data and information provided in this form for the purpose of processing
+            my request and contacting me via email and/or phone to follow up on my submission.
+          </span>
+        </label>
+
+        {errors.agreedToPrivacyPolicy && (
+          <div className="field-error-message" style={{ marginTop: '8px' }}>
+            {errors.agreedToPrivacyPolicy}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};

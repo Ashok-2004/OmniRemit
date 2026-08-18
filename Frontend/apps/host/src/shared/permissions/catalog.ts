@@ -45,51 +45,74 @@ export interface PermissionGroup {
   columns: { key: string; displayName: string }[]
 }
 
+/** Standard preferred order for CRUD and common action verbs */
+const PREFERRED_CAPABILITY_ORDER: Record<string, number> = {
+  view: 10,
+  create: 20,
+  edit: 30,
+  delete: 40,
+  disable: 50,
+  register: 60,
+  export: 70,
+}
+
 /**
- * Rows for one feature: the feature itself when it declares capabilities, then each sub-module.
- *
- * A parent with no capabilities of its own contributes no row — rendering an empty "Base Access" line
- * is what produced the invalid grants described above.
+ * Rows for one feature:
+ * - If the feature has child sub-modules (e.g. Department, Employee), render ONLY the child sub-modules as rows.
+ * - If the feature has no children, render the feature itself (if it declares capabilities).
  */
 export function rowsForFeature(feature: PermissionFeatureDto): PermissionRow[] {
   const rows: PermissionRow[] = []
 
-  if (feature.capabilities.length > 0) {
+  // If there are sub-modules (children), render each sub-module as its own row (skip redundant parent base access)
+  if (feature.children && feature.children.length > 0) {
+    for (const child of feature.children) {
+      const cleanCapabilities = (child.capabilities || []).filter(
+        (c) => !c.key.includes(':') && !c.key.includes('.'),
+      )
+      rows.push({
+        key: child.key,
+        label: child.displayName,
+        isParent: false,
+        capabilities: cleanCapabilities.length > 0 ? cleanCapabilities : child.capabilities,
+      })
+      // Recurse: the model is self-referencing, so a sub-module may itself have sub-modules.
+      for (const grandchild of rowsForFeature(child)) {
+        if (grandchild.key !== child.key) rows.push(grandchild)
+      }
+    }
+  } else if (feature.capabilities && feature.capabilities.length > 0) {
+    const cleanCapabilities = feature.capabilities.filter(
+      (c) => !c.key.includes(':') && !c.key.includes('.'),
+    )
     rows.push({
       key: feature.key,
-      label: feature.children.length > 0 ? `${feature.displayName} (base access)` : feature.displayName,
+      label: feature.displayName,
       isParent: true,
-      capabilities: feature.capabilities,
+      capabilities: cleanCapabilities.length > 0 ? cleanCapabilities : feature.capabilities,
     })
-  }
-
-  for (const child of feature.children) {
-    rows.push({
-      key: child.key,
-      label: child.displayName,
-      isParent: false,
-      capabilities: child.capabilities,
-    })
-    // Recurse: the model is self-referencing, so a sub-module may itself have sub-modules.
-    for (const grandchild of rowsForFeature(child)) {
-      if (grandchild.key !== child.key) rows.push(grandchild)
-    }
   }
 
   return rows
 }
 
-/** The union of capabilities across rows, de-duplicated, preserving the server's ordering. */
+/** The union of capabilities across rows, sorted cleanly (CREATE, VIEW, EDIT, DELETE first, then others). */
 export function columnsForRows(rows: PermissionRow[]): { key: string; displayName: string }[] {
   const columns: { key: string; displayName: string }[] = []
   for (const row of rows) {
     for (const cap of row.capabilities) {
-      if (!columns.some((c) => c.key === cap.key)) {
+      if (!columns.some((c) => c.key.toLowerCase() === cap.key.toLowerCase())) {
         columns.push({ key: cap.key, displayName: cap.displayName })
       }
     }
   }
-  return columns
+
+  return columns.sort((a, b) => {
+    const orderA = PREFERRED_CAPABILITY_ORDER[a.key.toLowerCase()] ?? 100
+    const orderB = PREFERRED_CAPABILITY_ORDER[b.key.toLowerCase()] ?? 100
+    if (orderA !== orderB) return orderA - orderB
+    return a.displayName.localeCompare(b.displayName)
+  })
 }
 
 /** Rows + columns for one feature, ready to render. */
@@ -112,10 +135,7 @@ export function groupsFromCatalog(
 /**
  * Every (featureKey, capability) pair the catalog contains, walked recursively.
  *
- * This is the universe the user-override editor diffs against. The missing recursion was not merely a
- * display bug: `replaceOverrides` reconciles against this list, so a sub-module override that never
- * appeared here was dropped by any unrelated edit — changing a user's phone number silently removed
- * their department permissions.
+ * This is the universe the user-override editor diffs against.
  */
 export function allGrantablePairs(
   catalog: PermissionFeatureDto[],
@@ -125,14 +145,18 @@ export function allGrantablePairs(
 
   const walk = (features: PermissionFeatureDto[]) => {
     for (const f of features) {
-      for (const cap of f.capabilities) {
-        const id = `${f.key}:${cap.key}`
-        if (!seen.has(id)) {
-          seen.add(id)
-          pairs.push({ featureKey: f.key, capability: cap.key })
+      if (f.children && f.children.length > 0) {
+        walk(f.children)
+      } else {
+        for (const cap of f.capabilities) {
+          if (cap.key.includes(':') || cap.key.includes('.')) continue
+          const id = `${f.key}:${cap.key}`
+          if (!seen.has(id)) {
+            seen.add(id)
+            pairs.push({ featureKey: f.key, capability: cap.key })
+          }
         }
       }
-      if (f.children.length > 0) walk(f.children)
     }
   }
 
