@@ -23,7 +23,7 @@ export default function CompanyOverview({ profile, contactInfo }: CompanyOvervie
       try {
         await api.logAudit({
           action: "VIEW_SENSITIVE_DATA",
-          customer: profile.organizationName || "Unknown",
+          customerName: profile.organizationName || "Unknown",
           customerType: "Non-Individual",
           field: fieldLabel,
           status: "Success",

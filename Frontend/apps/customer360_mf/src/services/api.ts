@@ -149,27 +149,40 @@ export const api = {
   ): Promise<PaginatedEnvelope<Interaction>> =>
     request(`/v1/interactions/${encodeURIComponent(id)}?pageNumber=${page}&pageSize=${size}`),
 
-  // Product deep-dives
-  getDepositProduct: (id: string): Promise<ApiEnvelope<DepositProduct>> =>
-    request(`/v1/depositproduct/${encodeURIComponent(id)}`),
+  // Product deep-dives.
+  //
+  // Every one of these previously pointed at a URL that does not exist on this backend at all — e.g.
+  // `/v1/loanproduct/{id}` — a leftover from an earlier draft that was never reconciled against the
+  // real controller (Backend/Customer360Service/Controllers/ProductController.cs). Every real route
+  // is `/v1/product/<kind>`, a query string (not a path segment), and needs BOTH the customer's id
+  // and the specific product's account/policy number — a customer can hold more than one of a given
+  // product type, so the id alone can't identify which one. Confirmed against the controller's own
+  // route comments and parameter lists, not guessed.
+  getDepositProduct: (id: string, accountNo: string): Promise<ApiEnvelope<DepositProduct>> =>
+    request(`/v1/product/deposit?id=${encodeURIComponent(id)}&accountNo=${encodeURIComponent(accountNo)}`),
 
-  getLoanProduct: (id: string): Promise<ApiEnvelope<LoanProduct>> =>
-    request(`/v1/loanproduct/${encodeURIComponent(id)}`),
+  getLoanProduct: (id: string, accountNo: string): Promise<ApiEnvelope<LoanProduct>> =>
+    request(`/v1/product/loan?id=${encodeURIComponent(id)}&accountNo=${encodeURIComponent(accountNo)}`),
 
-  getCardProduct: (id: string): Promise<ApiEnvelope<CardsProduct>> =>
-    request(`/v1/cardsproduct/${encodeURIComponent(id)}`),
+  getCardProduct: (id: string, accountNo: string, cardType: string): Promise<ApiEnvelope<CardsProduct>> =>
+    request(
+      `/v1/product/cards?id=${encodeURIComponent(id)}&accountNo=${encodeURIComponent(accountNo)}&type=${encodeURIComponent(cardType)}`
+    ),
 
-  getGoldProduct: (id: string): Promise<ApiEnvelope<GoldProduct>> =>
-    request(`/v1/goldproduct/${encodeURIComponent(id)}`),
+  getGoldProduct: (id: string, accountNo: string): Promise<ApiEnvelope<GoldProduct>> =>
+    request(`/v1/product/gold?id=${encodeURIComponent(id)}&accountNo=${encodeURIComponent(accountNo)}`),
 
-  getWmProduct: (id: string): Promise<ApiEnvelope<WmProduct>> =>
-    request(`/v1/wmproduct/${encodeURIComponent(id)}`),
+  getWmProduct: (id: string, policyNo: string): Promise<ApiEnvelope<WmProduct>> =>
+    request(`/v1/product/wm?id=${encodeURIComponent(id)}&policyNo=${encodeURIComponent(policyNo)}`),
 
-  getUnitTrustProduct: (id: string): Promise<ApiEnvelope<UnitTrustProduct>> =>
-    request(`/v1/unittrustproduct/${encodeURIComponent(id)}`),
+  // Unlike the five above, unittrust/willwriting return a LIST (`data: [...]`), not a single object —
+  // matches the controller, which calls MapList rather than Map for these two. They also key on
+  // `nric`, not `id`.
+  getUnitTrustProduct: (nric: string, accountNo: string): Promise<ApiEnvelope<UnitTrustProduct[]>> =>
+    request(`/v1/product/unittrust?nric=${encodeURIComponent(nric)}&accountNo=${encodeURIComponent(accountNo)}`),
 
-  getWillWritingProduct: (id: string): Promise<ApiEnvelope<WillWritingProduct>> =>
-    request(`/v1/willwritingproduct/${encodeURIComponent(id)}`),
+  getWillWritingProduct: (nric: string, accountNo: string): Promise<ApiEnvelope<WillWritingProduct[]>> =>
+    request(`/v1/product/willwriting?nric=${encodeURIComponent(nric)}&accountNo=${encodeURIComponent(accountNo)}`),
 
   // Audit Logs
   getAuditLogs: (params: { search?: string; action?: string; pageNumber?: number; pageSize?: number } = {}): Promise<PaginatedEnvelope<AuditLog>> => {
@@ -186,4 +199,13 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+
+  // Alias — several call sites across this app were written against `logAudit`, a method that has
+  // never existed on this object. Every one of those calls threw `TypeError: api.logAudit is not a
+  // function`, silently (they're all wrapped in try/catch that only logs to the console), so every
+  // "viewed sensitive data" / "searched" audit entry for this app has never actually been written.
+  // Aliasing here fixes every call site in one place instead of renaming each one individually.
+  logAudit(data: Partial<AuditLog>): Promise<ApiEnvelope<void>> {
+    return this.createAuditLog(data);
+  },
 };

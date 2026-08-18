@@ -135,15 +135,20 @@ export default function Customer360() {
     setRevealed(prev => ({ ...prev, [fieldKey]: isRevealing }));
     
     if (isRevealing) {
+      // `profile` is typed as the CustomerProfile union, but every real call site of this function
+      // (the four corporate signatory/TIN/phone reveal buttons) only ever fires with a corporate
+      // profile loaded, matching the hardcoded "Non-Individual" label below — narrow explicitly rather
+      // than reading `.organizationName`/`.brn` off the union, which TypeScript correctly can't allow.
+      const corpProfile = profile as CorporateProfile | null;
       try {
         await api.logAudit({
           action: "VIEW_SENSITIVE_DATA",
-          customer: profile?.organizationName || "Unknown",
+          customerName: corpProfile?.organizationName || "Unknown",
           customerType: "Non-Individual",
           field: fieldLabel,
           status: "Success",
-          description: `Viewed ${fieldLabel} for customer '${profile?.organizationName || "Unknown"}'`,
-          customerId: profile?.brn || ""
+          description: `Viewed ${fieldLabel} for customer '${corpProfile?.organizationName || "Unknown"}'`,
+          customerId: corpProfile?.brn || ""
         });
       } catch (err) {
         console.error("Failed to log view sensitive data audit:", err);
@@ -252,7 +257,7 @@ export default function Customer360() {
       const customerId = latestProfile?.nationalId || searchVal;
       await api.logAudit({
         action: "SEARCH",
-        customer: customerName,
+        customerName: customerName,
         customerType: "Individual",
         status: "Success",
         description: `Searched for '${searchVal}' by ${searchIdType}`,
@@ -267,7 +272,7 @@ export default function Customer360() {
       // Log failure
       await api.logAudit({
         action: "SEARCH",
-        customer: searchVal,
+        customerName: searchVal,
         customerType: "Individual",
         status: "Failed",
         description: `Failed search for '${searchVal}' by ${searchIdType}`,
@@ -298,7 +303,7 @@ export default function Customer360() {
       const customerId = latestProfile?.brn || corpSearchVal;
       await api.logAudit({
         action: "SEARCH",
-        customer: customerName,
+        customerName: customerName,
         customerType: "Non-Individual",
         status: "Success",
         description: `Searched for '${corpSearchVal}' by ${corpSearchType}`,
@@ -313,7 +318,7 @@ export default function Customer360() {
       // Log failure
       await api.logAudit({
         action: "SEARCH",
-        customer: corpSearchVal,
+        customerName: corpSearchVal,
         customerType: "Non-Individual",
         status: "Failed",
         description: `Failed search for '${corpSearchVal}' by ${corpSearchType}`,
@@ -322,6 +327,27 @@ export default function Customer360() {
 
     } finally {
       setLoadingCorpSearch(false);
+    }
+  };
+
+  // Fetches the full corporate directory for the "Browse All Companies" / "Refresh Directory" /
+  // "Load All Registered Companies" actions. This used to be referenced under the name
+  // `handleViewAllCompanies` in three places (the Browse button, the Refresh Directory button, and
+  // the empty-state's Load All button) without ever being defined — a bare ReferenceError thrown
+  // during render the instant `showList` became true, which is deterministic: switching to
+  // Non-Individual always sets viewMode to 'list' shortly after. It only failed to surface earlier
+  // because nothing had exercised that render path in review. The fetch logic itself already existed,
+  // duplicated inside the loader effect below; this is that same logic, named and made callable from
+  // the buttons that were already trying to call it.
+  const handleViewAllCompanies = async () => {
+    setLoadingCompanies(true);
+    try {
+      const res = await api.getAllCorporateProfiles();
+      setCompanies(res.data || []);
+    } catch (err) {
+      console.error("Failed to load corporate directory:", err);
+    } finally {
+      setLoadingCompanies(false);
     }
   };
 
@@ -451,21 +477,13 @@ export default function Customer360() {
     setIntPageNumber(1);
   }, [profile]);
 
-  // Load corporate directory companies dynamically when in corporate list mode
+  // Load corporate directory companies dynamically when in corporate list mode.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- handleViewAllCompanies is a plain
+  // function recreated every render (matching this file's existing handler style, e.g.
+  // handleBackToSearchCorp above); including it would refire this effect on every render.
   useEffect(() => {
     if (!isIndividual && viewMode === 'list') {
-      const fetchCompanies = async () => {
-        setLoadingCompanies(true);
-        try {
-          const res = await api.getAllCorporateProfiles();
-          setCompanies(res.data || []);
-        } catch (err) {
-          console.error("Failed to load corporate directory:", err);
-        } finally {
-          setLoadingCompanies(false);
-        }
-      };
-      fetchCompanies();
+      handleViewAllCompanies();
     }
   }, [isIndividual, viewMode]);
 

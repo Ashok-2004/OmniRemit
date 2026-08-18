@@ -34,7 +34,11 @@ declare global {
 export const getBridge = (): OmniRemitHostBridge | null => {
   if (typeof window === 'undefined') return null;
   const bridge = window.__omniremitHost__;
-  if (!bridge && process.env.NODE_ENV === 'development') {
+  // import.meta.env.DEV (Vite's own flag), not process.env.NODE_ENV — `process` is never polyfilled
+  // for the browser bundle in this app's vite.config, so the old check threw
+  // `ReferenceError: process is not defined` the moment this ran with no bridge installed, e.g. this
+  // remote loaded standalone (`vite preview`) outside the host shell.
+  if (!bridge && import.meta.env.DEV) {
     console.debug(
       '[customer360_mf] window.__omniremitHost__ is not installed — this remote is designed to run ' +
         'inside the OmniConnect host shell. API calls in standalone mode may require auth tokens.'

@@ -10,7 +10,7 @@
   },
   "scripts": {
     "dev": "concurrently --kill-others \"vite build --watch\" \"vite preview\"",
-    "build": "vite build",
+    "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },

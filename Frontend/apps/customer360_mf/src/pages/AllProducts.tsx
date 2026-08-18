@@ -33,7 +33,10 @@ export default function AllProducts() {
 
   const customerId =
     customerType === 'individual'
-      ? (profile as IndividualProfile)?.nric || (profile as IndividualProfile)?.passport || ''
+      // `nric` isn't a real field on IndividualProfile (the primary identifier is `nationalId`) — this
+      // silently fell through to `passport` every time, which is empty for most customers, so
+      // customerId was frequently '' and the products-loading effect below never fired for them.
+      ? (profile as IndividualProfile)?.nationalId || (profile as IndividualProfile)?.passport || ''
       : (profile as CorporateProfile)?.brn || '';
 
   useEffect(() => {
@@ -279,33 +282,49 @@ export default function AllProducts() {
                     <td style={{ fontFamily: "'SF Mono', 'Fira Code', monospace", color: '#0f172a', fontWeight: 500 }}>
                       {prod.accountNumber}
                     </td>
-                    <td style={{ color: '#64748b' }}>{prod.branch || '-'}</td>
+                    {/* CustomerProduct carries no branch field at all (that's only present on the
+                        customer's own profile, a different entity) — always '-', honestly, not a
+                        fabricated value. */}
+                    <td style={{ color: '#64748b' }}>{'-'}</td>
                     <td style={{ fontWeight: 700, color: '#059669' }}>
-                      {prod.balance ? `RM ${Number(prod.balance).toLocaleString()}` : '-'}
+                      {prod.balances ? `RM ${Number(prod.balances).toLocaleString()}` : '-'}
                     </td>
                     <td>
-                      <span
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '5px',
-                          padding: '3px 10px',
-                          borderRadius: '999px',
-                          background: '#ecfdf5',
-                          color: '#047857',
-                          fontSize: '11.5px',
-                          fontWeight: 600,
-                          border: '1px solid #a7f3d0',
-                        }}
-                      >
-                        <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#10b981' }} />
-                        {prod.status || 'Active'}
-                      </span>
+                      {/* No single generic status field exists — derivedAccountStatus is the one the
+                          backend explicitly provides as a normalized status across product types. The
+                          fixed green "Active" fallback previously shown regardless of real status has
+                          been removed: it's not just a wrong label, it's specifically the wrong
+                          direction to fail in for something this label implies about an account. */}
+                      {prod.derivedAccountStatus ? (
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            padding: '3px 10px',
+                            borderRadius: '999px',
+                            background: '#ecfdf5',
+                            color: '#047857',
+                            fontSize: '11.5px',
+                            fontWeight: 600,
+                            border: '1px solid #a7f3d0',
+                          }}
+                        >
+                          <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#10b981' }} />
+                          {prod.derivedAccountStatus}
+                        </span>
+                      ) : (
+                        <span style={{ color: '#94a3b8', fontSize: '11.5px' }}>-</span>
+                      )}
                     </td>
                     <td style={{ textAlign: 'right' }}>
                       <button
                         type="button"
-                        onClick={() => openProductModal(prod)}
+                        // openProductModal(accountNo, type) — was passing the whole product object as
+                        // a single argument, matching neither parameter. Every "View Details" click
+                        // here called it with the wrong shape entirely; see Customer360.tsx's own
+                        // (correct) call sites for the real signature.
+                        onClick={() => openProductModal(prod.accountNumber, prod.type as string)}
                         style={{
                           display: 'inline-flex',
                           alignItems: 'center',

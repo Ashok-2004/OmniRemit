@@ -506,7 +506,7 @@ export const ViewLeadPage: React.FC = () => {
                           </div>
                           <div>
                             <div style={{ fontWeight: 600, color: '#0f172a' }}>{lead.name}</div>
-                            {lead.leadReference && (
+                            {lead.id && (
                               <span
                                 style={{
                                   fontSize: '11px',
@@ -517,7 +517,7 @@ export const ViewLeadPage: React.FC = () => {
                                   fontWeight: 500,
                                 }}
                               >
-                                {lead.leadReference}
+                                {lead.id}
                               </span>
                             )}
                           </div>

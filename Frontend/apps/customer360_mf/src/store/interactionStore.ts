@@ -68,7 +68,9 @@ export const useInteractionStore = create<InteractionStoreState>((set, get) => (
 
     try {
       const { pageNumber, pageSize } = get();
-      const res = await api.getInteractions(customerId, pageNumber, pageSize);
+      // `getInteractions` never existed on `api` (the real name is `getCustomerInteractions`) — this
+      // threw on every single case load, meaning the Interactions tab has never once shown real data.
+      const res = await api.getCustomerInteractions(customerId, pageNumber, pageSize);
 
       // Discard if a newer load was started while this one was in-flight
       if (version !== _interactionsVersion) return;

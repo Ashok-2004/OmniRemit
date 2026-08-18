@@ -46,7 +46,7 @@ export default function IndividualDetails({ subTab, profile, contactInfo }: Indi
       try {
         await api.logAudit({
           action: "VIEW_SENSITIVE_DATA",
-          customer: profile.fullName || "Unknown",
+          customerName: profile.fullName || "Unknown",
           customerType: "Individual",
           field: fieldLabel,
           status: "Success",

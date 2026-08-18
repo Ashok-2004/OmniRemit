@@ -191,8 +191,9 @@ export const RecentLeadsCard: React.FC = () => {
                         </div>
                         <div>
                           <div style={{ fontWeight: 600, color: '#0f172a' }}>{lead.name}</div>
-                          {lead.leadReference && (
-                            <div style={{ fontSize: '11px', color: '#64748b' }}>{lead.leadReference}</div>
+                          {/* LeadRecord has no `leadReference` field — `id` is the real identifier. */}
+                          {lead.id && (
+                            <div style={{ fontSize: '11px', color: '#64748b' }}>{lead.id}</div>
                           )}
                         </div>
                       </div>

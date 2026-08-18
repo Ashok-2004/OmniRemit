@@ -6,7 +6,7 @@ import CaseDetailsModal from '../components/CaseDetailsModal';
 import { ArrowLeft, Search, Eye, MessageSquare, RefreshCw, X, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
 import type { IndividualProfile, CorporateProfile } from '../types/api';
 
-const getStatusBadge = (status?: string) => {
+const getStatusBadge = (status?: string | null) => {
   const s = status?.toLowerCase() || 'new';
   if (s.includes('resolve') || s.includes('complete') || s.includes('close')) {
     return { bg: '#ecfdf5', text: '#047857', border: '#a7f3d0', dot: '#10b981', label: status || 'Resolved' };
@@ -47,7 +47,9 @@ export default function AllInteractions() {
 
   const customerId =
     customerType === 'individual'
-      ? (profile as IndividualProfile)?.nationalId || (profile as IndividualProfile)?.nric || ''
+      // IndividualProfile has no `nric` field (the real one is `nationalId`) — that fallback could
+      // never fire.
+      ? (profile as IndividualProfile)?.nationalId || ''
       : (profile as CorporateProfile)?.brn || '';
 
   useEffect(() => {
@@ -64,14 +66,24 @@ export default function AllInteractions() {
     setSearchTerm(e.target.value);
   };
 
-  // Filter local data based on search term & status
+  // Filter local data based on search term & status.
+  //
+  // These field names previously didn't exist on Interaction at all (caseNumber, title, assignedTo,
+  // source, status) — every one of them was `undefined` at runtime, every time, for every real
+  // interaction. That didn't crash (JS doesn't throw on reading a missing optional property), it
+  // silently filtered against empty strings and, worse, the table below rendered its hardcoded
+  // fallback text ("Customer Inquiry", "Unassigned", "Branch Walk-in", a fabricated "CAS-100N" case
+  // number) as if it were real CRM data for every single case. Mapped to the fields the backend
+  // (Backend/Customer360Service/Models/Models.cs: Interaction) actually returns; see the table render
+  // below for which mappings are exact vs. best-effort against a schema with no literal "title" or
+  // "assigned to" column.
   const filteredInteractions = interactions.filter((item) => {
     const matchesSearch =
-      (item.caseNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.title || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.assignedTo || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.source || '').toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === '' || (item.status || '').toLowerCase() === statusFilter.toLowerCase();
+      (item.caseId || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.classification || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.subRoleName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.sourceName || '').toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === '' || (item.statusParent || '').toLowerCase() === statusFilter.toLowerCase();
     return matchesSearch && matchesStatus;
   });
 
@@ -273,16 +285,19 @@ export default function AllInteractions() {
               </thead>
               <tbody>
                 {filteredInteractions.map((item, idx) => {
-                  const statusInfo = getStatusBadge(item.status);
+                  const statusInfo = getStatusBadge(item.statusParent);
 
                   return (
-                    <tr key={item.caseNumber || idx}>
+                    <tr key={item.caseId || idx}>
                       <td style={{ fontFamily: "'SF Mono', 'Fira Code', monospace", fontWeight: 600, color: '#2563eb' }}>
-                        {item.caseNumber || `CAS-${idx + 1001}`}
+                        {/* caseId is the real case identifier — no fabricated "CAS-100N" placeholder */}
+                        {item.caseId || '-'}
                       </td>
                       <td>
-                        <div style={{ fontWeight: 600, color: '#0f172a' }}>{item.title || 'Customer Inquiry'}</div>
-                        <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>{item.type || 'General Service'}</div>
+                        {/* The schema has no literal "title"/"subject" column — classification is the
+                            closest real field for a one-line summary of what the case is about. */}
+                        <div style={{ fontWeight: 600, color: '#0f172a' }}>{item.classification || 'Uncategorized'}</div>
+                        <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>{item.category || item.main || '-'}</div>
                       </td>
                       <td>
                         <span
@@ -295,11 +310,13 @@ export default function AllInteractions() {
                             fontWeight: 600,
                           }}
                         >
-                          {item.source || 'Branch Walk-in'}
+                          {item.sourceName || '-'}
                         </span>
                       </td>
-                      <td style={{ color: '#0f172a', fontWeight: 500 }}>{item.assignedTo || 'Unassigned'}</td>
-                      <td style={{ color: '#64748b', fontSize: '12.5px' }}>{item.createdDate || '-'}</td>
+                      {/* No literal "assigned to" column exists — subRoleName (the routing queue/role
+                          the case sits in) is the closest real field to "who owns this right now". */}
+                      <td style={{ color: '#0f172a', fontWeight: 500 }}>{item.subRoleName || '-'}</td>
+                      <td style={{ color: '#64748b', fontSize: '12.5px' }}>{item.createdDateParent || '-'}</td>
                       <td>
                         <span
                           style={{

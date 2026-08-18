@@ -99,27 +99,32 @@ export const useProductStore = create<ProductStoreState>((set, get) => ({
         : (customerState.profile as { nationalId?: string } | null)?.nationalId || customerState.activeIndividualId;
       const nationalId = lookupId;
 
+      // Method names below match api.ts's actual exports (getLoanDetails/getDepositDetails/etc. never
+      // existed — every branch here threw "api.<name> is not a function" the instant a user opened a
+      // product's details, for every product type).
       if (normType.includes('loan') || normType.includes('financing')) {
-        const res = await api.getLoanDetails(lookupId, accountNo);
+        const res = await api.getLoanProduct(lookupId, accountNo);
         details = res.data;
       } else if (normType.includes('deposit') || normType.includes('casa')) {
-        const res = await api.getDepositDetails(lookupId, accountNo);
+        const res = await api.getDepositProduct(lookupId, accountNo);
         details = res.data;
       } else if (normType.includes('card')) {
         const cardType = prodItem?.cardType || 'CR';
-        const res = await api.getCardDetails(nationalId, accountNo, cardType);
+        const res = await api.getCardProduct(nationalId, accountNo, cardType);
         details = res.data;
       } else if (normType.includes('gold') || normCategory.includes('gold')) {
-        const res = await api.getGoldDetails(nationalId, accountNo);
+        const res = await api.getGoldProduct(nationalId, accountNo);
         details = res.data;
       } else if (normType.includes('unit trust') || normCategory.includes('unit trust')) {
-        const res = await api.getUnitTrustDetails(nationalId, accountNo);
+        const res = await api.getUnitTrustProduct(nationalId, accountNo);
         details = (res.data && res.data[0]) || null;
       } else if (normType.includes('will') || normCategory.includes('will')) {
-        const res = await api.getWillWritingDetails(nationalId, accountNo);
+        const res = await api.getWillWritingProduct(nationalId, accountNo);
         details = (res.data && res.data[0]) || null;
       } else if (normType.includes('wm') || normType.includes('wealth') || normType.includes('takaful')) {
-        const res = await api.getWmDetails(nationalId, accountNo);
+        // accountNo doubles as policyNo here — CustomerProduct exposes one generic "accountNumber"
+        // field regardless of underlying product type, and for a WM row that value IS the policy no.
+        const res = await api.getWmProduct(nationalId, accountNo);
         details = res.data;
       } else {
         // Fallback to basic product item
