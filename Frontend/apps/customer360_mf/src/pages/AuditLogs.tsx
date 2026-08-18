@@ -399,21 +399,25 @@ export default function AuditLogs() {
         )}
       </div>
 
-      {/* Details Modal */}
+      {/* Details drawer — right-side, matching the host's own drawer pattern (and this app's own
+          CaseDetailsModal/ProductDetailsModal) rather than a centered dialog. */}
       {detailsOpen && selectedLog && (
-        <div className="c360-modal-overlay" onClick={() => setDetailsOpen(false)}>
-          <div className="c360-modal-dialog" onClick={(e) => e.stopPropagation()}>
-            <div className="c360-modal-header">
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>Audit Record Details</h3>
+        <div className="drawer-overlay" onClick={() => setDetailsOpen(false)}>
+          <div className="drawer-content" onClick={(e) => e.stopPropagation()}>
+            <div className="drawer-header blue-header">
+              <div className="drawer-title-text">
+                <h3>Audit Record Details</h3>
+                <p>Full details of this audit trail entry</p>
+              </div>
               <button
                 type="button"
+                className="drawer-close-btn"
                 onClick={() => setDetailsOpen(false)}
-                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
               >
                 <X size={18} />
               </button>
             </div>
-            <div className="c360-modal-body">
+            <div className="drawer-body">
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', fontSize: '13.5px' }}>
                 <div>
                   <span style={{ fontSize: '11.5px', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '2px' }}>
@@ -457,7 +461,7 @@ export default function AuditLogs() {
                 </div>
               </div>
             </div>
-            <div className="c360-modal-footer">
+            <div className="drawer-footer">
               <button
                 type="button"
                 className="c360-btn-secondary"

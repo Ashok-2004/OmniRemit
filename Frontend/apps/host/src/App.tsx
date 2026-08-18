@@ -7,6 +7,7 @@ import { useSilentRefresh } from './features/auth/hooks/useSilentRefresh'
 import { useAuthStore } from './features/auth/store/authStore'
 import { useModuleRegistryStore } from './shared/stores/moduleRegistryStore'
 import { useSettingsDrawerStore, type SettingsTab } from './shared/stores/settingsDrawerStore'
+import { useAuditLogDrawerStore } from './shared/stores/auditLogDrawerStore'
 import { RouteFallback } from './shared/components/RouteFallback/RouteFallback'
 import { lazyWithPreload, preloadWhenIdle } from './shared/utils/lazyWithPreload'
 
@@ -30,8 +31,9 @@ const LoginPage = lazy(() => import('./pages/LoginPage/LoginPage').then((m) => (
 const MaintenancePage = lazy(() => import('./pages/MaintenancePage/MaintenancePage').then((m) => ({ default: m.MaintenancePage })))
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage/NotFoundPage').then((m) => ({ default: m.NotFoundPage })))
 const RemoteAppPage = lazy(() => import('./pages/RemoteAppPage/RemoteAppPage').then((m) => ({ default: m.RemoteAppPage })))
-const AuditLogsPage = lazy(() => import('./features/system-audit-logs/pages/AuditLogsPage').then((m) => ({ default: m.AuditLogsPage })))
 const ProfilePage = lazy(() => import('./features/profile/pages/ProfilePage').then((m) => ({ default: m.ProfilePage })))
+// AuditLogsPage itself is now rendered by AuditLogDrawer (AppShell), not routed here — see
+// AuditLogDeepLink below, which just opens that drawer and hands the URL back to the dashboard.
 
 const FEATURE_KEYS = {
   users: 'host.settings.users',
@@ -76,6 +78,25 @@ function SettingsDeepLink({ tab }: { tab: SettingsTab }) {
 
     navigate('/', { replace: true })
   }, [tab, id, location.pathname, openTab, pushLayer, navigate])
+
+  return <RouteFallback />
+}
+
+/**
+ * Opens the Audit Log drawer for a `/system/audit-logs` URL, then returns to the dashboard.
+ *
+ * Same reasoning and pattern as SettingsDeepLink above: Audit Logs used to be a routed full page,
+ * now it is a global drawer (AuditLogDrawer, rendered by AppShell). The URL is kept working rather
+ * than removed so bookmarks and the sidebar's own history entry still resolve.
+ */
+function AuditLogDeepLink() {
+  const openAuditLog = useAuditLogDrawerStore((s) => s.open)
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    openAuditLog()
+    navigate('/', { replace: true })
+  }, [openAuditLog, navigate])
 
   return <RouteFallback />
 }
@@ -209,7 +230,7 @@ function AppRoutes() {
           path="system/audit-logs"
           element={
             <RequireCapability featureKey={FEATURE_KEYS.auditLogs}>
-              <AuditLogsPage />
+              <AuditLogDeepLink />
             </RequireCapability>
           }
         />

@@ -358,15 +358,23 @@ export function DashboardPage() {
                 <span className={styles.statLabel}>Remote Applications</span>
               </div>
               <div className={styles.statValueRow}>
-                <span className={styles.statValue}>
-                  {totalApps || apps.length || 0}
+                <span className={appsUnavailable ? styles.statValueUnavailable : styles.statValue}>
+                  {appsUnavailable ? '—' : totalApps || apps.length || 0}
                 </span>
               </div>
               <div className={styles.statTrendRow}>
-                <span className={styles.trendGreen}>
-                  <span className={styles.trendArrow}>↑</span> Federated Apps
-                </span>
-                <span className={styles.trendSubtitle}>Live loaded</span>
+                {appsUnavailable ? (
+                  <span className={styles.trendUnavailable} role="status">
+                    Registry unreachable
+                  </span>
+                ) : (
+                  <>
+                    <span className={styles.trendGreen}>
+                      <span className={styles.trendArrow}>↑</span> Federated Apps
+                    </span>
+                    <span className={styles.trendSubtitle}>Live loaded</span>
+                  </>
+                )}
               </div>
             </div>
             {/* System Health Status */}

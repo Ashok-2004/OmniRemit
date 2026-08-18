@@ -818,52 +818,110 @@
 
 /* ---- right-side drawer / modal (CaseDetailsModal.tsx, ProductDetailsModal.tsx) ---- */
 
+/* Matches the host's own SettingsDrawer shell exactly (width, animation timing, backdrop blur,
+   gradient header, box-shadow) — Frontend/apps/host/src/layout/SettingsDrawer/SettingsDrawer.module.css.
+   The host's version is a 3-element structure (overlayRoot > backdrop + drawerContainer); this stays
+   a 2-element structure (overlay > content, matching this app's existing JSX in
+   CaseDetailsModal.tsx / ProductDetailsModal.tsx) but produces the identical visual result — the
+   overlay itself carries the backdrop's blur+color, in addition to positioning the content panel. */
+
 .drawer-overlay {
   position: fixed;
   inset: 0;
   background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(4px);
   display: flex;
   justify-content: flex-end;
-  z-index: 1000;
+  z-index: 999;
+  animation: c360-drawer-fade-in 0.2s ease-out;
+}
+
+@keyframes c360-drawer-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .drawer-content {
-  width: min(480px, 100%);
-  height: 100%;
-  background: var(--surface-card);
-  box-shadow: -12px 0 32px rgba(15, 23, 42, 0.18);
+  position: relative;
+  width: min(800px, 96vw);
+  height: 100vh;
+  background: var(--surface-ground);
+  box-shadow: -12px 0 60px rgba(15, 23, 42, 0.18), -2px 0 8px rgba(15, 23, 42, 0.06);
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  z-index: 1000;
+  animation: c360-drawer-slide-in 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes c360-drawer-slide-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
 }
 
 .drawer-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 24px;
+  padding: 22px 28px 20px;
   border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
 }
 
 .drawer-header.blue-header {
-  background: linear-gradient(120deg, var(--primary-800) 0%, var(--primary-600) 100%);
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(120deg, var(--primary-800) 0%, var(--primary-600) 45%, var(--primary-500) 100%);
   color: #ffffff;
   border-bottom: none;
 }
 
+/* Decorative circles, matching the host header's exact treatment. */
+.drawer-header.blue-header::before {
+  content: '';
+  position: absolute;
+  top: -50px;
+  right: -50px;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.drawer-header.blue-header::after {
+  content: '';
+  position: absolute;
+  bottom: -60px;
+  left: 30px;
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.drawer-title-text {
+  position: relative;
+  z-index: 1;
+}
+
 .drawer-title-text h3 {
   margin: 0;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 700;
+  letter-spacing: -0.025em;
 }
 
 .drawer-title-text p {
-  margin: 2px 0 0;
+  margin: 4px 0 0;
   font-size: 12px;
   opacity: 0.85;
 }
 
 .drawer-close-btn {
+  position: relative;
+  z-index: 1;
   background: rgba(255, 255, 255, 0.15);
   border: none;
   border-radius: var(--radius-sm);
@@ -874,6 +932,11 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  transition: background-color 130ms ease;
+}
+
+.drawer-close-btn:hover {
+  background: rgba(255, 255, 255, 0.26);
 }
 
 .drawer-header:not(.blue-header) .drawer-close-btn {

@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom'
 import { Sidebar, type SidebarAppItem } from '../Sidebar/Sidebar'
 import { Topbar, type TopbarSettingsAccess } from '../Topbar/Topbar'
 import { useSettingsDrawerStore } from '../../shared/stores/settingsDrawerStore'
+import { useAuditLogDrawerStore } from '../../shared/stores/auditLogDrawerStore'
 import { lazyWithPreload, preloadWhenIdle } from '../../shared/utils/lazyWithPreload'
 import styles from './AppShell.module.css'
 
@@ -17,6 +18,13 @@ import styles from './AppShell.module.css'
  */
 const { Component: SettingsDrawer, preload: preloadSettingsDrawer } = lazyWithPreload(() =>
   import('../SettingsDrawer/SettingsDrawer').then((m) => ({ default: m.SettingsDrawer })),
+)
+
+// Same reasoning as SettingsDrawer above: this pulls in the full audit-logs feature (filtering,
+// pagination, the failure-drilldown modal) and should not ship in the eager bundle for a screen most
+// sessions never open.
+const { Component: AuditLogDrawer, preload: preloadAuditLogDrawer } = lazyWithPreload(() =>
+  import('../AuditLogDrawer/AuditLogDrawer').then((m) => ({ default: m.AuditLogDrawer })),
 )
 
 import { ToastContainer } from '../../shared/components/Toast'
@@ -34,6 +42,7 @@ export function AppShell({ apps, appsError, userName, settingsAccess, canAccessA
   // Subscribed so the drawer is only mounted when it is actually open — mounting it unconditionally
   // would resolve the lazy component on first render and negate the split.
   const drawerOpen = useSettingsDrawerStore((s) => s.isOpen)
+  const auditDrawerOpen = useAuditLogDrawerStore((s) => s.isOpen)
 
   // Mobile sidebar open state — off by default, toggled by hamburger in Topbar
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -53,6 +62,7 @@ export function AppShell({ apps, appsError, userName, settingsAccess, canAccessA
 
   useEffect(() => {
     preloadWhenIdle(preloadSettingsDrawer)
+    preloadWhenIdle(preloadAuditLogDrawer)
   }, [])
 
   return (
@@ -102,6 +112,11 @@ export function AppShell({ apps, appsError, userName, settingsAccess, canAccessA
       {drawerOpen && (
         <Suspense fallback={null}>
           <SettingsDrawer />
+        </Suspense>
+      )}
+      {auditDrawerOpen && (
+        <Suspense fallback={null}>
+          <AuditLogDrawer />
         </Suspense>
       )}
     </div>

@@ -87,7 +87,27 @@ interface CustomerStoreState {
   activeIndividualId: string;
   activeCorporateId: string;
 
+  // ---------------------------------------------------------------------
+  // Per-type persistence.
+  //
+  // Individual and Corporate are two INDEPENDENT search sessions, not one
+  // shared slot with a type label on it. Before this, `profile`/`contactInfo`
+  // were the only storage — switching customerType necessarily discarded
+  // whichever type you were leaving, so searching an individual, checking
+  // Non-Individual, then coming back to Individual showed a blank form
+  // again. Each type now keeps its own cache; `profile`/`contactInfo` below
+  // are kept in sync as a read-only VIEW of whichever cache matches the
+  // current `customerType`, so every existing consumer (6 components read
+  // `profile`/`contactInfo` directly) needed no changes at all.
+  // ---------------------------------------------------------------------
+  individualProfile: IndividualProfile | null;
+  individualContactInfo: ContactDetail | null;
+  corporateProfile: CorporateProfile | null;
+  corporateContactInfo: ContactDetail | null;
+
+  /** View of individualProfile or corporateProfile matching `customerType` — never set directly. */
   profile: CustomerProfile | null;
+  /** View of individualContactInfo or corporateContactInfo matching `customerType`. */
   contactInfo: ContactDetail | null;
   loading: boolean;
   error: string | null;
@@ -105,22 +125,27 @@ export const useCustomerStore = create<CustomerStoreState>((set, get) => ({
   activeIndividualId: '',
   activeCorporateId: '',
 
-  profile: null, // Holds active profile details
-  contactInfo: null, // Holds contact details
+  individualProfile: null,
+  individualContactInfo: null,
+  corporateProfile: null,
+  corporateContactInfo: null,
+
+  profile: null,
+  contactInfo: null,
   loading: false,
   error: null,
   errorStatus: null,
 
   setCustomerType: (type) => {
-    set({ customerType: type, profile: null, contactInfo: null, error: null });
-    // Only re-fetch if there is actually an id to look up — calling with an
-    // empty id previously fired a guaranteed-to-fail request (and set
-    // `error`) on every sidebar Individual/Non-Individual toggle.
-    const { activeIndividualId, activeCorporateId } = get();
-    const hasId = type === 'individual' ? !!activeIndividualId : !!activeCorporateId;
-    if (hasId) {
-      get().loadActiveProfile();
-    }
+    // Just switch which cached slot is being viewed — never clears either slot, and never
+    // auto-refetches. A cached profile for the type being switched TO is shown exactly as it was
+    // left; a type with nothing searched yet correctly shows null, which the page already renders
+    // as the clean search form. `error` is cleared because it belongs to whatever action last ran,
+    // not to a specific type.
+    const state = get();
+    const cachedProfile = type === 'individual' ? state.individualProfile : state.corporateProfile;
+    const cachedContact = type === 'individual' ? state.individualContactInfo : state.corporateContactInfo;
+    set({ customerType: type, profile: cachedProfile, contactInfo: cachedContact, error: null });
   },
 
   loadActiveProfile: async () => {
@@ -151,7 +176,23 @@ export const useCustomerStore = create<CustomerStoreState>((set, get) => ({
       // Discard if a newer search was started while this one was in-flight
       if (version !== _searchVersion) return;
 
-      set({ profile: profileData, contactInfo: contactData, loading: false });
+      if (customerType === 'individual') {
+        set({
+          individualProfile: profileData as IndividualProfile | null,
+          individualContactInfo: contactData,
+          profile: profileData,
+          contactInfo: contactData,
+          loading: false,
+        });
+      } else {
+        set({
+          corporateProfile: profileData as CorporateProfile | null,
+          corporateContactInfo: contactData,
+          profile: profileData,
+          contactInfo: contactData,
+          loading: false,
+        });
+      }
       if (profileData) {
         const savedId =
           customerType === 'individual'
@@ -183,6 +224,12 @@ export const useCustomerStore = create<CustomerStoreState>((set, get) => ({
       if (version !== _searchVersion) return null;
 
       set({
+        individualProfile: profileData,
+        individualContactInfo: contactData,
+        // A fresh Individual search always means the operator is looking at Individual right now —
+        // reflect it in the view fields too regardless of whatever customerType was active a moment
+        // ago (matches the pre-existing behaviour: searching always shows its own result).
+        customerType: 'individual',
         profile: profileData,
         contactInfo: contactData,
         activeIndividualId: profileData.nationalId as string,
@@ -214,6 +261,9 @@ export const useCustomerStore = create<CustomerStoreState>((set, get) => ({
       if (version !== _searchVersion) return null;
 
       set({
+        corporateProfile: profileData,
+        corporateContactInfo: contactData,
+        customerType: 'corporate',
         profile: profileData,
         contactInfo: contactData,
         activeCorporateId: profileData.brn as string,

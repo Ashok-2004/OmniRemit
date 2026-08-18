@@ -353,6 +353,8 @@ export default function Customer360() {
 
   // Resets all individual search state and returns user to the clean search form.
   // Must clear every credential input so there is no leakage on re-entry.
+  // "New Search" — this is the ONLY action that clears Individual's cached profile/search form.
+  // Switching away to Non-Individual and back must NOT trigger this (see the removed effect below).
   const handleBackToSearch = () => {
     setIsSearched(false);
     setSearchIdType('');
@@ -360,12 +362,20 @@ export default function Customer360() {
     setSearchVal('');
     setSearchError('');
     clearSavedCustomer();
-    useCustomerStore.setState({ profile: null, contactInfo: null, error: null });
+    useCustomerStore.setState({
+      individualProfile: null,
+      individualContactInfo: null,
+      profile: null,
+      contactInfo: null,
+      error: null,
+      activeIndividualId: '',
+    });
     useProductStore.setState({ products: [], pageNumber: 1, pageSize: 5 });
     useInteractionStore.setState({ interactions: [], pageNumber: 1 });
   };
 
-  // Resets all corporate search state and returns user to the clean corporate search form.
+  // Resets all corporate search state and returns user to the clean corporate search form. Same
+  // "only an explicit action clears it" rule as handleBackToSearch above.
   const handleBackToSearchCorp = () => {
     setIsSearchedCorp(false);
     setCorpSearchType('');
@@ -373,37 +383,28 @@ export default function Customer360() {
     setCorpSearchError('');
     setViewMode('list');
     clearSavedCustomer();
-    useCustomerStore.setState({ profile: null, contactInfo: null, error: null });
+    useCustomerStore.setState({
+      corporateProfile: null,
+      corporateContactInfo: null,
+      profile: null,
+      contactInfo: null,
+      error: null,
+      activeCorporateId: '',
+    });
     useProductStore.setState({ products: [], pageNumber: 1, pageSize: 5 });
     useInteractionStore.setState({ interactions: [], pageNumber: 1 });
   };
 
-  useEffect(() => {
-    if (!isIndividual) {
-      // Switched to Corporate — reset Individual search state
-      setIsSearched(false);
-      setSearchIdType('');
-      setSearchSubtype('');
-      setSearchVal('');
-      setSearchError('');
-      useCustomerStore.setState({ profile: null, contactInfo: null, error: null });
-    } else {
-      // Switched to Individual — reset Corporate search state
-      setIsSearchedCorp(false);
-      setCorpSearchType('');
-      setCorpSearchVal('');
-      setCorpSearchError('');
-      useCustomerStore.setState({ profile: null, contactInfo: null, error: null });
-    }
-    // Clear Products/Interactions belonging to the previous customer type —
-    // otherwise a stale Individual product list (or vice versa) can remain
-    // in the shared Zustand stores and briefly render for the new type
-    // before the next fetch completes (or leak entirely on the standalone
-    // /interactions and /corporate-products sub-routes, which read directly
-    // from these stores with no type check of their own).
-    useProductStore.setState({ products: [], pageNumber: 1, pageSize: 5, totalCount: 0, totalPages: 1 });
-    useInteractionStore.setState({ interactions: [], pageNumber: 1, totalCount: 0, totalPages: 1 });
-  }, [customerType]);
+  // Deliberately no useEffect on [customerType] here anymore. There used to be one that reset the
+  // OTHER tab's search form and BOTH tabs' profile every time customerType changed — meaning
+  // searching Individual, checking Non-Individual, then coming back to Individual always landed back
+  // on a blank form. useCustomerStore.setCustomerType now switches which cached per-type slot is
+  // being viewed without clearing either one; each tab's own local state here
+  // (isSearched/searchIdType/... vs isSearchedCorp/corpSearchType/...) was ALREADY independent per
+  // type and only ever got wiped by this effect. Products/Interactions still refresh for whichever
+  // profile is now active via their own [profile, isIndividual] effects further below — that's a
+  // deliberate re-fetch-on-switch, not a cache, since the user's complaint was specifically about
+  // search state and profile data disappearing, not about an extra network request.
 
   // Load interactions when profile changes
   useEffect(() => {
@@ -736,33 +737,40 @@ export default function Customer360() {
             <div style={{ display: 'none' }} />
           )}
 
-          {/* Search Input */}
-          <div className="c360-form-group" style={{ gridColumn: searchIdType === 'SecondaryID' ? 'span 1' : 'span 2' }}>
-            <label className="c360-label">
-              {searchIdType === 'Phone' ? 'Phone Number' : 
-               searchIdType === 'Name' ? 'Full Name' : 
-               searchIdType === 'NRIC' ? 'National ID (NRIC)' : 
-               (dropdownOptions.secondaryIdTypes.find((opt) => opt.value === searchSubtype)?.label || 'Identity Number')} <span className="c360-required">*</span>
-            </label>
-            <div className="c360-input-wrapper">
-              <Search size={16} className="c360-input-icon" />
-              <input
-                type="text"
-                placeholder={
-                  searchIdType === 'Phone' ? 'e.g. +60123456789 or 0123456789' : 
-                  searchIdType === 'Name' ? 'e.g. Ahmad bin Razak' : 
-                  searchIdType === 'NRIC' ? 'e.g. 900101-14-5566 or 900101145566' : 
-                  searchSubtype === 'PASSPORT' ? 'e.g. A12345678' : 'Enter identity number'
-                }
-                value={searchVal}
-                onChange={(e) => {
-                  setSearchVal(e.target.value);
-                  setSearchError('');
-                }}
-                className="c360-input"
-              />
+          {/* Search Input — only once the operator has actually chosen what they're searching by.
+              Showing an empty "Identity Number" box before any ID Type is selected (previously
+              unconditional) told the operator nothing about what format to enter and read as
+              confusing/broken; for Secondary ID specifically, the document type must be picked too,
+              since the placeholder/label below depends on it. */}
+          {searchIdType && (searchIdType !== 'SecondaryID' || searchSubtype) && (
+            <div className="c360-form-group" style={{ gridColumn: searchIdType === 'SecondaryID' ? 'span 1' : 'span 2' }}>
+              <label className="c360-label">
+                {searchIdType === 'Phone' ? 'Phone Number' :
+                 searchIdType === 'Name' ? 'Full Name' :
+                 searchIdType === 'NRIC' ? 'National ID (NRIC)' :
+                 (dropdownOptions.secondaryIdTypes.find((opt) => opt.value === searchSubtype)?.label || 'Identity Number')} <span className="c360-required">*</span>
+              </label>
+              <div className="c360-input-wrapper">
+                <Search size={16} className="c360-input-icon" />
+                <input
+                  type="text"
+                  placeholder={
+                    searchIdType === 'Phone' ? 'e.g. +60123456789 or 0123456789' :
+                    searchIdType === 'Name' ? 'e.g. Ahmad bin Razak' :
+                    searchIdType === 'NRIC' ? 'e.g. 900101-14-5566 or 900101145566' :
+                    searchSubtype === 'PASSPORT' ? 'e.g. A12345678' : 'Enter identity number'
+                  }
+                  value={searchVal}
+                  onChange={(e) => {
+                    setSearchVal(e.target.value);
+                    setSearchError('');
+                  }}
+                  className="c360-input"
+                  autoFocus
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Action Buttons */}
           <button
@@ -853,31 +861,37 @@ export default function Customer360() {
             </select>
           </div>
 
-          {/* Search Input */}
-          <div className="c360-form-group" style={{ gridColumn: 'span 2' }}>
-            <label className="c360-label">
-              {corpSearchType === 'BRN' ? 'BRN (Business Registration Number)' :
-               corpSearchType === 'OLDBRN' ? 'Old Registration Number' :
-               'Company / Organization Name'} <span className="c360-required">*</span>
-            </label>
-            <div className="c360-input-wrapper">
-              <Search size={16} className="c360-input-icon" />
-              <input
-                type="text"
-                placeholder={
-                  corpSearchType === 'BRN' ? 'e.g. 202003150001' :
-                  corpSearchType === 'OLDBRN' ? 'e.g. 202003151A' :
-                  'e.g. Omni Global Trading Sdn Bhd'
-                }
-                value={corpSearchVal}
-                onChange={(e) => {
-                  setCorpSearchVal(e.target.value);
-                  setCorpSearchError('');
-                }}
-                className="c360-input"
-              />
+          {/* Search Input — only once a search type is actually chosen. Previously unconditional,
+              which meant it fell through to the "Company / Organization Name" branch (the ternary's
+              else case) even with nothing selected — indistinguishable from genuinely having chosen
+              Company Name search. */}
+          {corpSearchType && (
+            <div className="c360-form-group" style={{ gridColumn: 'span 2' }}>
+              <label className="c360-label">
+                {corpSearchType === 'BRN' ? 'BRN (Business Registration Number)' :
+                 corpSearchType === 'OLDBRN' ? 'Old Registration Number' :
+                 'Company / Organization Name'} <span className="c360-required">*</span>
+              </label>
+              <div className="c360-input-wrapper">
+                <Search size={16} className="c360-input-icon" />
+                <input
+                  type="text"
+                  placeholder={
+                    corpSearchType === 'BRN' ? 'e.g. 202003150001' :
+                    corpSearchType === 'OLDBRN' ? 'e.g. 202003151A' :
+                    'e.g. Omni Global Trading Sdn Bhd'
+                  }
+                  value={corpSearchVal}
+                  onChange={(e) => {
+                    setCorpSearchVal(e.target.value);
+                    setCorpSearchError('');
+                  }}
+                  className="c360-input"
+                  autoFocus
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Action Buttons */}
           <button
