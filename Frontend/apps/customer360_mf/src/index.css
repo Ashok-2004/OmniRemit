@@ -554,3 +554,613 @@
 .c360-table tbody tr:last-child td {
   border-bottom: none;
 }
+
+/* ==========================================================================
+   Previously-undefined classes — every rule below backs a className that was
+   already referenced across this app's components (IndividualDetails,
+   CompanyOverview, SectionContainer, Customer360, AllInteractions,
+   AllProducts, AuditLogs, CaseDetailsModal, ProductDetailsModal) with zero
+   CSS behind it anywhere. Not a build/injection bug: these classes never
+   had rules written for them, so every card, grid, button, spinner, hero
+   banner and drawer using them rendered with browser defaults only — no
+   background, no radius, no shadow, block layout instead of grid. Built
+   from the same design tokens declared above (:root, this same file) so
+   nothing here introduces a second, competing palette.
+   ========================================================================== */
+
+/* ---- section-container / info-section-title (SectionContainer.tsx) ---- */
+
+.section-container {
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: 20px 22px;
+}
+
+.info-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--primary-700);
+  padding-left: 10px;
+  border-left: 3px solid var(--primary-600);
+}
+
+/* ---- info-cards-grid / info-card (IndividualDetails.tsx, CompanyOverview.tsx) ---- */
+
+.info-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .info-cards-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .info-cards-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.info-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--surface-ground);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  min-width: 0;
+}
+
+.info-card.full-width {
+  grid-column: 1 / -1;
+}
+
+.info-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.info-label svg {
+  color: var(--primary-600);
+  flex-shrink: 0;
+}
+
+.info-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-heading);
+  word-break: break-word;
+}
+
+.vip-value-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.vip-star {
+  color: #f59e0b;
+  font-size: 14px;
+}
+
+/* ---- buttons ---- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-medium);
+  background: var(--surface-card);
+  color: var(--text-body);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.btn:hover {
+  border-color: var(--primary-400);
+  color: var(--primary-700);
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn-primary,
+.btn.btn-primary {
+  background: var(--primary-600);
+  border-color: var(--primary-600);
+  color: #ffffff;
+  box-shadow: var(--shadow-primary-btn);
+}
+
+.btn-primary:hover,
+.btn.btn-primary:hover {
+  background: var(--primary-700);
+  border-color: var(--primary-700);
+  color: #ffffff;
+}
+
+.btn-secondary,
+.btn.btn-secondary {
+  background: var(--primary-50);
+  border-color: var(--primary-200);
+  color: var(--primary-700);
+}
+
+/* ---- spinners / loading / empty / error states ---- */
+
+@keyframes c360-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.c360-spinner,
+.animate-spin {
+  animation: c360-spin 0.8s linear infinite;
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border-subtle);
+  border-top-color: var(--primary-600);
+  border-radius: 50%;
+  animation: c360-spin 0.8s linear infinite;
+}
+
+.loading-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.empty-state {
+  padding: 32px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13.5px;
+  background: var(--surface-ground);
+  border: 1px dashed var(--border-medium);
+  border-radius: var(--radius-md);
+}
+
+.error-container {
+  padding: 20px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: var(--radius-md);
+  color: #b91c1c;
+  text-align: center;
+}
+
+.error-container h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  color: #991b1b;
+}
+
+.error-container p {
+  margin: 0;
+  font-size: 13px;
+}
+
+/* ---- hero banner (AllInteractions.tsx, AllProducts.tsx, AuditLogs.tsx) ----
+   Matches the host's own dashboard hero-banner gradient exactly, per this
+   component's own "Hero Banner — Host Pattern" comment — the intent to match
+   the host was already there, the CSS backing it just never got written. */
+
+.c360-hero-banner {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 28px 32px;
+  border-radius: var(--radius-xl);
+  background: linear-gradient(120deg, var(--primary-800) 0%, var(--primary-600) 45%, var(--primary-500) 100%);
+  box-shadow: 0 4px 20px rgba(37, 99, 235, 0.25), 0 1px 4px rgba(37, 99, 235, 0.15);
+  color: #ffffff;
+}
+
+.c360-hero-title {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #ffffff;
+}
+
+.c360-hero-subtitle {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.c360-hero-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 12px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+/* ---- right-side drawer / modal (CaseDetailsModal.tsx, ProductDetailsModal.tsx) ---- */
+
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  justify-content: flex-end;
+  z-index: 1000;
+}
+
+.drawer-content {
+  width: min(480px, 100%);
+  height: 100%;
+  background: var(--surface-card);
+  box-shadow: -12px 0 32px rgba(15, 23, 42, 0.18);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.drawer-header.blue-header {
+  background: linear-gradient(120deg, var(--primary-800) 0%, var(--primary-600) 100%);
+  color: #ffffff;
+  border-bottom: none;
+}
+
+.drawer-title-text h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.drawer-title-text p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.drawer-close-btn {
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: inherit;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.drawer-header:not(.blue-header) .drawer-close-btn {
+  background: var(--surface-alt);
+  color: var(--text-secondary);
+}
+
+.drawer-body {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.drawer-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.drawer-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--primary-700);
+}
+
+.drawer-section-card {
+  background: var(--surface-ground);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 4px 14px;
+}
+
+.drawer-field-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.drawer-field-row:last-child {
+  border-bottom: none;
+}
+
+.drawer-field-row .info-label {
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.drawer-field-row .info-value {
+  font-size: 13px;
+}
+
+.drawer-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.drawer-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--surface-ground);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+
+.drawer-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* ---- c360-modal-* (AuditLogs.tsx — a centered dialog, not a side drawer) ---- */
+
+.c360-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.c360-modal-dialog {
+  width: min(560px, 100%);
+  max-height: 85vh;
+  overflow-y: auto;
+  background: var(--surface-card);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.25);
+}
+
+.c360-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-heading);
+}
+
+.c360-modal-body {
+  padding: 20px 22px;
+}
+
+.c360-modal-footer {
+  padding: 14px 22px;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* ---- status-badge (Customer360.tsx, ProductDetailsModal.tsx) ---- */
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.status-active {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+
+.status-validated {
+  background: var(--surface-alt);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-medium);
+}
+
+.status-pending {
+  background: #fffbeb;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+.status-wip {
+  background: var(--primary-50);
+  color: var(--primary-700);
+  border: 1px solid var(--primary-200);
+}
+
+.data-table-container {
+  overflow-x: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+/* ---- Customer360.tsx: two-column detail layout ---- */
+
+.customer-layout-container {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .customer-layout-container {
+    grid-template-columns: 1fr;
+  }
+}
+
+.customer-left-column {
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: 20px;
+  position: sticky;
+  top: 20px;
+}
+
+.customer-right-column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.left-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--text-body);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.left-tab-btn:hover {
+  background: var(--surface-ground);
+}
+
+.left-tab-btn.active {
+  background: var(--primary-50);
+  color: var(--primary-700);
+}
+
+/* ---- data table (Customer360.tsx's own tables, distinct from .c360-table) ---- */
+
+.table-responsive-wrapper {
+  overflow-x: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.data-table th {
+  text-align: left;
+  padding: 12px 16px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  background: var(--surface-ground);
+  border-bottom: 1px solid var(--border-subtle);
+  white-space: nowrap;
+}
+
+.data-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-heading);
+  vertical-align: middle;
+}
+
+.data-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.action-link {
+  color: var(--primary-600);
+  font-weight: 600;
+  font-size: 12.5px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.action-link:hover {
+  color: var(--primary-700);
+  text-decoration: underline;
+}
+
+.account-num-text {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  color: var(--text-heading);
+}
