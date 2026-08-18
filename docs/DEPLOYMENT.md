@@ -34,6 +34,48 @@ statically-hosted frontends that have no use for it.
 
 ---
 
+## Deploying without a custom domain
+
+If you are validating the pipeline on `*.vercel.app` and `*.onrender.com` before buying a domain,
+**two things change**. Read this before following the numbered steps.
+
+### 1. `Auth__SameSite=None` is mandatory
+
+Platform subdomains put the SPA and the API on different registrable domains, so every API call is
+cross-site and a `Lax` cookie is withheld. The symptom is specific and easy to misdiagnose: login
+succeeds, the dashboard loads, and then the session vanishes on the first refresh — because
+`POST /api/auth/refresh` went out without the cookie.
+
+Set `Auth__SameSite=None` on AuthService. It requires a Secure cookie, which is enforced at startup
+(the service throws rather than issuing a cookie the browser would silently discard).
+
+Understand the trade-off: this depends on **third-party cookies**. Safari's tracking prevention and
+Brave's defaults may block them regardless of correct configuration. Treat this as a staging
+posture, not the shape you ship to a bank. Moving to a shared parent domain later is a config change
+plus DNS — no rebuild, and no code change.
+
+### 2. The deploy order inverts
+
+The numbered steps below assume you know all five URLs up front. Without a domain you do not — each
+URL only exists once its service is deployed. Deploy in this order instead:
+
+1. **Backends first**, with `Cors__AllowedOrigins__0` left blank or set to a placeholder. Collect
+   the three `onrender.com` URLs.
+2. **Frontends second**, with `VITE_*` pointing at those real backend URLs. Collect the two
+   `vercel.app` URLs.
+3. **Back to the backends**: set `Cors__AllowedOrigins__0` to the host's real `vercel.app` URL, set
+   `Auth__SameSite=None`, and redeploy all three.
+4. **Then** the registry data step (Manifest URL / Permissions Source URL) using the real URLs.
+
+The frontends must be rebuilt if a backend URL later changes — `VITE_*` values are inlined at build
+time, not read at runtime.
+
+> Vercel gives each project a **stable production alias** (`<project>.vercel.app`) alongside the
+> per-deployment URLs. Always use the stable alias in CORS origins and in the registry's Manifest
+> URL. A per-deployment URL changes on every push and will break both the next morning.
+
+---
+
 ## Step 1 — Databases
 
 Create three Neon databases (one project is fine): `omniremit_auth`, `omniremit_registry`,
