@@ -20,25 +20,47 @@ namespace backend.Data
             LoadLogs();
         }
 
+        // NOTE ON SCALE: this repository is still a local file, not a database — audit history lives in
+        // this one process's memory and on its local disk. On a platform like Render that disk is
+        // ephemeral, so every redeploy silently loses whatever audit history had accumulated; there is
+        // also no multi-instance story (two replicas would each keep a separate, diverging file). For a
+        // bank-facing compliance/audit trail, the durable fix is a real database table (matching how
+        // AuthService already persists its own audit log), not a bigger file. What IS fixed here is the
+        // one part that was actively getting WORSE as history grew:
         private void LoadLogs()
         {
             lock (_lock)
             {
                 try
                 {
-                    if (File.Exists(_filePath))
+                    if (!File.Exists(_filePath)) return;
+                    var text = File.ReadAllText(_filePath);
+                    if (string.IsNullOrWhiteSpace(text)) return;
+
+                    if (text.TrimStart().StartsWith('['))
                     {
-                        var json = File.ReadAllText(_filePath);
-                        if (!string.IsNullOrWhiteSpace(json))
-                        {
-                            var deserialized = JsonSerializer.Deserialize<List<AuditLog>>(json);
-                            if (deserialized != null)
-                            {
-                                _logs.Clear();
-                                _logs.AddRange(deserialized);
-                            }
-                        }
+                        // Legacy format from before the fix below: the whole history as one JSON array,
+                        // rewritten in full on every write. Read whatever is already on disk once here —
+                        // it was saved newest-first (see the old Insert(0, ...) below), so no reordering
+                        // needed — and every write from now on appends instead.
+                        var deserialized = JsonSerializer.Deserialize<List<AuditLog>>(text);
+                        if (deserialized != null) _logs.AddRange(deserialized);
+                        return;
                     }
+
+                    // Current format: newline-delimited JSON, one record per line, appended oldest-last.
+                    // Parse in file order then reverse once, so in-memory order matches the newest-first
+                    // convention every reader of `_logs` already relies on.
+                    var parsed = new List<AuditLog>();
+                    foreach (var line in text.Split('\n'))
+                    {
+                        var trimmedLine = line.Trim();
+                        if (trimmedLine.Length == 0) continue;
+                        var log = JsonSerializer.Deserialize<AuditLog>(trimmedLine);
+                        if (log != null) parsed.Add(log);
+                    }
+                    parsed.Reverse();
+                    _logs.AddRange(parsed);
                 }
                 catch (Exception ex)
                 {
@@ -47,28 +69,25 @@ namespace backend.Data
             }
         }
 
-        private void SaveLogs()
-        {
-            lock (_lock)
-            {
-                try
-                {
-                    var json = JsonSerializer.Serialize(_logs, new JsonSerializerOptions { WriteIndented = true });
-                    File.WriteAllText(_filePath, json);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error saving audit logs: {ex.Message}");
-                }
-            }
-        }
-
         public void Add(AuditLog log)
         {
             lock (_lock)
             {
-                _logs.Insert(0, log); // Insert newest at the beginning
-                SaveLogs();
+                _logs.Insert(0, log); // Newest first in memory — every reader of `_logs` relies on this.
+                try
+                {
+                    // Append-only write: one line, O(1) regardless of how much history already exists.
+                    // The previous version re-serialized and rewrote the ENTIRE log on every single
+                    // write (SaveLogs() below used to run here) — at real audit-log volume (thousands of
+                    // events a day, every day) that per-write cost grows without bound, and it holds the
+                    // single lock on this repository for the whole rewrite, serializing every other
+                    // request that wants to read or write a log in the meantime.
+                    File.AppendAllText(_filePath, JsonSerializer.Serialize(log) + "\n");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error saving audit log: {ex.Message}");
+                }
             }
         }
 

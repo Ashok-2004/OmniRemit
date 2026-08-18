@@ -108,17 +108,23 @@
   gap: 12px;
 }
 
+/* Host-matching header treatment: a solid blue accent bar to the left of the title, the same
+   convention the host uses on its own card/section headers (and the one this app already uses for
+   "Personal Details" etc. via .info-section-title) — replaces the earlier filled icon-badge square,
+   which was this app's own look and didn't match anything in the host shell. */
 .c360-search-title-box {
   display: flex;
   align-items: center;
   gap: 10px;
+  padding-left: 12px;
+  border-left: 3px solid var(--primary-600);
 }
 
 .c360-search-icon-badge {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: var(--primary-50);
+  width: 20px;
+  height: 20px;
+  border-radius: 0;
+  background: transparent;
   color: var(--primary-600);
   display: flex;
   align-items: center;
@@ -129,7 +135,7 @@
 .c360-search-title {
   font-size: 15px;
   font-weight: 700;
-  color: var(--text-heading);
+  color: var(--primary-700);
   letter-spacing: -0.01em;
   margin: 0;
 }
@@ -553,6 +559,52 @@
 
 .c360-table tbody tr:last-child td {
   border-bottom: none;
+}
+
+/* Pagination — same visual pattern as the host's own AuditLogsPage pagination bar, so this table's
+   paging controls read as the same platform convention, not an app-specific one-off. */
+.c360-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px 0 4px;
+}
+
+.c360-page-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #ffffff;
+  border: 1px solid var(--border-medium);
+  border-radius: 8px;
+  padding: 7px 16px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s ease;
+}
+
+.c360-page-btn:hover:not(:disabled) {
+  background: var(--primary-50);
+  border-color: #93c5fd;
+  color: var(--primary-600);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.1);
+}
+
+.c360-page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.c360-page-indicator {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  min-width: 100px;
+  text-align: center;
 }
 
 /* ==========================================================================

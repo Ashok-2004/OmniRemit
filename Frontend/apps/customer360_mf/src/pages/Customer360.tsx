@@ -52,12 +52,9 @@ export default function Customer360() {
   // Tab states
   const [activeTab, setActiveTab] = useState('personal_details'); // 'personal_details' for Individual; 'overview' for Corporate
   const [activeSubTab, setActiveSubTab] = useState(''); // no longer used for Individual details
-  const [viewMode, setViewMode] = useState('details'); // 'details' or 'list'
   const [detailsExpanded, setDetailsExpanded] = useState(false);
   const [workspaceExpanded, setWorkspaceExpanded] = useState(true);
   const [productsTab, setProductsTab] = useState('held'); // 'held' or 'interested' for Individual
-  const [companies, setCompanies] = useState<CorporateProfile[]>([]);
-  const [loadingCompanies, setLoadingCompanies] = useState(false);
 
   // ---------------------------------------------------------------------------
   // Bootstrap state — avoids the "flash of the search form" on refresh.
@@ -98,7 +95,6 @@ export default function Customer360() {
   const [corpSearchVal, setCorpSearchVal] = useState('');
   const [corpSearchError, setCorpSearchError] = useState('');
   const [loadingCorpSearch, setLoadingCorpSearch] = useState(false);
-  const [filterText, setFilterText] = useState('');
 
   // Individual Product Held states
   const [indSearchQuery, setIndSearchQuery] = useState('');
@@ -178,7 +174,24 @@ export default function Customer360() {
   // Rehydrate the active customer after a browser refresh.
   // ---------------------------------------------------------------------------
   useEffect(() => {
-    if (profile) { setBootstrapping(false); return; }
+    // The store already has a cached profile for the currently active type — this is the case on
+    // every remount of this component that ISN'T a real browser refresh, e.g. navigating to Audit
+    // Logs and back to Individual/Non-Individual. MainLayout swaps <Customer360/> out for a
+    // different component and back, which unmounts and remounts this component and resets its local
+    // state (isSearched/isSearchedCorp default back to false) — but useCustomerStore is a
+    // module-level singleton, so `profile` itself is still populated the whole time. Without this,
+    // the render gate below (`!isSearched || !profile`) would show the empty search form even though
+    // the profile data never actually went away, and only a full page refresh (which re-runs the
+    // saved-id refetch path below and sets isSearched itself) would bring it back.
+    if (profile) {
+      if (customerType === 'individual') {
+        setIsSearched(true);
+      } else {
+        setIsSearchedCorp(true);
+      }
+      setBootstrapping(false);
+      return;
+    }
     const saved = readSavedCustomer();
     if (!saved) { setBootstrapping(false); return; }
 
@@ -201,7 +214,6 @@ export default function Customer360() {
         .then((loaded) => {
           if (loaded) {
             setIsSearchedCorp(true);
-            setViewMode('details');
           }
         })
         .catch(() => clearSavedCustomer())
@@ -231,7 +243,6 @@ export default function Customer360() {
         setIsSearched(true);
       } else {
         setIsSearchedCorp(true);
-        setViewMode('details');
       }
     }
   }, [profile]);
@@ -294,7 +305,6 @@ export default function Customer360() {
       // fired two identical /v1/corpprofile requests per search.
       const { loadCorporateProfileById } = useCustomerStore.getState();
       await loadCorporateProfileById(corpSearchVal, corpSearchType);
-      setViewMode('details');
       setIsSearchedCorp(true);
 
       // Log success
@@ -330,27 +340,6 @@ export default function Customer360() {
     }
   };
 
-  // Fetches the full corporate directory for the "Browse All Companies" / "Refresh Directory" /
-  // "Load All Registered Companies" actions. This used to be referenced under the name
-  // `handleViewAllCompanies` in three places (the Browse button, the Refresh Directory button, and
-  // the empty-state's Load All button) without ever being defined — a bare ReferenceError thrown
-  // during render the instant `showList` became true, which is deterministic: switching to
-  // Non-Individual always sets viewMode to 'list' shortly after. It only failed to surface earlier
-  // because nothing had exercised that render path in review. The fetch logic itself already existed,
-  // duplicated inside the loader effect below; this is that same logic, named and made callable from
-  // the buttons that were already trying to call it.
-  const handleViewAllCompanies = async () => {
-    setLoadingCompanies(true);
-    try {
-      const res = await api.getAllCorporateProfiles();
-      setCompanies(res.data || []);
-    } catch (err) {
-      console.error("Failed to load corporate directory:", err);
-    } finally {
-      setLoadingCompanies(false);
-    }
-  };
-
   // Resets all individual search state and returns user to the clean search form.
   // Must clear every credential input so there is no leakage on re-entry.
   // "New Search" — this is the ONLY action that clears Individual's cached profile/search form.
@@ -381,7 +370,6 @@ export default function Customer360() {
     setCorpSearchType('');
     setCorpSearchVal('');
     setCorpSearchError('');
-    setViewMode('list');
     clearSavedCustomer();
     useCustomerStore.setState({
       corporateProfile: null,
@@ -478,16 +466,6 @@ export default function Customer360() {
     setIntPageNumber(1);
   }, [profile]);
 
-  // Load corporate directory companies dynamically when in corporate list mode.
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- handleViewAllCompanies is a plain
-  // function recreated every render (matching this file's existing handler style, e.g.
-  // handleBackToSearchCorp above); including it would refire this effect on every render.
-  useEffect(() => {
-    if (!isIndividual && viewMode === 'list') {
-      handleViewAllCompanies();
-    }
-  }, [isIndividual, viewMode]);
-
   useEffect(() => {
     // Skip default tab reset when navigating back with a tab query param
     if (typeof window !== 'undefined') {
@@ -497,17 +475,13 @@ export default function Customer360() {
     }
 
     if (isIndividual) {
-      setViewMode('details');
       setActiveTab('personal_details');
       setActiveSubTab('');
     } else {
-      setViewMode('list');
       setActiveTab('overview');
       setActiveSubTab('');
     }
   }, [customerType]);
-
-  const showList = !isIndividual && viewMode === 'list';
 
   // Restoring a customer after refresh — show a neutral loading state, never
   // the search form (which would flash briefly before swapping to the
@@ -610,14 +584,6 @@ export default function Customer360() {
     (safeIntPageNumber - 1) * intPageSize,
     safeIntPageNumber * intPageSize
   );
-
-  const getCompanyDetails = (company: CorporateProfile | null | undefined) => {
-    return {
-      id: company?.customerId || '-',
-      phone: '-',
-      email: company?.signatoryName || '-'
-    };
-  };
 
   const getInitials = (name: string | null | undefined): string => {
     if (!name) return '-';
@@ -806,34 +772,29 @@ export default function Customer360() {
     <div className="c360-search-panel" style={{ marginBottom: 20 }}>
       <div className="c360-search-header">
         <div className="c360-search-title-box">
-          <div className="c360-search-icon-badge" style={{ background: '#ecfdf5', color: '#059669' }}>
+          <div className="c360-search-icon-badge">
             <Building2 size={18} />
           </div>
           <div>
             <h2 className="c360-search-title">Non-Individual (Corporate) Search</h2>
             <p className="c360-search-subtitle">
-              {!corpSearchType ? 'Select search type and enter details, or browse company directory.' :
+              {!corpSearchType ? 'Select a search type and enter a value to look up a company profile.' :
                corpSearchType === 'BRN' ? 'Search registered company by Business Registration Number (BRN).' :
                corpSearchType === 'OLDBRN' ? 'Search registered company by Old BRN.' :
                'Search registered company by Company Name.'}
             </p>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
+        {isSearchedCorp && (
           <button
             type="button"
-            onClick={() => {
-              setViewMode('list');
-              if (companies.length === 0) {
-                handleViewAllCompanies();
-              }
-            }}
-            className={viewMode === 'list' ? 'c360-btn-primary' : 'c360-btn-secondary'}
+            onClick={handleBackToSearchCorp}
+            className="c360-btn-secondary"
             style={{ height: '36px', padding: '0 14px', fontSize: '13px' }}
           >
-            <Building2 size={14} /> Browse All Companies
+            <RotateCcw size={14} /> New Search
           </button>
-        </div>
+        )}
       </div>
 
       <form onSubmit={(e) => { e.preventDefault(); handleCorpSearch(); }}>
@@ -922,154 +883,6 @@ export default function Customer360() {
       </form>
     </div>
   );
-
-  if (showList) {
-    // Filter results locally in directory view
-    const filteredCompanies = companies.filter(company => 
-      (company.organizationName || '').toLowerCase().includes(filterText.toLowerCase()) ||
-      (company.brn || '').toLowerCase().includes(filterText.toLowerCase()) ||
-      (company.organizationType || '').toLowerCase().includes(filterText.toLowerCase()) ||
-      (company.economicSector || '').toLowerCase().includes(filterText.toLowerCase())
-    );
-
-    const getCountryName = (code: string | null | undefined): string => {
-      if (code === 'MY') return 'Malaysia';
-      if (code === 'SG') return 'Singapore';
-      return code || '-';
-    };
-
-    const colorsList = ['#10B981', '#6366F1', '#3B82F6', '#F59E0B', '#EF4444', '#0F172A', '#14B8A6'];
-    const getAvatarBgColor = (name: string | null | undefined): string => {
-      let hash = 0;
-      for (let i = 0; i < (name || '').length; i++) {
-        hash = (name || '').charCodeAt(i) + ((hash << 5) - hash);
-      }
-      const index = Math.abs(hash) % colorsList.length;
-      return colorsList[index];
-    };
-
-    return (
-      <div>
-        {renderCorporateSearchPanel()}
-
-        {/* Directory Bar */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div className="c360-input-wrapper" style={{ width: 280 }}>
-              <Search size={15} className="c360-input-icon" />
-              <input
-                type="text"
-                placeholder="Filter companies by name or BRN..."
-                value={filterText}
-                onChange={(e) => setFilterText(e.target.value)}
-                className="c360-input"
-                style={{ height: 38, fontSize: 13 }}
-              />
-            </div>
-            <span style={{ fontSize: 13, color: '#64748b', fontWeight: 500 }}>
-              {filteredCompanies.length} companies found
-            </span>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleViewAllCompanies}
-            disabled={loadingCompanies}
-            className="c360-btn-secondary"
-            style={{ height: 38, fontSize: 13 }}
-          >
-            {loadingCompanies ? <Loader2 size={14} className="c360-spinner" /> : <RotateCcw size={14} />} Refresh Directory
-          </button>
-        </div>
-
-        {loadingCompanies ? (
-          <div className="loading-overlay" style={{ height: '40vh' }}>
-            <div className="spinner"></div>
-            <p style={{ fontWeight: 600, color: '#374151' }}>Loading Corporate Directory...</p>
-          </div>
-        ) : filteredCompanies.length === 0 ? (
-          <div className="c360-empty-prompt">
-            <div className="c360-empty-prompt-icon">
-              <Building2 size={28} />
-            </div>
-            <h3 className="c360-empty-prompt-title">No Corporate Records Found</h3>
-            <p className="c360-empty-prompt-desc">
-              {companies.length === 0
-                ? 'Enter a BRN in the search form above or click "Refresh Directory" to load all registered companies.'
-                : 'No companies match your current filter query.'}
-            </p>
-            {companies.length === 0 && (
-              <button
-                type="button"
-                onClick={handleViewAllCompanies}
-                className="c360-btn-primary"
-                style={{ marginTop: 8 }}
-              >
-                <Building2 size={15} /> Load All Registered Companies
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="c360-corp-grid">
-            {filteredCompanies.map((company) => {
-              const avatarBg = getAvatarBgColor(company.organizationName);
-              const isActive = (company.onlineBankingActivationStatus || '').toLowerCase() === 'active';
-              return (
-                <div 
-                  key={company.customerId} 
-                  className="c360-corp-card"
-                  onClick={() => {
-                    useCustomerStore.setState({ activeCorporateId: company.brn as string });
-                    loadActiveProfile();
-                    setViewMode('details');
-                  }}
-                >
-                  <div>
-                    {/* Header: Avatar, Name, BRN, Badge */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-                      <div style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: avatarBg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFFFFF', fontWeight: 700, fontSize: 15, flexShrink: 0 }}>
-                        {getInitials(company.organizationName)}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={company.organizationName ?? undefined}>
-                          {company.organizationName}
-                        </div>
-                        <div style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>
-                          BRN: {company.brn || '-'}
-                        </div>
-                      </div>
-                      <span className={isActive ? 'c360-badge c360-badge-success' : 'c360-badge c360-badge-warning'}>
-                        {company.onlineBankingActivationStatus || '-'}
-                      </span>
-                    </div>
-
-                    <div style={{ height: 1, background: '#f1f5f9', margin: '12px 0' }}></div>
-
-                    {/* Content Fields */}
-                    <div className="c360-data-grid-2" style={{ gap: 8 }}>
-                      <div className="c360-data-item" style={{ padding: '8px 10px' }}>
-                        <span className="c360-data-label">Type</span>
-                        <span className="c360-data-value" style={{ fontSize: 12.5 }} title={company.organizationType ?? undefined}>{company.organizationType || '-'}</span>
-                      </div>
-                      <div className="c360-data-item" style={{ padding: '8px 10px' }}>
-                        <span className="c360-data-label">Country</span>
-                        <span className="c360-data-value" style={{ fontSize: 12.5 }} title={getCountryName(company.country)}>{getCountryName(company.country)}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 10, borderTop: '1px solid #f1f5f9', fontSize: 12.5, fontWeight: 600, color: '#2563eb' }}>
-                    <span>View Customer 360</span>
-                    <ChevronRight size={16} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    );
-  }
 
   if (isIndividual && (!isSearched || !profile)) {
     return (

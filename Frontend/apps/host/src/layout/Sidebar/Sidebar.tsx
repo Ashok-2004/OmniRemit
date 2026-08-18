@@ -3,7 +3,6 @@ import { classNames } from '../../shared/utils/classNames'
 import { SkeletonBlock } from '../../shared/components/Skeleton'
 import { Icon } from '../../shared/components/Icon/Icon'
 import { resolveIcon } from '../../shared/components/Icon/resolveIcon'
-import { useAuditLogDrawerStore } from '../../shared/stores/auditLogDrawerStore'
 import styles from './Sidebar.module.css'
 import { APP_NAME } from '../../shared/config/branding'
 
@@ -31,8 +30,6 @@ function navItemClass({ isActive }: { isActive: boolean }) {
 }
 
 export function Sidebar({ apps, canAccessAuditLogs, error, mobileOpen }: SidebarProps) {
-  const openAuditLog = useAuditLogDrawerStore((s) => s.open)
-
   return (
     <aside className={classNames(styles.sidebar, mobileOpen ? styles.sidebarMobileOpen : '')}>
 
@@ -124,21 +121,12 @@ export function Sidebar({ apps, canAccessAuditLogs, error, mobileOpen }: Sidebar
         {canAccessAuditLogs && (
           <div className={styles.systemSection}>
             <div className={styles.sectionLabel}>System</div>
-            {/* A button, not a route link — Audit Logs opens as a right-side drawer over whatever
-                page is currently showing, the same way the Settings gear does, rather than
-                navigating away to a full page. The /system/audit-logs URL still works as a deep
-                link (see App.tsx's AuditLogDeepLink), it just opens this same drawer now. */}
-            <button
-              type="button"
-              className={navItemClass({ isActive: false })}
-              onClick={openAuditLog}
-              style={{ width: '100%', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left', font: 'inherit', letterSpacing: 'inherit' }}
-            >
+            <NavLink to="/system/audit-logs" className={navItemClass}>
               <span className={styles.navIcon} aria-hidden="true">
                 <Icon.FileText width={17} height={17} />
               </span>
               <span className={styles.navLabel}>Audit Logs</span>
-            </button>
+            </NavLink>
           </div>
         )}
 

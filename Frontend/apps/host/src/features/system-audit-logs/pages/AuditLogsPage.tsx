@@ -2,12 +2,15 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuthStore } from '../../auth/store/authStore'
 import { Badge, type BadgeTone } from '../../../shared/components/Badge/Badge'
 import { SkeletonBlock } from '../../../shared/components/Skeleton'
-import { Modal } from '../../../shared/components/Modal/Modal'
 import { PermissionGate } from '../../../shared/components/PermissionGate/PermissionGate'
 import { ApiError } from '../../../shared/api/httpClient'
 import { useDebouncedValue } from '../../../shared/hooks/useDebouncedValue'
 import { auditLogsApi, type AuditLogDto, type AuditLogSummaryDto } from '../api/auditLogsApi'
 import { Icon } from '../../../shared/components/Icon/Icon'
+// Same generated classes the Settings drawer and the System Audit Trail deep-link render from — reused
+// here so a single record's details open as the identical right-side drawer shell used everywhere else
+// in the host, rather than introducing a third drawer look.
+import drawerStyles from '../../../layout/SettingsDrawer/SettingsDrawer.module.css'
 import styles from './AuditLogsPage.module.css'
 
 const FEATURE = 'host.system.audit-logs'
@@ -22,6 +25,39 @@ const SERVICE_TONES: Record<string, BadgeTone> = {
 
 function serviceTone(serviceName: string): BadgeTone {
   return SERVICE_TONES[serviceName] ?? 'neutral'
+}
+
+// Raw actions arrive as backend event names ("auth.login_succeeded", "remoteapp.deleted") — accurate
+// for logs, unreadable for the person reviewing them. Known actions get an exact, hand-written label;
+// anything not in the map yet still gets turned into words instead of showing raw dot/underscore
+// notation, so a new action type added later degrades gracefully rather than looking broken.
+const ACTION_LABELS: Record<string, string> = {
+  'auth.login_succeeded': 'Login Succeeded',
+  'auth.login_failed': 'Login Failed',
+  'remoteapp.created': 'Remote App Registered',
+  'remoteapp.updated': 'Remote App Updated',
+  'remoteapp.deleted': 'Remote App Removed',
+  'remoteapp.status_changed': 'Remote App Status Changed',
+  'employee.created': 'Employee Created',
+  'employee.updated': 'Employee Updated',
+  'employee.deleted': 'Employee Deleted',
+  'lead.created': 'Lead Created',
+  'lead.updated': 'Lead Updated',
+  'lead.deleted': 'Lead Deleted',
+}
+
+function formatActionLabel(action: string): string {
+  if (!action) return 'Unknown Action'
+  const known = ACTION_LABELS[action]
+  if (known) return known
+  const segment = action.includes('.') ? action.slice(action.lastIndexOf('.') + 1) : action
+  return segment
+    .replace(/_/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ')
 }
 
 function formatTimestamp(iso: string) {
@@ -151,9 +187,14 @@ export function AuditLogsPage() {
   const [total, setTotal] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
-  const [selectedFailure, setSelectedFailure] = useState<AuditLogDto | null>(null)
-  /** Which audit-event row has its Details expanded (by id). Click again to collapse. */
-  const [expandedRowId, setExpandedRowId] = useState<string | null>(null)
+  /**
+   * The row whose full details are open in the right-side drawer, or null when the drawer is closed.
+   * One record at a time — clicking "View" on another row just swaps which record the same drawer
+   * shows. Previously this was an inline expand-in-place row (and a separate, never-actually-opened
+   * "Login Failure Details" Modal); both are replaced by this single drawer so every "view details"
+   * action on this page opens the same right-side panel the rest of the host uses.
+   */
+  const [viewingLog, setViewingLog] = useState<AuditLogDto | null>(null)
 
   // Bumped by the Refresh button to force a refetch of the current query. A counter rather than calling
   // a loader directly, so refreshing goes through exactly the same effect — and therefore the same
@@ -161,6 +202,15 @@ export function AuditLogsPage() {
   const [refreshKey, setRefreshKey] = useState(0)
 
   const range = useMemo(() => computeRange(dateRange), [dateRange])
+
+  useEffect(() => {
+    if (!viewingLog) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setViewingLog(null)
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [viewingLog])
 
   const loadSummary = useCallback(async () => {
     if (!accessToken) return
@@ -547,187 +597,105 @@ export function AuditLogsPage() {
             ) : (
               logs.map((log) => {
                 const initial = (log.actorName || log.actorUserId || 'S').charAt(0).toUpperCase()
-                const isExpanded = expandedRowId === log.id
 
                 return isLoginTab ? (
-                  <>
-                    <tr key={log.id} className={isExpanded ? styles.rowExpanded : undefined}>
-                      <td className={styles.timeCell}>{formatTimestamp(log.occurredAt)}</td>
-                      <td>
-                        <div className={styles.actorCell}>
-                          <span className={styles.actorAvatar}>{initial}</span>
-                          <span className={styles.actorName}>
-                            {log.actorName ?? <span className={styles.mutedText}>Unknown</span>}
-                          </span>
-                        </div>
-                      </td>
-                      <td>
-                        <span className={styles.authPill}>{log.authMethod ?? 'Local'}</span>
-                      </td>
-                      <td>
-                        {log.sourceIp ? (
-                          <span className={styles.ipBadge}>
-                            <span className={styles.ipDot} aria-hidden="true" />
-                            {log.sourceIp}
-                          </span>
-                        ) : (
-                          <span className={styles.mutedText}>—</span>
-                        )}
-                      </td>
-                      <td
-                        className={`${styles.deviceCell} ${log.userAgent ? styles.deviceCellClickable : ''}`}
-                        onClick={() => {
-                          if (log.userAgent || log.failureReason || log.details) {
-                            setExpandedRowId(isExpanded ? null : log.id)
-                          }
-                        }}
-                        title={log.userAgent ? 'Click to view full browser & device details' : undefined}
-                      >
-                        {(() => {
-                          const parsed = parseUserAgent(log.userAgent)
-                          if (!parsed) return <span className={styles.mutedText}>{log.userAgent ?? '—'}</span>
-                          return (
-                            <div className={styles.devicePillGroup}>
-                              <span className={styles.browserPill}>{parsed.browser}</span>
-                              <span className={styles.osPill}>{parsed.os}</span>
-                            </div>
-                          )
-                        })()}
-                      </td>
-                      <td>
-                        <Badge tone={log.result === 'Success' ? 'success' : 'danger'} dot>
-                          {log.result}
-                        </Badge>
-                      </td>
-                      <td>
-                        <button
-                          type="button"
-                          className={styles.viewDetailBtn}
-                          onClick={() => setExpandedRowId(isExpanded ? null : log.id)}
-                          title="Toggle full details"
-                        >
-                          {isExpanded ? 'Hide' : 'Details'}
-                        </button>
-                      </td>
-                    </tr>
-                    {isExpanded && (
-                      <tr className={styles.expandedDetailRow}>
-                        <td colSpan={7} className={styles.expandedDetailCell}>
-                          <div className={styles.expandedDetailContent}>
-                            {log.userAgent && (
-                              <div className={styles.expandedSection}>
-                                <span className={styles.expandedDetailLabel}>Browser / Device (Full User-Agent)</span>
-                                <p className={styles.expandedDetailText}>{log.userAgent}</p>
-                              </div>
-                            )}
-                            {log.failureReason && (
-                              <div className={styles.expandedSection}>
-                                <span className={styles.expandedDetailLabel}>Failure Reason</span>
-                                <p className={styles.expandedDangerVal}>{log.failureReason}</p>
-                              </div>
-                            )}
-                            {log.details && (
-                              <div className={styles.expandedSection}>
-                                <span className={styles.expandedDetailLabel}>Additional Details</span>
-                                <p className={styles.expandedDetailText}>{log.details}</p>
-                              </div>
-                            )}
-                            <div className={styles.expandedMiniMeta}>
-                              <span><strong>IP Address:</strong> {log.sourceIp || '—'}</span>
-                              <span><strong>Auth Method:</strong> {log.authMethod || 'Local'}</span>
-                              <span><strong>Correlation ID:</strong> <code>{log.correlationId}</code></span>
-                            </div>
-                            <button
-                              type="button"
-                              className={styles.collapseBtn}
-                              onClick={() => setExpandedRowId(null)}
-                            >
-                              Collapse ↑
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <tr
-                      key={log.id}
-                      className={isExpanded ? styles.rowExpanded : undefined}
+                  <tr key={log.id}>
+                    <td className={styles.timeCell}>{formatTimestamp(log.occurredAt)}</td>
+                    <td>
+                      <div className={styles.actorCell}>
+                        <span className={styles.actorAvatar}>{initial}</span>
+                        <span className={styles.actorName}>
+                          {log.actorName ?? <span className={styles.mutedText}>Unknown</span>}
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <span className={styles.authPill}>{log.authMethod ?? 'Local'}</span>
+                    </td>
+                    <td>
+                      {log.sourceIp ? (
+                        <span className={styles.ipBadge}>
+                          <span className={styles.ipDot} aria-hidden="true" />
+                          {log.sourceIp}
+                        </span>
+                      ) : (
+                        <span className={styles.mutedText}>—</span>
+                      )}
+                    </td>
+                    <td
+                      className={`${styles.deviceCell} ${log.userAgent ? styles.deviceCellClickable : ''}`}
+                      onClick={() => setViewingLog(log)}
+                      title="Click to view full details"
                     >
-                      <td className={styles.timeCell}>{formatTimestamp(log.occurredAt)}</td>
-                      <td>
-                        <Badge tone={serviceTone(log.serviceName)}>{log.serviceName}</Badge>
-                      </td>
-                      <td>
-                        <div className={styles.actorCell}>
-                          <span className={styles.actorAvatar}>{initial}</span>
-                          <span className={styles.actorName}>
-                            {log.actorName ?? <span className={styles.mutedText}>System</span>}
-                          </span>
+                      {(() => {
+                        const parsed = parseUserAgent(log.userAgent)
+                        if (!parsed) return <span className={styles.mutedText}>{log.userAgent ?? '—'}</span>
+                        return (
+                          <div className={styles.devicePillGroup}>
+                            <span className={styles.browserPill}>{parsed.browser}</span>
+                            <span className={styles.osPill}>{parsed.os}</span>
+                          </div>
+                        )
+                      })()}
+                    </td>
+                    <td>
+                      <Badge tone={log.result === 'Success' ? 'success' : 'danger'} dot>
+                        {log.result}
+                      </Badge>
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className={styles.viewDetailBtn}
+                        onClick={() => setViewingLog(log)}
+                        title="View full details"
+                      >
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                ) : (
+                  <tr key={log.id}>
+                    <td className={styles.timeCell}>{formatTimestamp(log.occurredAt)}</td>
+                    <td>
+                      <Badge tone={serviceTone(log.serviceName)}>{log.serviceName}</Badge>
+                    </td>
+                    <td>
+                      <div className={styles.actorCell}>
+                        <span className={styles.actorAvatar}>{initial}</span>
+                        <span className={styles.actorName}>
+                          {log.actorName ?? <span className={styles.mutedText}>System</span>}
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <span className={styles.actionCell} title={log.action}>{formatActionLabel(log.action)}</span>
+                    </td>
+                    <td>
+                      {log.entityType ? (
+                        <div className={styles.entityWrap}>
+                          <span className={styles.entityType}>{log.entityType}</span>
+                          {log.entityId && (
+                            <span className={styles.entityId} title={log.entityId}>
+                              {log.entityId.slice(0, 8)}
+                            </span>
+                          )}
                         </div>
-                      </td>
-                      <td><code className={styles.actionCell}>{log.action}</code></td>
-                      <td>
-                        {log.entityType ? (
-                          <div className={styles.entityWrap}>
-                            <span className={styles.entityType}>{log.entityType}</span>
-                            {log.entityId && (
-                              <span className={styles.entityId} title={log.entityId}>
-                                {log.entityId.slice(0, 8)}
-                              </span>
-                            )}
-                          </div>
-                        ) : (
-                          <span className={styles.mutedText}>—</span>
-                        )}
-                      </td>
-                      <td>
-                        <button
-                          type="button"
-                          className={styles.viewDetailBtn}
-                          onClick={() => setExpandedRowId(isExpanded ? null : log.id)}
-                          title="Toggle full details"
-                        >
-                          {isExpanded ? 'Hide' : 'Details'}
-                        </button>
-                      </td>
-                    </tr>
-                    {isExpanded && (
-                      <tr className={styles.expandedDetailRow}>
-                        <td colSpan={6} className={styles.expandedDetailCell}>
-                          <div className={styles.expandedDetailContent}>
-                            {log.details && (
-                              <div className={styles.expandedSection}>
-                                <span className={styles.expandedDetailLabel}>Full details</span>
-                                <p className={styles.expandedDetailText}>{log.details}</p>
-                              </div>
-                            )}
-                            {log.userAgent && (
-                              <div className={styles.expandedSection}>
-                                <span className={styles.expandedDetailLabel}>Browser / Device (User-Agent)</span>
-                                <p className={styles.expandedDetailText}>{log.userAgent}</p>
-                              </div>
-                            )}
-                            <div className={styles.expandedMiniMeta}>
-                              {log.sourceIp && <span><strong>IP Address:</strong> {log.sourceIp}</span>}
-                              {log.authMethod && <span><strong>Auth Method:</strong> {log.authMethod}</span>}
-                              {log.correlationId && (
-                                <span><strong>Correlation ID:</strong> <code>{log.correlationId}</code></span>
-                              )}
-                            </div>
-                            <button
-                              type="button"
-                              className={styles.collapseBtn}
-                              onClick={() => setExpandedRowId(null)}
-                            >
-                              Collapse ↑
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </>
+                      ) : (
+                        <span className={styles.mutedText}>—</span>
+                      )}
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className={styles.viewDetailBtn}
+                        onClick={() => setViewingLog(log)}
+                        title="View full details"
+                      >
+                        View
+                      </button>
+                    </td>
+                  </tr>
                 )
               })
             )}
@@ -760,27 +728,99 @@ export function AuditLogsPage() {
         </div>
       )}
 
-      {/* Failure Drilldown Modal */}
-      <Modal open={Boolean(selectedFailure)} title="Login Failure Details" onClose={() => setSelectedFailure(null)}>
-        {selectedFailure && (
-          <dl className={styles.detailList}>
-            <dt>Time</dt>
-            <dd>{formatTimestamp(selectedFailure.occurredAt)}</dd>
-            <dt>Attempted account</dt>
-            <dd>{selectedFailure.actorName ?? '—'}</dd>
-            <dt>Auth provider</dt>
-            <dd>{selectedFailure.authMethod ?? '—'}</dd>
-            <dt>Failure reason</dt>
-            <dd>{selectedFailure.failureReason ?? '—'}</dd>
-            <dt>IP address</dt>
-            <dd className={styles.monoText}>{selectedFailure.sourceIp ?? '—'}</dd>
-            <dt>Browser / device</dt>
-            <dd className={styles.wrapText}>{selectedFailure.userAgent ?? '—'}</dd>
-            <dt>Correlation ID</dt>
-            <dd className={styles.monoText}>{selectedFailure.correlationId}</dd>
-          </dl>
-        )}
-      </Modal>
+      {/* Record details drawer — opened per row by its "View" button (or, on the Sign-ins tabs, the
+          device cell). The SAME right-side drawer shell Settings and the System Audit Trail deep-link
+          use, scoped to just the one record clicked — NOT the whole audit log section. */}
+      {viewingLog && (
+        <div className={drawerStyles.overlayRoot}>
+          <div className={drawerStyles.backdrop} onClick={() => setViewingLog(null)} />
+          <div className={drawerStyles.drawerContainer}>
+            <div className={drawerStyles.rootPanel}>
+              <div className={drawerStyles.header}>
+                <div className={drawerStyles.headerLeft}>
+                  <div className={drawerStyles.headerIcon}>
+                    <Icon.FileText width={20} height={20} />
+                  </div>
+                  <div>
+                    <h2 className={drawerStyles.title}>Audit Record Details</h2>
+                    <p className={drawerStyles.subtitle}>Full details of this audit trail entry</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className={drawerStyles.closeBtn}
+                  onClick={() => setViewingLog(null)}
+                  aria-label="Close details"
+                >
+                  <Icon.X width={20} height={20} />
+                </button>
+              </div>
+
+              <div className={drawerStyles.tabBody}>
+                <dl className={styles.detailList}>
+                  <dt>Time</dt>
+                  <dd>{formatTimestamp(viewingLog.occurredAt)}</dd>
+
+                  <dt>Service</dt>
+                  <dd><Badge tone={serviceTone(viewingLog.serviceName)}>{viewingLog.serviceName}</Badge></dd>
+
+                  <dt>Actor</dt>
+                  <dd>{viewingLog.actorName ?? 'System'}</dd>
+
+                  <dt>Action</dt>
+                  <dd>
+                    {formatActionLabel(viewingLog.action)}{' '}
+                    <span className={styles.monoText}>({viewingLog.action})</span>
+                  </dd>
+
+                  {viewingLog.entityType && (
+                    <>
+                      <dt>Entity</dt>
+                      <dd>
+                        {viewingLog.entityType}
+                        {viewingLog.entityId ? ` · ${viewingLog.entityId}` : ''}
+                      </dd>
+                    </>
+                  )}
+
+                  <dt>Result</dt>
+                  <dd>
+                    <Badge tone={viewingLog.result === 'Success' ? 'success' : 'danger'} dot>
+                      {viewingLog.result}
+                    </Badge>
+                  </dd>
+
+                  <dt>Auth Method</dt>
+                  <dd>{viewingLog.authMethod ?? 'Local'}</dd>
+
+                  <dt>IP Address</dt>
+                  <dd className={styles.monoText}>{viewingLog.sourceIp ?? '—'}</dd>
+
+                  {viewingLog.failureReason && (
+                    <>
+                      <dt>Failure Reason</dt>
+                      <dd style={{ color: '#dc2626', fontWeight: 600 }}>{viewingLog.failureReason}</dd>
+                    </>
+                  )}
+
+                  {viewingLog.details && (
+                    <>
+                      <dt>Details</dt>
+                      <dd className={styles.wrapText}>{viewingLog.details}</dd>
+                    </>
+                  )}
+
+                  <dt>Browser / Device</dt>
+                  <dd className={styles.wrapText}>{viewingLog.userAgent ?? '—'}</dd>
+
+                  <dt>Correlation ID</dt>
+                  <dd className={styles.monoText}>{viewingLog.correlationId}</dd>
+                </dl>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

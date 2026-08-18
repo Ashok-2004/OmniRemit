@@ -200,8 +200,8 @@ export default function AuditLogs() {
             <select
               value={actionFilter}
               onChange={(e) => setActionFilter(e.target.value)}
-              className="c360-input"
-              style={{ width: '160px', height: '40px', cursor: 'pointer', appearance: 'auto', fontSize: '13px' }}
+              className="c360-select"
+              style={{ width: '170px', height: '40px', fontSize: '13px' }}
             >
               <option value="">All Action Types</option>
               <option value="VIEW">View Audits</option>
@@ -399,6 +399,33 @@ export default function AuditLogs() {
         )}
       </div>
 
+      {/* Pagination — server-side paged (pageNumber/pageSize/totalPages all come from the API
+          response, not a client-side slice of an already-fetched full list), which matters at bank
+          scale: this never has to pull more than one page of audit records into the browser at once. */}
+      {totalCount > pageSize && (
+        <div className="c360-pagination">
+          <button
+            type="button"
+            className="c360-page-btn"
+            disabled={pageNumber <= 1}
+            onClick={() => setPageNumber((p) => p - 1)}
+          >
+            &lt; Previous
+          </button>
+          <span className="c360-page-indicator">
+            Page {pageNumber} of {totalPages}
+          </span>
+          <button
+            type="button"
+            className="c360-page-btn"
+            disabled={pageNumber >= totalPages}
+            onClick={() => setPageNumber((p) => p + 1)}
+          >
+            Next &gt;
+          </button>
+        </div>
+      )}
+
       {/* Details drawer — right-side, matching the host's own drawer pattern (and this app's own
           CaseDetailsModal/ProductDetailsModal) rather than a centered dialog. */}
       {detailsOpen && selectedLog && (
@@ -441,7 +468,9 @@ export default function AuditLogs() {
                   <span style={{ fontSize: '11.5px', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '2px' }}>
                     Status
                   </span>
-                  <strong style={{ color: '#16a34a' }}>{selectedLog.status}</strong>
+                  <strong style={{ color: (selectedLog.status || '').toLowerCase() === 'success' ? '#16a34a' : '#dc2626' }}>
+                    {selectedLog.status}
+                  </strong>
                 </div>
                 <div style={{ gridColumn: 'span 2' }}>
                   <span style={{ fontSize: '11.5px', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '2px' }}>
