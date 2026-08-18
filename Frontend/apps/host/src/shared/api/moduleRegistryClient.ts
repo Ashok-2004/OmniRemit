@@ -29,8 +29,32 @@ export interface HealthEntryDto {
   error: string | null
 }
 
+/**
+ * Upper bound on how long the sidebar waits for ModuleRegistry.
+ *
+ * A refused connection already fails on its own (measured ~2.3s to a dead local port), so this is not
+ * what fixes the "stuck on skeletons" symptom — that was an unbounded retry loop in App.tsx, fixed
+ * there. This covers the case a refused connection does not: a registry that ACCEPTS the socket and
+ * then stalls (saturated thread pool, wedged DB call), where fetch waits indefinitely by default.
+ *
+ * 8s is comfortably above a cold start on a loaded machine and well below the point where a user
+ * concludes the app is broken.
+ */
+const REGISTRY_TIMEOUT_MS = 8000
+
 /** Raw calls against ModuleRegistry's public surface. Admin CRUD calls (Setup > Applications) live in features/settings-applications/api. */
 export const moduleRegistryClient = {
-  forSidebar: (accessToken: string) => apiFetch<SidebarAppDto[]>(`${base}/api/remote-apps/for-sidebar`, { accessToken }),
-  health: (accessToken: string) => apiFetch<HealthEntryDto[]>(`${base}/api/remote-apps/health`, { accessToken }),
+  // `signal` needs no change to httpClient: ApiFetchOptions extends RequestInit and spreads ...rest
+  // straight into fetch, so an AbortSignal already flows through. An abort surfaces as a rejection,
+  // which is exactly what the store's existing catch expects.
+  forSidebar: (accessToken: string) =>
+    apiFetch<SidebarAppDto[]>(`${base}/api/remote-apps/for-sidebar`, {
+      accessToken,
+      signal: AbortSignal.timeout(REGISTRY_TIMEOUT_MS),
+    }),
+  health: (accessToken: string) =>
+    apiFetch<HealthEntryDto[]>(`${base}/api/remote-apps/health`, {
+      accessToken,
+      signal: AbortSignal.timeout(REGISTRY_TIMEOUT_MS),
+    }),
 }

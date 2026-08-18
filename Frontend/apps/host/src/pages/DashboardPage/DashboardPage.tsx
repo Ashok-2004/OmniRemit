@@ -92,6 +92,9 @@ export function DashboardPage() {
   const [stats, setStats] = useState<DashboardStatsDto | null>(null)
   const [apps, setApps] = useState<RemoteAppDto[]>([])
   const [error, setError] = useState<string | null>(null)
+  // ModuleRegistry unreachable. Distinct from "zero apps registered" — the card must not print 0,
+  // which would read as a real count taken from a healthy service.
+  const [appsUnavailable, setAppsUnavailable] = useState(false)
   // Real per-app reachability from the registry probe. Drives the System Status card, which used
   // to be hardcoded.
   const [health, setHealth] = useState<HealthEntryDto[] | null>(null)
@@ -118,7 +121,19 @@ export function DashboardPage() {
          */
         const [statsRes, appsRes, logsRes, healthRes] = await Promise.all([
           dashboardApi.stats(accessToken!),
-          remoteAppsApi.list(accessToken!, { pageSize: 12 }),
+          /*
+           * Guarded like its neighbours, because it talks to a DIFFERENT service.
+           *
+           * This call goes to ModuleRegistry; stats goes to AuthService. Unguarded inside a
+           * Promise.all, a ModuleRegistry outage rejected the whole batch, so setStats never ran and
+           * every card kept its initial 0 — the page reported "0 users, 0 roles" while AuthService was
+           * up and answering correctly. Reporting zero users to a bank operator because an unrelated
+           * service is down is a wrong fact, not a missing one.
+           *
+           * `null` (not an empty list) marks unreachable, so the card can distinguish "the registry is
+           * down" from "no applications are registered".
+           */
+          remoteAppsApi.list(accessToken!, { pageSize: 12 }).catch(() => null),
           auditLogsApi.list(accessToken!, { pageSize: 6 }).catch(() => ({ items: [], total: 0 })),
           // A failing probe must not blank the whole dashboard — the card falls back to "Unknown".
           dashboardApi.health(accessToken!).catch(() => [] as HealthEntryDto[]),
@@ -128,8 +143,9 @@ export function DashboardPage() {
           setStats(statsRes)
           setTotalUsers(statsRes.users ?? 0)
           setTotalRoles(statsRes.roles ?? 0)
-          setTotalApps(appsRes.total)
-          setApps(appsRes.items)
+          setTotalApps(appsRes?.total ?? 0)
+          setApps(appsRes?.items ?? [])
+          setAppsUnavailable(appsRes === null)
           setRecentLogs(logsRes.items)
           setHealth(healthRes)
           setError(null)
@@ -336,15 +352,31 @@ export function DashboardPage() {
             <span className={styles.statLabel}>Remote Applications</span>
           </div>
           <div className={styles.statValueRow}>
-            <span className={styles.statValue}>
-              {loading ? <SkeletonBlock height={32} width={36} /> : totalApps || apps.length || 0}
+            <span className={appsUnavailable ? styles.statValueUnavailable : styles.statValue}>
+              {loading ? (
+                <SkeletonBlock height={32} width={36} />
+              ) : appsUnavailable ? (
+                '—'
+              ) : (
+                totalApps || apps.length || 0
+              )}
             </span>
           </div>
           <div className={styles.statTrendRow}>
-            <span className={styles.trendGreen}>
-              <span className={styles.trendArrow}>↑</span> Federated Apps
-            </span>
-            <span className={styles.trendSubtitle}>Live loaded</span>
+            {appsUnavailable ? (
+              /* An em dash plus this line, instead of "0 / Federated Apps / Live loaded" — the
+                 operator can see the number is unknown rather than believing no apps are registered. */
+              <span className={styles.trendUnavailable} role="status">
+                Registry unreachable
+              </span>
+            ) : (
+              <>
+                <span className={styles.trendGreen}>
+                  <span className={styles.trendArrow}>↑</span> Federated Apps
+                </span>
+                <span className={styles.trendSubtitle}>Live loaded</span>
+              </>
+            )}
           </div>
         </div>
 

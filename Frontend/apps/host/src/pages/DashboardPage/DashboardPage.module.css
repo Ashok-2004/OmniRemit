@@ -319,6 +319,30 @@
   font-weight: 500;
 }
 
+/*
+ * Unknown-value state, used when the service behind a card is unreachable.
+ *
+ * Deliberately muted rather than red: the platform is not in an error state, this one figure is
+ * simply unavailable. It must however be visually distinct from a real number, so an operator can
+ * never mistake a placeholder for a measurement.
+ */
+.statValueUnavailable {
+  font-size: 28px;
+  font-weight: 800;
+  color: #cbd5e1;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.trendUnavailable {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: #94a3b8;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
 /* ════════════════════════════════════════════════════
    TWO-COLUMN GRID
    ════════════════════════════════════════════════════ */

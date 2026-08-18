@@ -136,14 +136,28 @@ function AuthenticatedShell() {
 
   useEffect(() => {
     if (!accessToken) return
-    if (registryStatus === 'idle' || (registryStatus === 'error' && registryApps.length === 0)) {
+    /*
+     * Fetch ONCE per session, on 'idle' only.
+     *
+     * Retrying on 'error' here was a retry storm, not resilience. The store sets 'error' with an empty
+     * app list when the registry is unreachable; `registryStatus` is an effect dependency, so the
+     * effect re-ran, saw `error && apps.length === 0`, and fetched again — which set 'loading', which
+     * re-ran the effect, forever. Against a downed ModuleRegistry that is an unbounded request loop
+     * (netstat showed three simultaneous connection attempts), and because the sidebar renders
+     * skeletons whenever status is 'loading', the APPS section sat on grey placeholders through every
+     * cycle instead of showing the error state that was already written for it.
+     *
+     * Hammering a service that is down is also precisely what stops it coming back up. One attempt,
+     * then the error state, whose copy already tells the user to refresh.
+     */
+    if (registryStatus === 'idle') {
       void ensureFreshAccessToken()
         .then(fetchForSidebar)
         .catch(() => {
           // ensureFreshAccessToken already routes to /login via authStore on failure
         })
     }
-  }, [accessToken, registryStatus, registryApps.length, ensureFreshAccessToken, fetchForSidebar])
+  }, [accessToken, registryStatus, ensureFreshAccessToken, fetchForSidebar])
 
   const isAdministrator = Boolean(user?.isAdministrator)
   const settingsAccess = {

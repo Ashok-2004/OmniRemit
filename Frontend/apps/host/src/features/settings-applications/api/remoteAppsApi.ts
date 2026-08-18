@@ -60,8 +60,20 @@ function buildQuery(params: object) {
 }
 
 export const remoteAppsApi = {
+  /*
+   * Read-only listing, given a deadline because the dashboard renders it alongside data from a
+   * different service (AuthService). A caller's `.catch()` fallback only runs if the promise SETTLES;
+   * a refused connection settles on its own, but a registry that accepts the socket and then stalls
+   * does not, and would hold the whole dashboard on skeletons rather than degrading one card.
+   *
+   * Mutations are deliberately left without a timeout: aborting a write tells you nothing about
+   * whether the server applied it.
+   */
   list: (accessToken: string, params: ListRemoteAppsParams = {}) =>
-    apiFetch<PagedResult<RemoteAppDto>>(`${base}/api/remote-apps${buildQuery(params)}`, { accessToken }),
+    apiFetch<PagedResult<RemoteAppDto>>(`${base}/api/remote-apps${buildQuery(params)}`, {
+      accessToken,
+      signal: AbortSignal.timeout(8000),
+    }),
 
   get: (accessToken: string, id: string) => apiFetch<RemoteAppDto>(`${base}/api/remote-apps/${id}`, { accessToken }),
 
