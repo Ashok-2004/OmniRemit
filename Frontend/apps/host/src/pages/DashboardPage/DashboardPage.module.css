@@ -840,3 +840,12 @@
   color: var(--omni-color-danger-700, #b91c1c);
   font-size: 13px;
 }
+
+/* System status when an application is unreachable. The card previously had no way to render a
+   problem at all — it claimed "Operational" unconditionally. */
+.statValueDegraded {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--omni-color-danger-600, #dc2626);
+  letter-spacing: -0.02em;
+}

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAuthStore } from '../../features/auth/store/authStore'
 import { remoteAppsApi, type RemoteAppDto } from '../../features/settings-applications/api/remoteAppsApi'
 import { auditLogsApi, type AuditLogDto } from '../../features/system-audit-logs/api/auditLogsApi'
-import { dashboardApi, type DashboardStatsDto } from '../../features/dashboard/api/dashboardApi'
+import { dashboardApi, type DashboardStatsDto, type HealthEntryDto } from '../../features/dashboard/api/dashboardApi'
 import { ApiError } from '../../shared/api/httpClient'
 import { useSettingsDrawerStore } from '../../shared/stores/settingsDrawerStore'
 import { SkeletonBlock } from '../../shared/components/Skeleton'
@@ -92,6 +92,9 @@ export function DashboardPage() {
   const [stats, setStats] = useState<DashboardStatsDto | null>(null)
   const [apps, setApps] = useState<RemoteAppDto[]>([])
   const [error, setError] = useState<string | null>(null)
+  // Real per-app reachability from the registry probe. Drives the System Status card, which used
+  // to be hardcoded.
+  const [health, setHealth] = useState<HealthEntryDto[] | null>(null)
   const [recentLogs, setRecentLogs] = useState<AuditLogDto[]>([])
 
   useEffect(() => {
@@ -113,10 +116,12 @@ export function DashboardPage() {
          * Applications and the audit tail are still fetched because the page renders those rows
          * individually; they are genuinely row-level data, not aggregates.
          */
-        const [statsRes, appsRes, logsRes] = await Promise.all([
+        const [statsRes, appsRes, logsRes, healthRes] = await Promise.all([
           dashboardApi.stats(accessToken!),
           remoteAppsApi.list(accessToken!, { pageSize: 12 }),
           auditLogsApi.list(accessToken!, { pageSize: 6 }).catch(() => ({ items: [], total: 0 })),
+          // A failing probe must not blank the whole dashboard — the card falls back to "Unknown".
+          dashboardApi.health(accessToken!).catch(() => [] as HealthEntryDto[]),
         ])
 
         if (!cancelled) {
@@ -126,6 +131,7 @@ export function DashboardPage() {
           setTotalApps(appsRes.total)
           setApps(appsRes.items)
           setRecentLogs(logsRes.items)
+          setHealth(healthRes)
           setError(null)
         }
       } catch (err) {
@@ -170,6 +176,44 @@ export function DashboardPage() {
     }))
   }, [stats])
 
+  /**
+   * System status, derived from the registry health probe.
+   *
+   * This card used to read "Operational / 99.98% Uptime / All services healthy" unconditionally. The
+   * uptime figure was invented — nothing in the platform measures uptime — and the healthy claim was
+   * made even while an application was demonstrably down. A status card that cannot report a problem
+   * is worse than none, because an operator learns to trust it.
+   */
+  const systemStatus = useMemo(() => {
+    if (health === null) return { label: 'Checking', tone: 'neutral' as const, detail: 'Probing services…' }
+    if (health.length === 0) {
+      return { label: 'No apps', tone: 'neutral' as const, detail: 'No remote applications registered' }
+    }
+
+    const unreachable = health.filter((h) => h.health === 'Unreachable')
+    const unknown = health.filter((h) => h.health === 'Unknown')
+
+    if (unreachable.length > 0) {
+      return {
+        label: 'Degraded',
+        tone: 'danger' as const,
+        detail:
+          unreachable.length === 1
+            ? `${unreachable[0].displayName} is not responding`
+            : `${unreachable.length} applications are not responding`,
+      }
+    }
+
+    if (unknown.length > 0) {
+      return { label: 'Checking', tone: 'neutral' as const, detail: `${unknown.length} not yet probed` }
+    }
+
+    return {
+      label: 'Operational',
+      tone: 'healthy' as const,
+      detail: health.length === 1 ? '1 application reachable' : `${health.length} applications reachable`,
+    }
+  }, [health])
   // SVG Donut calculation
   const donutSegments = useMemo(() => {
     const total = roleDistribution.reduce((sum, r) => sum + r.count, 0) || 1
@@ -314,15 +358,19 @@ export function DashboardPage() {
           </div>
           <div className={styles.statValueRow}>
             <div className={styles.statusLiveRow}>
-              <span className={styles.pulsingDot} />
-              <span className={styles.statValueHealthy}>Operational</span>
+              {systemStatus.tone === 'healthy' && <span className={styles.pulsingDot} />}
+              <span
+                className={
+                  systemStatus.tone === 'danger' ? styles.statValueDegraded : styles.statValueHealthy
+                }
+              >
+                {systemStatus.label}
+              </span>
             </div>
           </div>
           <div className={styles.statTrendRow}>
-            <span className={styles.trendGreen}>
-              <span>✓</span> 99.98% Uptime
-            </span>
-            <span className={styles.trendSubtitle}>All services healthy</span>
+            {/* Real reachability, not an invented uptime percentage. */}
+            <span className={styles.trendSubtitle}>{systemStatus.detail}</span>
           </div>
         </div>
       </div>
