@@ -490,16 +490,6 @@ export default function AuditLogs() {
                 </div>
               </div>
             </div>
-            <div className="drawer-footer">
-              <button
-                type="button"
-                className="c360-btn-secondary"
-                onClick={() => setDetailsOpen(false)}
-                style={{ height: '36px', padding: '0 16px', fontSize: '13px' }}
-              >
-                Close
-              </button>
-            </div>
           </div>
         </div>
       )}
