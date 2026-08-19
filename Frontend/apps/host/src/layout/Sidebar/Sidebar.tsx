@@ -29,6 +29,31 @@ function navItemClass({ isActive }: { isActive: boolean }) {
   return classNames(styles.navItem, isActive && styles.navItemActive)
 }
 
+// Each remote with an expandable sub-menu (Customer 360, Lead Management) injects its own chevron
+// toggle button as a DOM child of this NavLink — see HostSidebarCustomer360Nav.tsx /
+// HostSidebarLeadNav.tsx, which portal their sub-nav in and `appendChild` the chevron directly onto
+// the anchor found by this same href. The host has no direct handle on that button or the remote's
+// expand/collapse state, so "click anywhere on the row toggles it" is done by finding whichever
+// chevron is present at click time (it can mount up to ~4s after the remote loads, hence a live
+// query rather than a cached ref) and forwarding the click to it — a real click event, not touching
+// the remote's internal state directly.
+//
+// This only ever fires for clicks that DIDN'T land on the chevron itself: the chevron's own onclick
+// calls stopPropagation() in the bubble phase, which stops this row-level onClick (registered via
+// React's root-level delegated listener) from also running — so clicking the chevron toggles once,
+// not twice.
+const SUB_NAV_CHEVRON_SELECTOR = '.c360-sidebar-chevron-btn, .lead-sidebar-chevron-btn'
+
+function forwardClickToChevron(e: React.MouseEvent<HTMLAnchorElement>) {
+  const chevron = e.currentTarget.querySelector<HTMLButtonElement>(SUB_NAV_CHEVRON_SELECTOR)
+  if (chevron) {
+    e.preventDefault()
+    chevron.click()
+  }
+  // No chevron found (app has no sub-menu, or the remote hasn't mounted its chevron yet) — let the
+  // NavLink navigate normally.
+}
+
 export function Sidebar({ apps, canAccessAuditLogs, error, mobileOpen }: SidebarProps) {
   return (
     <aside className={classNames(styles.sidebar, mobileOpen ? styles.sidebarMobileOpen : '')}>
@@ -103,6 +128,7 @@ export function Sidebar({ apps, canAccessAuditLogs, error, mobileOpen }: Sidebar
                 classNames(navItemClass({ isActive }), isUnreachable && styles.navItemUnreachable)
               }
               title={isUnreachable ? `${app.displayName} is not responding` : undefined}
+              onClick={forwardClickToChevron}
             >
               <span className={styles.navIcon} aria-hidden="true">
                 <AppIcon width={17} height={17} />
