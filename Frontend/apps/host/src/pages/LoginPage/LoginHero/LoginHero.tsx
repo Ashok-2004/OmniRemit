@@ -1,341 +1,290 @@
+import { useRef, useState, useEffect, useCallback, type CSSProperties, type ReactNode } from 'react'
 import styles from './LoginHero.module.css'
-import { APP_NAME, COPYRIGHT_YEAR } from '../../../shared/config/branding'
+import { APP_NAME } from '../../../shared/config/branding'
+import { Icon } from '../../../shared/components/Icon/Icon'
 
+// ── App Registry ───────────────────────────────────────────────
+// To add a new app: push ONE object — { id, label, icon }.
+// Position  → auto-calculated from index (elliptical distribution).
+// Icon color → auto-assigned from COLOR_PALETTE cycling by index.
+// No posClass, no colorClass, no manual CSS needed.
+interface AppNode {
+  id:    string
+  label: string[]
+  icon:  ReactNode
+}
+
+// ── Color Palette (cycles automatically) ──────────────────────
+// Add more entries to expand the palette for future apps.
+const COLOR_PALETTE: { bg: string; shadow: string }[] = [
+  { bg: 'linear-gradient(145deg,#7c3aed 0%,#4f46e5 100%)', shadow: '0 2px 8px rgba(109,40,217,0.45)' }, // violet
+  { bg: 'linear-gradient(145deg,#0284c7 0%,#2563eb 100%)', shadow: '0 2px 8px rgba(37,99,235,0.45)'   }, // blue
+  { bg: 'linear-gradient(145deg,#0d9488 0%,#0891b2 100%)', shadow: '0 2px 8px rgba(8,145,178,0.45)'   }, // teal
+  { bg: 'linear-gradient(145deg,#d97706 0%,#b45309 100%)', shadow: '0 2px 8px rgba(180,83,9,0.40)'    }, // amber
+  { bg: 'linear-gradient(145deg,#be185d 0%,#9d174d 100%)', shadow: '0 2px 8px rgba(157,23,77,0.45)'   }, // rose
+  { bg: 'linear-gradient(145deg,#15803d 0%,#166534 100%)', shadow: '0 2px 8px rgba(21,128,61,0.40)'   }, // green
+]
+
+const APPS: AppNode[] = [
+  { id: 'lead',     label: ['Lead',     'Management'], icon: <Icon.User       width={15} height={15} /> },
+  { id: 'market',   label: ['Market',   'Place'],      icon: <Icon.Headphones width={15} height={15} /> },
+  { id: 'case',     label: ['Case',     'Management'], icon: <Icon.Package    width={15} height={15} /> },
+  { id: 'customer', label: ['Customer', '360°'],       icon: <Icon.Users      width={15} height={15} /> },
+  { id: 'product',  label: ['Api',  'Management'], icon: <Icon.Search   width={15} height={15} /> },
+]
+
+// ── Auto-position helper ───────────────────────────────────────
+// Distributes N cards evenly around an ellipse centred at (50 %, 50 %).
+// rx / ry are the half-axes in percentage-of-container units.
+// startAngleDeg lets you rotate the whole ring (−90 = first card at top).
+function getCardStyle(
+  index:         number,
+  total:         number,
+  rx = 41,        // horizontal radius  (% of stage width)
+  ry = 42,        // vertical   radius  (% of stage height)
+  startAngleDeg = -90,
+): CSSProperties {
+  const angleRad = ((startAngleDeg + (360 / total) * index) * Math.PI) / 180
+  const cx = 50 + rx * Math.cos(angleRad)  // % from left
+  const cy = 50 + ry * Math.sin(angleRad)  // % from top
+
+  return {
+    left:      `${cx}%`,
+    top:       `${cy}%`,
+    transform: 'translate(-50%, -50%)',
+  }
+}
+
+interface LineCoord { x1: number; y1: number; x2: number; y2: number }
+
+// ── Component ──────────────────────────────────────────────────
 export function LoginHero() {
+  const stageRef = useRef<HTMLDivElement>(null)
+  const hubRef   = useRef<HTMLDivElement>(null)
+  const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+  const [lines, setLines] = useState<LineCoord[]>([])
+
+  const recalculate = useCallback(() => {
+    const stage = stageRef.current
+    const hub   = hubRef.current
+    if (!stage || !hub) return
+
+    const sr = stage.getBoundingClientRect()
+    const hr = hub.getBoundingClientRect()
+    const hubCX = hr.left - sr.left + hr.width  / 2
+    const hubCY = hr.top  - sr.top  + hr.height / 2
+
+    const next: LineCoord[] = []
+    for (const app of APPS) {
+      const el = cardRefs.current.get(app.id)
+      if (!el) continue
+      const cr = el.getBoundingClientRect()
+      next.push({
+        x1: hubCX,
+        y1: hubCY,
+        x2: cr.left - sr.left + cr.width  / 2,
+        y2: cr.top  - sr.top  + cr.height / 2,
+      })
+    }
+    setLines(next)
+  }, [])
+
+  useEffect(() => {
+    // Recalculate after first paint (cards are positioned by CSS %)
+    const id = requestAnimationFrame(recalculate)
+    const ro = new ResizeObserver(recalculate)
+    if (stageRef.current) ro.observe(stageRef.current)
+    return () => { cancelAnimationFrame(id); ro.disconnect() }
+  }, [recalculate])
+
   return (
     <div className={styles.heroContainer}>
+      <div className={styles.bgDeepGlow}      aria-hidden="true" />
+      <div className={styles.bgGridOverlay}   aria-hidden="true" />
+      <div className={styles.bgGlowOrb}       aria-hidden="true" />
+      <div className={styles.bgCenterHorizon} aria-hidden="true" />
 
-      {/* Ambient glows */}
-      <div className={styles.bgOrb}        aria-hidden="true" />
-      <div className={styles.bgCenterGlow} aria-hidden="true" />
+      <div className={styles.heroInner}>
 
-      {/* Dot grid — top-right accent */}
-      <svg className={styles.dotGrid} viewBox="0 0 120 120" fill="none" aria-hidden="true">
-        <pattern id="dp" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
-          <circle cx="2" cy="2" r="1.4" fill="#38bdf8" />
-        </pattern>
-        <rect width="120" height="120" fill="url(#dp)" />
-      </svg>
-
-      <div className={styles.heroContent}>
-
-        {/* Brand */}
+        {/* ── Brand Header ── */}
         <header className={styles.brandHeader}>
-          <div className={styles.logoIcon} aria-hidden="true">
-            <svg width="24" height="24" viewBox="0 0 36 36" fill="none">
-              <defs>
-                <linearGradient id="lg1" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%"   stopColor="#38bdf8" />
-                  <stop offset="100%" stopColor="#0284c7" />
-                </linearGradient>
-              </defs>
-              <polygon points="18,2 32,10 32,26 18,34 4,26 4,10"
-                stroke="url(#lg1)" strokeWidth="2.2" strokeLinejoin="round" fill="none" />
-              <line x1="18" y1="18" x2="18" y2="34" stroke="url(#lg1)" strokeWidth="2.2" />
-              <line x1="18" y1="18" x2="32" y2="10" stroke="url(#lg1)" strokeWidth="2.2" />
-              <line x1="18" y1="18" x2="4"  y2="10" stroke="url(#lg1)" strokeWidth="2.2" />
-              <polygon points="18,7 27,12 18,17 9,12"
-                stroke="#38bdf8" strokeWidth="1.3" strokeOpacity="0.9"
-                fill="rgba(56,189,248,0.18)" />
-              <polyline points="9,12 9,21 18,26 27,21 27,12"
-                stroke="#38bdf8" strokeWidth="1.3" strokeOpacity="0.9" fill="none" />
+          <div className={styles.logoBadge} aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 32 32" fill="none">
+              <path d="M16 2L28 9V23L16 30L4 23V9L16 2Z"
+                stroke="#38BDF8" strokeWidth="2" strokeLinejoin="round"
+                fill="rgba(56,189,248,0.12)" />
+              <path d="M16 2V16M28 9L16 16M4 9L16 16M16 16V30"
+                stroke="#60A5FA" strokeWidth="1.4" strokeOpacity="0.8" />
+              <circle cx="16" cy="16" r="3.2" fill="#38BDF8" />
             </svg>
           </div>
-          <div className={styles.brandTextGroup}>
-            <span className={styles.brandTitle}>
-              {/* Split so the two-tone brand styling survives, but the NAME comes from config —
-                  it was hardcoded here as two spans, which is why a plain search for the product
-                  name never found it. */}
-              <span className={styles.brandOmni}>{APP_NAME.slice(0, 4)}</span>
-              <span className={styles.brandConnect}>{APP_NAME.slice(4)}</span>
-            </span>
-          </div>
+          <span className={styles.brandTitle}>
+            Omni<span>Connect</span>
+          </span>
         </header>
 
-        {/* Headline */}
-        <div className={styles.textSection}>
+        {/* ── Hero Headings ── */}
+        <div className={styles.headlineSection}>
           <h1 className={styles.mainHeading}>
             One platform.<br />
-            Every team,{' '}
-            <em className={styles.highlightText}>every app.</em>
+            Every team,<br />
+            <span className={styles.gradientHeading}>every app.</span>
           </h1>
-          <p className={styles.description}>
-            Access every tool your role unlocks — unified,
-            secure, and always available.
+          <p className={styles.subHeading}>
+            Securely access all the applications and tools your role provides
+            from one unified workspace.
           </p>
-
-          {/* Three stats — social proof, not repeated elsewhere */}
-          {/*
-            These describe how the platform WORKS. They are deliberately not metrics or service
-            commitments.
-
-            This block previously read "12k+ Active users", "99.9% Uptime SLA" and "24/7 Support".
-            The first is a fabricated figure — the platform has five accounts, and printing an invented
-            user count on a product being sold to a bank is a straightforward false claim. The other
-            two are contractual undertakings by whoever operates the deployment, not properties of the
-            software, and each deploying bank will have its own numbers in its own agreement.
-
-            Every line below is a real, implemented behaviour a reader can verify in the code, and each
-            was exercised against the running services.
-          */}
-          {/* <div className={styles.stats}>
-            <div className={styles.stat}>
-              <span className={styles.statValue}>
-                Role<span className={styles.statAccent}>-based</span>
-              </span>
-              <span className={styles.statLabel}>Checked on every request</span>
-            </div>
-            <div className={styles.stat}>
-              <span className={styles.statValue}>
-                <span className={styles.statAccent}>Audited</span>
-              </span>
-              <span className={styles.statLabel}>Every change attributable</span>
-            </div>
-            <div className={styles.stat}>
-              <span className={styles.statValue}>
-                Auto<span className={styles.statAccent}>-lock</span>
-              </span>
-              <span className={styles.statLabel}>Idle sessions signed out</span>
-            </div>
-          </div> */}
         </div>
 
-        {/* 3D Illustration */}
-        <div className={styles.graphicSection}>
+        {/* ── Isometric Stage ── */}
+        <div className={styles.isometricStage} ref={stageRef}>
+
+          {/* Dynamic SVG lines — redrawn automatically */}
           <svg
-            className={styles.isometricSvg}
-            viewBox="0 0 600 420"
-            fill="none"
             aria-hidden="true"
+            style={{
+              position: 'absolute', inset: 0,
+              width: '100%', height: '100%',
+              pointerEvents: 'none', zIndex: 2, overflow: 'visible',
+            }}
           >
             <defs>
-              <linearGradient id="deckTop" x1="20%" y1="0%"  x2="80%"  y2="100%">
-                <stop offset="0%"   stopColor="#0f3da8" />
-                <stop offset="60%"  stopColor="#082578" />
-                <stop offset="100%" stopColor="#04164d" />
-              </linearGradient>
-              <linearGradient id="deckRim" x1="0%"  y1="0%"  x2="100%" y2="100%">
-                <stop offset="0%"   stopColor="#38bdf8" />
-                <stop offset="50%"  stopColor="#2563eb" />
-                <stop offset="100%" stopColor="#1d4ed8" />
-              </linearGradient>
-              <linearGradient id="sideL" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%"   stopColor="#1e40af" />
-                <stop offset="100%" stopColor="#0b205e" />
-              </linearGradient>
-              <linearGradient id="sideR" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%"   stopColor="#112b77" />
-                <stop offset="100%" stopColor="#051238" />
-              </linearGradient>
-              <linearGradient id="baseL" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%"   stopColor="#0d2466" />
-                <stop offset="100%" stopColor="#030b21" />
-              </linearGradient>
-              <linearGradient id="baseR" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%"   stopColor="#081745" />
-                <stop offset="100%" stopColor="#020717" />
-              </linearGradient>
-              <linearGradient id="wTop" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%"   stopColor="#ffffff" />
-                <stop offset="100%" stopColor="#f1f5f9" />
-              </linearGradient>
-              <linearGradient id="wL" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%"   stopColor="#ffffff" />
-                <stop offset="100%" stopColor="#e2e8f0" />
-              </linearGradient>
-              <linearGradient id="wR" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%"   stopColor="#cbd5e1" />
-                <stop offset="100%" stopColor="#94a3b8" />
-              </linearGradient>
-              <linearGradient id="rbTop" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%"   stopColor="#3b82f6" />
-                <stop offset="100%" stopColor="#2563eb" />
-              </linearGradient>
-              <linearGradient id="rbL" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%"   stopColor="#2563eb" />
-                <stop offset="100%" stopColor="#1d4ed8" />
-              </linearGradient>
-              <linearGradient id="rbR" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%"   stopColor="#172554" />
-                <stop offset="100%" stopColor="#0f172a" />
-              </linearGradient>
-              <linearGradient id="ebTop" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%"   stopColor="#60a5fa" />
-                <stop offset="100%" stopColor="#3b82f6" />
-              </linearGradient>
-              <linearGradient id="ebL" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%"   stopColor="#3b82f6" />
-                <stop offset="100%" stopColor="#2563eb" />
-              </linearGradient>
-              <linearGradient id="ebR" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%"   stopColor="#1e3a8a" />
-                <stop offset="100%" stopColor="#172554" />
-              </linearGradient>
-              <linearGradient id="sbTop" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%"   stopColor="#bae6fd" />
-                <stop offset="100%" stopColor="#7dd3fc" />
-              </linearGradient>
-              <linearGradient id="sbL" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%"   stopColor="#7dd3fc" />
-                <stop offset="100%" stopColor="#38bdf8" />
-              </linearGradient>
-              <linearGradient id="sbR" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%"   stopColor="#0284c7" />
-                <stop offset="100%" stopColor="#0369a1" />
-              </linearGradient>
-              <linearGradient id="hg" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%"   stopColor="rgba(20,55,145,0.9)"  />
-                <stop offset="100%" stopColor="rgba(8,25,75,0.95)"   />
-              </linearGradient>
-              <linearGradient id="chartFill" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%"   stopColor="rgba(56,189,248,0.4)" />
-                <stop offset="100%" stopColor="rgba(56,189,248,0)"   />
-              </linearGradient>
-              <filter id="glow"   x="-20%" y="-20%" width="140%" height="140%">
-                <feGaussianBlur stdDeviation="3.5" result="b" />
-                <feComposite in="SourceGraphic" in2="b" operator="over" />
-              </filter>
-              <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
-                <feGaussianBlur stdDeviation="15" />
-              </filter>
-              <filter id="cg" x="-10%" y="-10%" width="120%" height="120%">
-                <feGaussianBlur stdDeviation="2" result="b" />
-                <feComposite in="SourceGraphic" in2="b" operator="over" />
+              <filter id="lineGlow">
+                <feGaussianBlur stdDeviation="1.8" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
               </filter>
             </defs>
-
-            {/* Floor shadow */}
-            <ellipse cx="320" cy="335" rx="192" ry="64" fill="#010a26" opacity="0.72" filter="url(#shadow)" />
-
-            {/* Lower base */}
-            <polygon points="140,295 320,385 320,398 140,308" fill="url(#baseL)" />
-            <polygon points="320,385 500,295 500,308 320,398" fill="url(#baseR)" />
-            <polygon points="320,205 500,295 320,385 140,295" fill="#061a54" />
-
-            {/* Main deck */}
-            <polygon points="152,284 320,368 320,382 152,298" fill="url(#sideL)" />
-            <polygon points="320,368 488,284 488,298 320,382" fill="url(#sideR)" />
-            <path d="M320,200 L488,284 L320,368 L152,284 Z"
-              stroke="url(#deckRim)" strokeWidth="3.5" fill="url(#deckTop)" filter="url(#glow)" />
-            <path d="M320,212 L472,284 L320,356 L168,284 Z"
-              stroke="#38bdf8" strokeWidth="1.1" strokeOpacity="0.42" fill="none" />
-
-            {/* Circuit traces */}
-            <path d="M210,284 L250,304 L250,320 L275,332"
-              stroke="#38bdf8" strokeWidth="1.1" strokeOpacity="0.52" fill="none" />
-            <circle cx="210" cy="284" r="3" fill="#38bdf8" className={styles.glowingNode} />
-            <path d="M430,284 L390,304 L390,324 L365,336"
-              stroke="#38bdf8" strokeWidth="1.1" strokeOpacity="0.52" fill="none" />
-            <circle cx="430" cy="284" r="3" fill="#38bdf8" className={styles.glowingNode} />
-
-            {/* Back-left electric blue pillar */}
-            <polygon points="270,248 246,236 246,164 270,176" fill="url(#ebL)" />
-            <polygon points="270,248 294,236 294,164 270,176" fill="url(#ebR)" />
-            <polygon points="270,176 294,164 270,152 246,164" fill="url(#ebTop)" />
-
-            {/* Back-right sky blue pillar */}
-            <polygon points="370,250 346,238 346,174 370,186" fill="url(#sbL)" />
-            <polygon points="370,250 394,238 394,174 370,186" fill="url(#sbR)" />
-            <polygon points="370,186 394,174 370,162 346,174" fill="url(#sbTop)" />
-
-            {/* Center tallest white pillar */}
-            <polygon points="320,252 350,237 365,245 335,260" fill="rgba(2,10,35,0.38)" />
-            <polygon points="320,252 290,237 290,119 320,134" fill="url(#wL)" />
-            <polygon points="320,252 350,237 350,119 320,134" fill="url(#wR)" />
-            <polygon points="320,134 350,119 320,104 290,119" fill="url(#wTop)" />
-
-            {/* Front-left white pillar */}
-            <polygon points="270,298 244,285 244,237 270,250" fill="url(#wL)" />
-            <polygon points="270,298 296,285 296,237 270,250" fill="url(#wR)" />
-            <polygon points="270,250 296,237 270,224 244,237" fill="url(#wTop)" />
-
-            {/* Front-center royal blue pillar */}
-            <polygon points="320,320 290,305 290,209 320,224" fill="url(#rbL)" />
-            <polygon points="320,320 350,305 350,209 320,224" fill="url(#rbR)" />
-            <polygon points="320,224 350,209 320,194 290,209" fill="url(#rbTop)" />
-
-            {/* Front-right sky blue pillar */}
-            <polygon points="375,295 352,283 352,247 375,259" fill="url(#sbL)" />
-            <polygon points="375,295 398,283 398,247 375,259" fill="url(#sbR)" />
-            <polygon points="375,259 398,247 375,235 352,247" fill="url(#sbTop)" />
-
-            {/* Shield card — left */}
-            <g className={styles.floatA}>
-              <path d="M195,248 L195,274 L225,289"
-                stroke="#38bdf8" strokeWidth="1.1" strokeDasharray="2 2" strokeOpacity="0.6" fill="none" />
-              <circle cx="225" cy="289" r="2.8" fill="#38bdf8" className={styles.glowingNode} />
-              <g transform="translate(158,190)">
-                <rect width="50" height="54" rx="12" fill="#000e38" opacity="0.5" filter="url(#shadow)" />
-                <rect width="50" height="54" rx="12" fill="url(#hg)" stroke="#38bdf8" strokeWidth="1.4" strokeOpacity="0.75" filter="url(#cg)" />
-                <g transform="translate(13,13)">
-                  <path d="M12 2L3 6V12C3 17.5 7 22.5 12 24C17 22.5 21 17.5 21 12V6L12 2Z"
-                    fill="none" stroke="#fff" strokeWidth="1.7" strokeLinejoin="round" />
-                  <circle cx="12" cy="13" r="2.8" fill="#38bdf8" />
-                </g>
-                <rect x="8" y="42" width="34" height="2.5" rx="1.2" fill="#38bdf8" opacity="0.32" />
+            {lines.map((ln, i) => (
+              <g key={i}>
+                {/* Soft glow halo */}
+                <line x1={ln.x1} y1={ln.y1} x2={ln.x2} y2={ln.y2}
+                  stroke="#38BDF8" strokeWidth="4" strokeOpacity="0.14"
+                  strokeLinecap="round" filter="url(#lineGlow)" />
+                {/* Main animated dash */}
+                <line x1={ln.x1} y1={ln.y1} x2={ln.x2} y2={ln.y2}
+                  stroke="#38BDF8" strokeWidth="1.5" strokeOpacity="0.70"
+                  strokeLinecap="round" strokeDasharray="6 5"
+                  className={styles.pulseBeam} />
+                {/* Terminal dot at card end */}
+                <circle cx={ln.x2} cy={ln.y2} r="3.5"
+                  fill="#38BDF8" fillOpacity="0.80" />
               </g>
-            </g>
+            ))}
+          </svg>
 
-            {/* Team badge — back */}
-            <g className={styles.floatB}>
-              <g transform="translate(372,162)">
-                <rect width="48" height="44" rx="11" fill="#000e38" opacity="0.5" filter="url(#shadow)" />
-                <rect width="48" height="44" rx="11" fill="url(#hg)" stroke="#60a5fa" strokeWidth="1.3" strokeOpacity="0.7" filter="url(#cg)" />
-                <g transform="translate(12,10)" stroke="#fff" strokeWidth="1.7" fill="none">
-                  <circle cx="12" cy="7" r="3" />
-                  <path d="M7,19 C7,15.5 9.5,13.5 12,13.5 C14.5,13.5 17,15.5 17,19" />
-                  <circle cx="5.5" cy="8.5" r="2" strokeOpacity="0.7" />
-                  <path d="M2,18 C2,15.5 3.5,14 5.5,14" strokeOpacity="0.7" />
-                  <circle cx="18.5" cy="8.5" r="2" strokeOpacity="0.7" />
-                  <path d="M22,18 C22,15.5 20.5,14 18.5,14" strokeOpacity="0.7" />
-                </g>
-              </g>
-            </g>
-
-            {/* Analytics card — right */}
-            <g className={styles.floatC}>
-              <path d="M452,252 L452,272 L424,286"
-                stroke="#38bdf8" strokeWidth="1.1" strokeDasharray="2 2" strokeOpacity="0.6" fill="none" />
-              <circle cx="424" cy="286" r="2.8" fill="#38bdf8" className={styles.glowingNode} />
-              <g transform="translate(438,150)">
-                <rect width="114" height="100" rx="12" fill="#000e38" opacity="0.56" filter="url(#shadow)" />
-                <rect width="114" height="100" rx="12" fill="url(#hg)" stroke="#38bdf8" strokeWidth="1.4" strokeOpacity="0.72" filter="url(#cg)" />
-                <line x1="10" y1="19" x2="104" y2="19" stroke="#38bdf8" strokeWidth="0.8" strokeOpacity="0.3" />
-                <circle cx="16"  cy="11.5" r="2" fill="#38bdf8" opacity="0.72" />
-                <circle cx="23"  cy="11.5" r="2" fill="#60a5fa" opacity="0.72" />
-                <line x1="32" y1="11.5" x2="62" y2="11.5" stroke="#93c5fd" strokeWidth="1.4" strokeLinecap="round" opacity="0.46" />
-                <polygon points="14,51 30,39 48,47 68,35 88,43 104,31 104,57 14,57" fill="url(#chartFill)" />
-                <polyline points="14,51 30,39 48,47 68,35 88,43 104,31"
-                  stroke="#38bdf8" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                <circle cx="30"  cy="39" r="2.3" fill="#38bdf8" />
-                <circle cx="68"  cy="35" r="2.3" fill="#38bdf8" />
-                <circle cx="104" cy="31" r="2.3" fill="#38bdf8" />
-                <line x1="14" y1="61" x2="104" y2="61" stroke="#38bdf8" strokeWidth="0.6" strokeOpacity="0.2" />
-                <g transform="translate(14,66)">
-                  <rect x="0"  y="16" width="7" height="13" rx="1.5" fill="#38bdf8" opacity="0.78" />
-                  <rect x="13" y="8"  width="7" height="21" rx="1.5" fill="#60a5fa" opacity="0.88" />
-                  <rect x="26" y="12" width="7" height="17" rx="1.5" fill="#38bdf8" opacity="0.82" />
-                  <rect x="39" y="3"  width="7" height="26" rx="1.5" fill="#93c5fd" opacity="0.94" />
-                  <rect x="52" y="10" width="7" height="19" rx="1.5" fill="#60a5fa" opacity="0.82" />
-                  <rect x="65" y="1"  width="7" height="28" rx="1.5" fill="#38bdf8" opacity="0.94" />
-                  <rect x="78" y="14" width="7" height="15" rx="1.5" fill="#60a5fa" opacity="0.78" />
-                </g>
-              </g>
+          {/* Hub SVG */}
+          <svg className={styles.hubSvg} viewBox="0 0 240 200"
+            fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <defs>
+              <radialGradient id="hubGlow2" cx="50%" cy="50%" r="50%">
+                <stop offset="0%"   stopColor="#38BDF8" stopOpacity="0.45" />
+                <stop offset="60%"  stopColor="#2563EB" stopOpacity="0.20" />
+                <stop offset="100%" stopColor="#2563EB" stopOpacity="0" />
+              </radialGradient>
+              <linearGradient id="pedTop2" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%"   stopColor="#1E40AF" />
+                <stop offset="55%"  stopColor="#0D1D5C" />
+                <stop offset="100%" stopColor="#070E2E" />
+              </linearGradient>
+              <linearGradient id="pedLeft2" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%"   stopColor="#2563EB" />
+                <stop offset="100%" stopColor="#050B28" />
+              </linearGradient>
+              <linearGradient id="pedRight2" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%"   stopColor="#1D4ED8" />
+                <stop offset="100%" stopColor="#030820" />
+              </linearGradient>
+              <linearGradient id="horizGrad2" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%"   stopColor="#2563EB" stopOpacity="0" />
+                <stop offset="35%"  stopColor="#38BDF8" stopOpacity="0.5" />
+                <stop offset="50%"  stopColor="#7DD3FC" stopOpacity="0.9" />
+                <stop offset="65%"  stopColor="#38BDF8" stopOpacity="0.5" />
+                <stop offset="100%" stopColor="#2563EB" stopOpacity="0" />
+              </linearGradient>
+              <filter id="pedGlow2" x="-30%" y="-30%" width="160%" height="160%">
+                <feGaussianBlur stdDeviation="4" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              </filter>
+            </defs>
+            <path d="M 0 130 Q 120 95 240 130" stroke="url(#horizGrad2)" strokeWidth="2" fill="none" />
+            <ellipse cx="120" cy="125" rx="85" ry="36" fill="url(#hubGlow2)" />
+            <ellipse cx="120" cy="132" rx="55" ry="20" fill="#020817" opacity="0.85" />
+            <polygon points="60,125 120,155 180,125 120,95"  fill="#07112A" stroke="#1E3A8A" strokeWidth="1" />
+            <polygon points="60,125 120,155 120,165 60,135"  fill="#04091C" />
+            <polygon points="120,155 180,125 180,135 120,165" fill="#030716" />
+            <polygon points="70,115 120,142 170,115 120,88"
+              fill="url(#pedTop2)" stroke="#38BDF8" strokeWidth="2.5" filter="url(#pedGlow2)" />
+            <polygon points="70,115 120,142 120,151 70,124" fill="url(#pedLeft2)" />
+            <polygon points="120,142 170,115 170,124 120,151" fill="url(#pedRight2)" />
+            <polygon points="85,115 120,133 155,115 120,97" fill="#1E3A8A" stroke="#60A5FA" strokeWidth="1.4" />
+            <g transform="translate(103,90)">
+              <polygon points="17,2 30,9 30,23 17,30 4,23 4,9"
+                fill="#071030" stroke="#38BDF8" strokeWidth="2" filter="url(#pedGlow2)" />
+              <path d="M17,2 L17,16 M30,9 L17,16 M4,9 L17,16 M17,16 L17,30" stroke="#60A5FA" strokeWidth="1.2" />
+              <polygon points="17,7 24,11 24,21 17,25 10,21 10,11" fill="#fff" opacity="0.95" />
+              <path d="M17,7 L17,16 M24,11 L17,16 M10,11 L17,16 M17,16 L17,25" stroke="#1D4ED8" strokeWidth="1.2" />
             </g>
           </svg>
+
+          {/* Invisible hub centre anchor */}
+          <div ref={hubRef} className={styles.hubAnchor} aria-hidden="true" />
+
+          {/* ── Auto-positioned App Cards ── */}
+          {APPS.map((app, i) => {
+            const color = COLOR_PALETTE[i % COLOR_PALETTE.length]
+            return (
+              <div
+                key={app.id}
+                ref={(el) => {
+                  if (el) cardRefs.current.set(app.id, el)
+                  else    cardRefs.current.delete(app.id)
+                }}
+                className={styles.appCard}
+                style={getCardStyle(i, APPS.length)}
+              >
+                {/* Icon box — color injected via CSS vars, no class per app */}
+                <div
+                  className={styles.cardIconBox}
+                  style={{
+                    ['--icon-bg'     as string]: color.bg,
+                    ['--icon-shadow' as string]: color.shadow,
+                  }}
+                >
+                  {app.icon}
+                </div>
+                <span className={styles.cardLabel}>
+                  {app.label.map((line, li) => (
+                    <span key={li}>{line}{li < app.label.length - 1 && <br />}</span>
+                  ))}
+                </span>
+                <span className={styles.statusDot} aria-label="Active" />
+              </div>
+            )
+          })}
         </div>
 
-      </div>{/* heroContent */}
-
-      {/* Footer */}
-      <footer className={styles.footer}>
-        <span>© {COPYRIGHT_YEAR} {APP_NAME} · All rights reserved</span>
-        <div className={styles.footerLinks}>
-          <a href="#" className={styles.footerLink}>Privacy</a>
-          <a href="#" className={styles.footerLink}>Terms</a>
+        {/* ── Feature Strip ── */}
+        <div className={styles.featureStrip}>
+          {[
+            { Icon: Icon.ShieldCheck, title: 'Enterprise Security', sub: '256-bit TLS encryption' },
+            { Icon: Icon.Lock,        title: 'Role-Based Access',    sub: 'Granular permissions'   },
+            { Icon: Icon.FileText,    title: 'Audit Trails',         sub: 'Full activity log'       },
+            { Icon: Icon.ShieldCheck, title: 'Compliance & Controls', sub: 'Governance & access controls'     },
+          ].map(({ Icon: Ic, title, sub }) => (
+            <div key={title} className={styles.featureItem}>
+              <div className={styles.featureIconWrap}><Ic width={16} height={16} /></div>
+              <div className={styles.featureTextCol}>
+                <span className={styles.featureTitle}>{title}</span>
+                <span className={styles.featureSub}>{sub}</span>
+              </div>
+            </div>
+          ))}
         </div>
-      </footer>
 
+        <footer className={styles.heroFooter}>
+          © 2026 {APP_NAME}. All rights reserved.
+        </footer>
+      </div>
     </div>
   )
 }
