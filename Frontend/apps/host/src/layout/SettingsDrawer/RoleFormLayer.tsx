@@ -134,6 +134,16 @@ export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
     [catalog, remoteApps],
   )
 
+  /*
+   * A feature with no matching `app` record is a deleted/orphaned remote app whose PermissionFeature
+   * row is stale in AuthService's catalog (pending a resync) — same reasoning as UserFormLayer's
+   * accordion filter. Must never be shown as assignable, whether it's gone entirely or just Disabled.
+   */
+  const visibleAppGroups = useMemo(
+    () => appGroups.filter(({ app }) => app && app.status !== 'Disabled'),
+    [appGroups],
+  )
+
   // Capability checking helpers
   const isGranted = (featureKey: string, capability: string) => {
     if (isAdministrator) return true
@@ -378,8 +388,8 @@ export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
           onClick={() => setActiveTab('apps')}
         >
           <span>Application Access</span>
-          {appGroups.length > 0 && (
-            <span className={styles.tabBadge}>{appGroups.length}</span>
+          {visibleAppGroups.length > 0 && (
+            <span className={styles.tabBadge}>{visibleAppGroups.length}</span>
           )}
         </button>
         )}
@@ -544,14 +554,14 @@ export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
               </div>
 
               <div className={styles.accordionList}>
-                {appGroups.length === 0 && (
+                {visibleAppGroups.length === 0 && (
                   <p className={styles.sectionHint}>
                     No registered application has declared any permissions yet. Set a Permissions
                     Source URL on an application and resync it to populate this tab.
                   </p>
                 )}
 
-                {appGroups.map(({ feature, rows, columns, app }) => {
+                {visibleAppGroups.map(({ feature, rows, columns, app }) => {
                   const isExpanded = Boolean(expandedApps[feature.key])
                   const AppIcon = resolveIcon(app?.iconKey)
                   const grantedCount = permissions.filter((p) =>

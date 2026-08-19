@@ -844,9 +844,14 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
                     </div>
                   )}
 
-                  {/* Remote Apps Accordions — rows and columns come from the catalog */}
+                  {/* Remote Apps Accordions — rows and columns come from the catalog. A feature with
+                      no matching `app` record is a deleted/orphaned remote app whose PermissionFeature
+                      row is stale in AuthService's catalog (pending a resync) — it must never be
+                      assignable, so `!app` has to be EXCLUDED here, not kept. The previous condition
+                      (`!app || app.status !== 'Disabled'`) had this backwards: it kept every deleted
+                      app's permissions while only correctly hiding ones still registered but Disabled. */}
                   {appGroups
-                    .filter(({ app }) => !app || app.status !== 'Disabled')
+                    .filter(({ app }) => app && app.status !== 'Disabled')
                     .filter(
                       ({ feature }) =>
                         !permSearch ||
