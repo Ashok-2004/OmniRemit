@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   Layers,
   Building2,
-  Share2,
   Calendar,
   CreditCard,
   Phone,
@@ -21,7 +20,6 @@ interface LeadFilterPopoverProps {
 const TABS: { id: FilterCriterion; label: string; icon: React.ReactNode }[] = [
   { id: 'product', label: 'Product', icon: <Layers size={16} /> },
   { id: 'branch', label: 'Branch', icon: <Building2 size={16} /> },
-  { id: 'leadSource', label: 'Lead Source', icon: <Share2 size={16} /> },
   { id: 'createdFrom', label: 'Created From', icon: <Calendar size={16} /> },
   { id: 'createdTo', label: 'Created To', icon: <Calendar size={16} /> },
   { id: 'icNumber', label: 'IC Number', icon: <CreditCard size={16} /> },
@@ -30,24 +28,14 @@ const TABS: { id: FilterCriterion; label: string; icon: React.ReactNode }[] = [
   { id: 'status', label: 'Status', icon: <Flag size={16} /> },
 ];
 
+// Fallback shown only for the brief window before the real product list has loaded from the API.
+// This used to list 8 products, 5 of which don't exist in LeadService's product catalog at all
+// (Backend/LeadService/Data/ApplicationDbContext.cs only seeds ASB Financing, Home Financing, and
+// Micro Finance) — trimmed to match what the backend actually has.
 const DEFAULT_PRODUCTS = [
   'Home Financing',
   'ASB Financing',
   'Micro Finance',
-  'Personal Loan',
-  'Auto Financing',
-  'Credit Card',
-  'Business Loan',
-  'Other Financing',
-];
-
-const LEAD_SOURCES = [
-  'Website Direct',
-  'Branch Walk-in',
-  'Sales Referral',
-  'Partner Portal',
-  'Marketing Campaign',
-  'Social Media',
 ];
 
 const STATUSES = ['New', 'Contacted', 'In Progress', 'Qualified', 'Converted', 'Closed'];
@@ -134,9 +122,6 @@ export const LeadFilterPopover: React.FC<LeadFilterPopoverProps> = ({ isOpen, on
   // Get master branch list
   const allBranches = branches.map((b) => b.label);
   const filteredBranches = allBranches.filter((b) => b.toLowerCase().includes(currentSearch.toLowerCase()));
-
-  // Get lead sources
-  const filteredSources = LEAD_SOURCES.filter((s) => s.toLowerCase().includes(currentSearch.toLowerCase()));
 
   // Get statuses
   const filteredStatuses = STATUSES.filter((s) => s.toLowerCase().includes(currentSearch.toLowerCase()));
@@ -382,66 +367,6 @@ export const LeadFilterPopover: React.FC<LeadFilterPopoverProps> = ({ isOpen, on
                     No branches found.
                   </div>
                 )}
-              </div>
-            </div>
-          )}
-
-          {/* Tab 3: Lead Source */}
-          {activeTab === 'leadSource' && (
-            <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-              <div style={{ position: 'relative', marginBottom: '14px' }}>
-                <Search size={15} color="#94a3b8" style={{ position: 'absolute', left: '10px', top: '10px' }} />
-                <input
-                  type="text"
-                  placeholder="Search lead source..."
-                  value={currentSearch}
-                  onChange={(e) => handleSearchChange('leadSource', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px 10px 8px 32px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '13px',
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', overflowY: 'auto', flex: 1, paddingRight: '4px' }}>
-                {filteredSources.map((s) => {
-                  const selectedList = getRuleValue('leadSource').split(',').map((item) => item.trim());
-                  const checked = selectedList.includes(s);
-
-                  return (
-                    <label
-                      key={s}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
-                        fontSize: '13px',
-                        color: '#334155',
-                        cursor: 'pointer',
-                        fontWeight: checked ? 600 : 400,
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleMultiValue('leadSource', s)}
-                        style={{
-                          width: '16px',
-                          height: '16px',
-                          borderRadius: '4px',
-                          accentColor: '#2563eb',
-                          cursor: 'pointer',
-                        }}
-                      />
-                      <span>{s}</span>
-                    </label>
-                  );
-                })}
               </div>
             </div>
           )}

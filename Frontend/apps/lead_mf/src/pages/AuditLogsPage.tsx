@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { ShieldCheck, Search, RefreshCw, Eye, Download, X } from 'lucide-react';
+import { ShieldCheck, Search, RefreshCw, Eye, Download, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useLeadStore } from '../store/useLeadStore';
 import { AuditDetailsDrawer } from '../components/audit/AuditDetailsDrawer';
 
@@ -13,7 +13,18 @@ export const AuditLogsPage: React.FC = () => {
     openAuditDetails,
     setAuditSearchQuery,
     setAuditActionFilter,
+    // Pagination — this state and the fetchAuditLogs page/pageSize wiring already existed in the
+    // store; only the UI to drive it was missing, so only the first page (10 rows) of audit history
+    // was ever reachable no matter how much existed.
+    auditPage,
+    auditPageSize,
+    totalAuditRecords,
+    setAuditPage,
   } = useLeadStore();
+
+  const totalAuditPages = Math.max(1, Math.ceil(totalAuditRecords / auditPageSize));
+  const auditStartIndex = totalAuditRecords > 0 ? (auditPage - 1) * auditPageSize + 1 : 0;
+  const auditEndIndex = Math.min(auditPage * auditPageSize, totalAuditRecords);
 
   useEffect(() => {
     fetchAuditLogs();
@@ -69,6 +80,20 @@ export const AuditLogsPage: React.FC = () => {
     }
   };
 
+  // The table used to render the raw backend action code (CREATE/EDIT/DELETE/VIEW) verbatim, even
+  // though the filter dropdown's own options were already humanized ("Create Events", etc.) — this
+  // brings the table in line with that.
+  const getActionLabel = (action: string): string => {
+    switch (action.toLowerCase()) {
+      case 'create': return 'Created';
+      case 'edit':
+      case 'update': return 'Updated';
+      case 'delete': return 'Deleted';
+      case 'view': return 'Viewed';
+      default: return action;
+    }
+  };
+
   const formatTimestamp = (ts: string) => {
     try {
       const date = new Date(ts);
@@ -111,30 +136,30 @@ export const AuditLogsPage: React.FC = () => {
           position: 'relative',
           overflow: 'hidden',
           background: 'linear-gradient(120deg, #1e40af 0%, #2563eb 45%, #3b82f6 100%)',
-          boxShadow: '0 4px 20px rgba(37, 99, 235, 0.22), 0 1px 4px rgba(37, 99, 235, 0.12)',
+          boxShadow: '0 4px 20px rgba(37, 99, 235, 0.25), 0 1px 4px rgba(37, 99, 235, 0.15)',
           boxSizing: 'border-box',
         }}
       >
-        {/* Background decorative glass circles */}
+        {/* Background decorative glass circles — matching host's exact sizes/offsets/opacity */}
         <div
           style={{
             position: 'absolute',
-            top: '-40px',
-            right: '-40px',
-            width: '180px',
-            height: '180px',
+            top: '-50px',
+            right: '-50px',
+            width: '220px',
+            height: '220px',
             borderRadius: '50%',
-            background: 'rgba(255, 255, 255, 0.08)',
+            background: 'rgba(255, 255, 255, 0.07)',
             pointerEvents: 'none',
           }}
         />
         <div
           style={{
             position: 'absolute',
-            bottom: '-50px',
+            bottom: '-60px',
             right: '120px',
-            width: '130px',
-            height: '130px',
+            width: '160px',
+            height: '160px',
             borderRadius: '50%',
             background: 'rgba(255, 255, 255, 0.05)',
             pointerEvents: 'none',
@@ -478,7 +503,7 @@ export const AuditLogsPage: React.FC = () => {
                               background: badge.dot,
                             }}
                           />
-                          {log.actionType.toUpperCase()}
+                          {getActionLabel(log.actionType)}
                         </span>
                       </td>
 
@@ -504,7 +529,11 @@ export const AuditLogsPage: React.FC = () => {
                           style={{
                             fontSize: '11.5px',
                             fontWeight: 600,
-                            color: log.status === 'SUCCESS' ? '#16a34a' : '#dc2626',
+                            // The backend only ever writes "Success" (capitalized, not all-caps) —
+                            // LeadService has no failure-audit path yet — so a strict === 'SUCCESS'
+                            // comparison never matched anything and every row rendered red/danger
+                            // regardless of outcome. Compare case-insensitively instead.
+                            color: log.status?.toUpperCase() === 'SUCCESS' ? '#16a34a' : '#dc2626',
                           }}
                         >
                           {log.status}
@@ -550,6 +579,79 @@ export const AuditLogsPage: React.FC = () => {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Pagination — same pattern as ViewLeadPage.tsx's working footer, wired to the
+            auditPage/auditPageSize/totalAuditRecords state that already existed in the store. */}
+        {totalAuditRecords > 0 && (
+          <div
+            style={{
+              padding: '14px 20px',
+              borderTop: '1px solid #eaecf0',
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+              background: '#f8fafc',
+              fontSize: '13px',
+              color: '#64748b',
+            }}
+          >
+            <div>
+              Showing <strong style={{ color: '#0f172a' }}>{auditStartIndex}</strong> to{' '}
+              <strong style={{ color: '#0f172a' }}>{auditEndIndex}</strong> of{' '}
+              <strong style={{ color: '#0f172a' }}>{totalAuditRecords}</strong> events
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <button
+                type="button"
+                disabled={auditPage <= 1}
+                onClick={() => setAuditPage(auditPage - 1)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  border: '1.5px solid #e2e8f0',
+                  background: '#ffffff',
+                  color: '#0f172a',
+                  cursor: auditPage <= 1 ? 'not-allowed' : 'pointer',
+                  opacity: auditPage <= 1 ? 0.4 : 1,
+                  transition: 'all 0.12s ease',
+                }}
+              >
+                <ChevronLeft size={14} />
+              </button>
+              <span style={{ fontWeight: 600, color: '#0f172a', padding: '0 4px' }}>
+                {auditPage} / {totalAuditPages}
+              </span>
+              <button
+                type="button"
+                disabled={auditPage >= totalAuditPages}
+                onClick={() => setAuditPage(auditPage + 1)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  border: '1.5px solid #e2e8f0',
+                  background: '#ffffff',
+                  color: '#0f172a',
+                  cursor: auditPage >= totalAuditPages ? 'not-allowed' : 'pointer',
+                  opacity: auditPage >= totalAuditPages ? 0.4 : 1,
+                  transition: 'all 0.12s ease',
+                }}
+              >
+                <ChevronRight size={14} />
+              </button>
+            </div>
           </div>
         )}
       </div>

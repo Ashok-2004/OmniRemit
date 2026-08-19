@@ -239,7 +239,6 @@ export const apiClient = {
     icNumber?: string;
     phone?: string;
     status?: string;
-    leadSource?: string;
   }): Promise<PagedResult<LeadRecord>> => {
     try {
       const query = new URLSearchParams();
@@ -258,7 +257,6 @@ export const apiClient = {
       if (params.icNumber) query.append('icNumber', params.icNumber);
       if (params.phone) query.append('phone', params.phone);
       if (params.status) query.append('status', params.status);
-      if (params.leadSource) query.append('leadSource', params.leadSource);
 
       const res = await fetchWithAuth(`${API_BASE_URL}/api/leads?${query.toString()}`);
       if (!res.ok) {

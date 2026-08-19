@@ -78,13 +78,19 @@ export const HostSidebarLeadNav: React.FC = () => {
       if (byHref) return byHref;
 
       const allLinks = Array.from(document.querySelectorAll<HTMLAnchorElement>('aside nav a, aside a'));
-      return allLinks.find((el) => el.textContent?.toLowerCase().includes('lead management')) || null;
+      return (
+        allLinks.find((el) => {
+          const text = (el.textContent || '').toLowerCase();
+          return text.includes('lead management') || text.includes('lead');
+        }) || null
+      );
     };
 
-    let container = document.getElementById('lead-host-sidebar-subnav');
-    const leadLink = findLeadLink();
+    const attachToSidebar = (): boolean => {
+      const leadLink = findLeadLink();
+      if (!leadLink) return false;
 
-    if (leadLink) {
+      let container = document.getElementById('lead-host-sidebar-subnav');
       if (!container) {
         container = document.createElement('div');
         container.id = 'lead-host-sidebar-subnav';
@@ -139,6 +145,36 @@ export const HostSidebarLeadNav: React.FC = () => {
 
       chevronBtnRef.current = chevronBtn;
       setPortalTarget(container);
+      return true;
+    };
+
+    // Immediate attempt
+    if (!attachToSidebar()) {
+      // Retry for up to 4 seconds in case the host sidebar's app list is still loading
+      // asynchronously from ModuleRegistry when this remote mounts — without this, a slightly slow
+      // host sidebar meant this sub-menu silently never appeared, with no recovery (matches the fix
+      // already applied to customer360_mf's equivalent component).
+      const intervalId = setInterval(() => {
+        if (attachToSidebar()) {
+          clearInterval(intervalId);
+        }
+      }, 150);
+
+      const timeoutId = setTimeout(() => {
+        clearInterval(intervalId);
+      }, 4000);
+
+      return () => {
+        clearInterval(intervalId);
+        clearTimeout(timeoutId);
+        const existingContainer = document.getElementById('lead-host-sidebar-subnav');
+        if (existingContainer?.parentNode) {
+          existingContainer.parentNode.removeChild(existingContainer);
+        }
+        if (chevronBtnRef.current?.parentNode) {
+          chevronBtnRef.current.parentNode.removeChild(chevronBtnRef.current);
+        }
+      };
     }
 
     return () => {

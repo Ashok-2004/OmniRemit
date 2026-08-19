@@ -4,14 +4,32 @@ import { TimeRangeFilterDropdown } from './TimeRangeFilterDropdown';
 import { useLeadStore } from '../../store/useLeadStore';
 import { canCreateLead } from '../../api/hostBridge';
 
+// Exact clone of the host's own hero-banner breakpoint, so this collapses the same way the
+// dashboard it's embedded in does (see Frontend/apps/host/src/pages/DashboardPage/DashboardPage.module.css
+// .heroCard media query at 768px) rather than just overflowing on narrow screens.
+const RESPONSIVE_CSS = `
+@media (max-width: 768px) {
+  .lead-hero-banner {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    padding: 22px 22px !important;
+    gap: 14px !important;
+  }
+}
+`;
+
 export const DashboardHeader: React.FC = () => {
   const { setActivePage } = useLeadStore();
   const userCanCreate = canCreateLead();
 
   return (
     <div style={{ marginBottom: '0' }}>
-      {/* Lead Management Hero Banner */}
+      <style>{RESPONSIVE_CSS}</style>
+      {/* Lead Management Hero Banner — same gradient, shadow, and decorative-circle spec as the
+          host's own DashboardPage.module.css .heroCard, so this remote's banner isn't a slightly
+          different one-off. */}
       <div
+        className="lead-hero-banner"
         style={{
           borderRadius: '18px',
           padding: '28px 34px',
@@ -22,30 +40,30 @@ export const DashboardHeader: React.FC = () => {
           position: 'relative',
           overflow: 'hidden',
           background: 'linear-gradient(120deg, #1e40af 0%, #2563eb 45%, #3b82f6 100%)',
-          boxShadow: '0 4px 20px rgba(37, 99, 235, 0.22), 0 1px 4px rgba(37, 99, 235, 0.12)',
+          boxShadow: '0 4px 20px rgba(37, 99, 235, 0.25), 0 1px 4px rgba(37, 99, 235, 0.15)',
           boxSizing: 'border-box',
         }}
       >
-        {/* Background decorative glass circles */}
+        {/* Background decorative glass circles — matching host's exact sizes/offsets/opacity */}
         <div
           style={{
             position: 'absolute',
-            top: '-40px',
-            right: '-40px',
-            width: '180px',
-            height: '180px',
+            top: '-50px',
+            right: '-50px',
+            width: '220px',
+            height: '220px',
             borderRadius: '50%',
-            background: 'rgba(255, 255, 255, 0.08)',
+            background: 'rgba(255, 255, 255, 0.07)',
             pointerEvents: 'none',
           }}
         />
         <div
           style={{
             position: 'absolute',
-            bottom: '-50px',
+            bottom: '-60px',
             right: '120px',
-            width: '130px',
-            height: '130px',
+            width: '160px',
+            height: '160px',
             borderRadius: '50%',
             background: 'rgba(255, 255, 255, 0.05)',
             pointerEvents: 'none',

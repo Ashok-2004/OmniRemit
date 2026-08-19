@@ -6,7 +6,6 @@ import {
   TimeSeriesPoint,
   ProductDistribution,
   BranchDistribution,
-  TopSalesExecutive,
   DashboardFilterParams,
 } from '../api/apiClient';
 
@@ -106,7 +105,6 @@ interface LeadStoreState {
   leadsByProduct: ProductDistribution[];
   leadsByBranch: BranchDistribution[];
   recentLeads: LeadRecord[];
-  topSalesExecutives: TopSalesExecutive[];
   isLoadingDashboard: boolean;
 
   setDashboardDatePreset: (preset: string) => void;
@@ -657,7 +655,6 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
       let icNumber = '';
       let phone = '';
       let status = '';
-      let leadSource = '';
 
       state.filterRules.forEach((rule) => {
         if (!rule.value || !rule.value.trim()) return;
@@ -698,9 +695,6 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
           case 'status':
             status = rule.value;
             break;
-          case 'leadSource':
-            leadSource = rule.value;
-            break;
         }
       });
 
@@ -720,7 +714,6 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
         icNumber,
         phone,
         status,
-        leadSource,
       });
 
       set({
@@ -749,7 +742,6 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
   leadsByProduct: [],
   leadsByBranch: [],
   recentLeads: [],
-  topSalesExecutives: [],
   isLoadingDashboard: false,
 
   setDashboardDatePreset: (preset) => {
@@ -862,14 +854,13 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
         granularity: s.dashboardGranularity,
       };
 
-      const [kpiSummary, leadsOverTime, leadsByProduct, leadsByBranch, recentLeads, topSalesExecutives] =
+      const [kpiSummary, leadsOverTime, leadsByProduct, leadsByBranch, recentLeads] =
         await Promise.all([
           apiClient.getDashboardKpis(params),
           apiClient.getLeadsOverTime(params),
           apiClient.getLeadsByProduct(params),
           apiClient.getLeadsByBranch(params),
           apiClient.getRecentLeads(params, 5),
-          apiClient.getTopSalesExecutives(params, 5),
         ]);
 
       set({
@@ -878,7 +869,6 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
         leadsByProduct,
         leadsByBranch,
         recentLeads,
-        topSalesExecutives,
         isLoadingDashboard: false,
       });
     } catch (err) {
@@ -889,7 +879,6 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
         leadsByProduct: [],
         leadsByBranch: [],
         recentLeads: [],
-        topSalesExecutives: [],
         isLoadingDashboard: false,
       });
     }

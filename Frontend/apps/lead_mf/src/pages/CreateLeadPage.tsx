@@ -9,7 +9,10 @@ export const CreateLeadPage: React.FC = () => {
         display: 'flex',
         flexDirection: 'column',
         gap: '22px',
-        maxWidth: '900px',
+        // Was 900px — every other page in this app (Dashboard, View Lead, Audit Logs) and the host
+        // itself cap at 1340px, so this page's content was visibly narrower than the rest of the app
+        // for no reason.
+        maxWidth: '1340px',
         width: '100%',
         paddingBottom: '40px',
         fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",

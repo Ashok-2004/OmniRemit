@@ -5,7 +5,6 @@ import { KpiCardSection } from '../components/dashboard/KpiCardSection';
 import { LeadsOverTimeCard } from '../components/dashboard/LeadsOverTimeCard';
 import { LeadsByProductCard } from '../components/dashboard/LeadsByProductCard';
 import { LeadsByBranchCard } from '../components/dashboard/LeadsByBranchCard';
-import { TopSalesExecutivesCard } from '../components/dashboard/TopSalesExecutivesCard';
 import { RecentLeadsCard } from '../components/dashboard/RecentLeadsCard';
 import { LeadDetailsDrawer } from '../components/lead/LeadDetailsDrawer';
 
@@ -50,16 +49,16 @@ export const DashboardPage: React.FC = () => {
         <LeadsByProductCard />
       </div>
 
-      {/* Row 2: Branch Distribution (Left) & Top Sales Executives (Right) */}
+      {/* Row 2: Branch Distribution — Top Sales Executives removed, so this is a single column now
+          rather than leaving an empty gap where it used to sit. */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
+          gridTemplateColumns: '1fr',
           gap: '20px',
         }}
       >
         <LeadsByBranchCard />
-        <TopSalesExecutivesCard />
       </div>
 
       {/* Row 3: Recent Leads — full width */}

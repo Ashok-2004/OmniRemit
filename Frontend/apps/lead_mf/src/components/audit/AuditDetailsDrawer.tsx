@@ -30,13 +30,24 @@ export const AuditDetailsDrawer: React.FC = () => {
     }
   };
 
+  // Same raw-code-vs-readable-label gap already fixed on the table this drawer opens from.
+  const getActionLabel = (action: string): string => {
+    switch (action.toLowerCase()) {
+      case 'create': return 'Created';
+      case 'edit':
+      case 'update': return 'Updated';
+      case 'delete': return 'Deleted';
+      case 'view': return 'Viewed';
+      default: return action;
+    }
+  };
+
   const badgeStyle = getActionBadgeColor(selectedAuditLog.actionType);
 
   return (
     <div className="drawer-overlay" style={{ zIndex: 1200 }} onClick={closeAuditDetails}>
       <div
         className="create-lead-drawer"
-        style={{ maxWidth: '640px' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="drawer-header-blue">
@@ -72,7 +83,7 @@ export const AuditDetailsDrawer: React.FC = () => {
                   textTransform: 'uppercase',
                 }}
               >
-                {selectedAuditLog.actionType} ACTION
+                {getActionLabel(selectedAuditLog.actionType)} Action
               </span>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#64748b' }}>
                 <Clock size={15} />
@@ -152,17 +163,6 @@ export const AuditDetailsDrawer: React.FC = () => {
               </div>
             </div>
           )}
-        </div>
-
-        <div className="drawer-footer" style={{ padding: '16px 24px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', background: '#f8fafc' }}>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={closeAuditDetails}
-            style={{ padding: '9px 20px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontWeight: 500, cursor: 'pointer' }}
-          >
-            Close
-          </button>
         </div>
       </div>
     </div>

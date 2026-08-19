@@ -43,6 +43,21 @@ const ACCENT_BARS_CSS = `
   box-shadow: 0 6px 20px rgba(15, 23, 42, 0.08);
   transform: translateY(-1px);
 }
+
+/* Same breakpoints as the host's own .statCardsGrid (DashboardPage.module.css) — this grid had no
+   responsive handling at all before, so 5 cards would just squeeze themselves illegibly narrow on
+   tablet/mobile instead of wrapping the way the host's stat grid does. */
+@media (max-width: 1100px) {
+  .kpi-card-grid { grid-template-columns: repeat(2, 1fr) !important; }
+}
+@media (max-width: 600px) {
+  .kpi-card-grid { grid-template-columns: 1fr !important; }
+}
+@media (max-width: 480px) {
+  .kpi-card-grid { gap: 10px !important; }
+  .kpi-card { padding: 14px 16px 12px; }
+  .kpi-card .kpi-value { font-size: 24px !important; }
+}
 `;
 
 const KPI_CONFIG = [
@@ -55,7 +70,7 @@ const KPI_CONFIG = [
     key: 'totalLeads' as const,
   },
   {
-    title: 'System Roles',
+    title: 'New Leads',
     subtitle: 'New entries',
     icon: <UserPlus size={20} />,
     iconWrapClass: 'iconWrapPurple',
@@ -106,6 +121,7 @@ export const KpiCardSection: React.FC = () => {
       <style>{ACCENT_BARS_CSS}</style>
 
       <div
+        className="kpi-card-grid"
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(5, 1fr)',
@@ -158,6 +174,7 @@ export const KpiCardSection: React.FC = () => {
               {/* Metric Value */}
               <div style={{ display: 'flex', alignItems: 'baseline' }}>
                 <span
+                  className="kpi-value"
                   style={{
                     fontSize: '28px',
                     fontWeight: 800,

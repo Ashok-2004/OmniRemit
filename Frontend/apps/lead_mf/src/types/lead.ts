@@ -76,7 +76,6 @@ export interface LeadRecord {
 export type FilterCriterion =
   | 'product'
   | 'branch'
-  | 'leadSource'
   | 'createdFrom'
   | 'createdTo'
   | 'icNumber'
