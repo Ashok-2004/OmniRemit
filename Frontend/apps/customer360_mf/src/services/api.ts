@@ -13,6 +13,8 @@ import type {
   WillWritingProduct,
   LookupOptions,
   AuditLog,
+  FieldConfig,
+  FieldConfigProfileType,
 } from '../types/api';
 import { getAccessToken, ensureFreshAccessToken, getCurrentUser, isRunningInHost } from '../api/hostBridge';
 
@@ -110,6 +112,19 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 export const api = {
   // Search dropdown options config
   getSearchOptions: (): Promise<ApiEnvelope<LookupOptions>> => request('/v1/lookups'),
+
+  // Field-visibility/masking config the detail pages render from — see FieldConfig.cs
+  getFieldConfig: (profileType: FieldConfigProfileType): Promise<ApiEnvelope<FieldConfig[]>> =>
+    request(`/v1/field-config/${profileType.toLowerCase()}`),
+
+  updateFieldConfig: (
+    profileType: FieldConfigProfileType,
+    fields: FieldConfig[]
+  ): Promise<ApiEnvelope<FieldConfig[]>> =>
+    request(`/v1/field-config/${profileType.toLowerCase()}`, {
+      method: 'PUT',
+      body: JSON.stringify(fields),
+    }),
 
   // Individual profile
   getIndividualProfile: (

@@ -26,7 +26,7 @@ namespace backend.Controllers
         // POST /v1/audit
         [HttpPost("audit")]
         [HttpPost("auditlog")]
-        public IActionResult CreateAuditLog([FromBody] AuditLogInput input)
+        public async Task<IActionResult> CreateAuditLog([FromBody] AuditLogInput input)
         {
             var staffUser = GetAuthenticatedUser();
 
@@ -43,7 +43,7 @@ namespace backend.Controllers
                 Timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
             };
 
-            _auditRepository.Add(auditLog);
+            await _auditRepository.AddAsync(auditLog);
 
             return Ok(new
             {
@@ -55,14 +55,13 @@ namespace backend.Controllers
         // GET /v1/audit
         [HttpGet("audit")]
         [HttpGet("auditlog")]
-        public IActionResult GetAuditLogs(
+        public async Task<IActionResult> GetAuditLogs(
             [FromQuery] string? search,
             [FromQuery] string? action,
             [FromQuery] int pageNumber = 1,
             [FromQuery] int pageSize = 10)
         {
-            int totalCount;
-            var logs = _auditRepository.Get(search, action, pageNumber, pageSize, out totalCount);
+            var (logs, totalCount) = await _auditRepository.GetAsync(search, action, pageNumber, pageSize);
             int totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
             if (totalPages < 1) totalPages = 1;
 

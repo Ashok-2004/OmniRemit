@@ -6,6 +6,7 @@ import Customer360 from '../../pages/Customer360';
 import AllProducts from '../../pages/AllProducts';
 import AllInteractions from '../../pages/AllInteractions';
 import AuditLogs from '../../pages/AuditLogs';
+import FieldSettings from '../../pages/FieldSettings';
 
 export const MainLayout: React.FC = () => {
   const { activePage } = useNavigationStore();
@@ -35,6 +36,8 @@ export const MainLayout: React.FC = () => {
         return <AllInteractions />;
       case 'audit-logs':
         return <AuditLogs />;
+      case 'field-settings':
+        return <FieldSettings />;
       default:
         return <Customer360 />;
     }

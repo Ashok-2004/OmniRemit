@@ -436,3 +436,33 @@ export interface AuditLog {
   customerId?: string;
   field?: string;
 }
+
+/** Mirrors Backend/Customer360Service/Models/FieldConfig.cs's ProfileType exactly. */
+export type FieldConfigProfileType = 'Individual' | 'Corporate';
+
+/** Mirrors Backend/Customer360Service/Models/FieldConfig.cs's MaskingRule exactly. */
+export type MaskingRule =
+  | 'None'
+  | 'HideFirstShowLast'
+  | 'HideLastShowFirst'
+  | 'HideMiddleShowFirstAndLast'
+  | 'FullMask';
+
+/**
+ * One row of GET/PUT /v1/field-config/{individual|corporate} — the admin-configurable rule the
+ * Customer 360 detail pages render a single profile field from. See FieldConfig.cs for the
+ * authoritative field-by-field documentation (in particular what the "contact." ApiField prefix
+ * means).
+ */
+export interface FieldConfig {
+  id: string;
+  profileType: FieldConfigProfileType;
+  apiField: string;
+  displayLabel: string;
+  visible: boolean;
+  section: string;
+  displayOrder: number;
+  sensitive: boolean;
+  maskingRule: MaskingRule;
+  visibleCharCount: number;
+}

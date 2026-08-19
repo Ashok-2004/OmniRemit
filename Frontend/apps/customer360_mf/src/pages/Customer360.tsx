@@ -7,10 +7,11 @@ import { getFriendlyErrorMessage, idTypeToFriendlyLabel } from '../utils/errorMe
 import { maskPhone, maskNRIC, maskTIN } from '../utils/masking';
 import CustomerHeader from '../components/CustomerHeader';
 import IndividualDetails from '../components/IndividualDetails';
-import CompanyOverview from '../components/CompanyOverview';
 import SectionContainer from '../components/SectionContainer';
 import CaseDetailsModal from '../components/CaseDetailsModal';
 import ProductDetailsModal from '../components/ProductDetailsModal';
+import DynamicProfileSection, { groupBySection } from '../components/DynamicProfileSection';
+import { useFieldReveal } from '../hooks/useFieldReveal';
 import { Eye, EyeOff, ChevronRight, ChevronDown, SlidersHorizontal, Building2, Layers, User, Briefcase, Globe, Shield, FileText, Calendar, DollarSign, MapPin, Mail, Phone, TrendingUp, Search, RotateCcw, AlertCircle, Loader2 } from 'lucide-react';
 import { useNavigationStore } from '../store/navigationStore';
 import type {
@@ -19,6 +20,7 @@ import type {
   CustomerProduct,
   Interaction,
   LookupOptions,
+  FieldConfig,
 } from '../types/api';
 
 export default function Customer360() {
@@ -169,6 +171,41 @@ export default function Customer360() {
       active = false;
     };
   }, []);
+
+  // ---------------------------------------------------------------------------
+  // Field-visibility/masking config the detail pages render from (Field Settings feature). Fetched
+  // once, alongside the search-options fetch above — both are effectively static reference data for
+  // the lifetime of this component.
+  // ---------------------------------------------------------------------------
+  const [individualFieldConfigs, setIndividualFieldConfigs] = useState<FieldConfig[]>([]);
+  const [corporateFieldConfigs, setCorporateFieldConfigs] = useState<FieldConfig[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    const fetchFieldConfigs = async () => {
+      try {
+        const [indRes, corpRes] = await Promise.all([
+          api.getFieldConfig('Individual'),
+          api.getFieldConfig('Corporate'),
+        ]);
+        if (!active) return;
+        if (indRes?.data) setIndividualFieldConfigs(indRes.data);
+        if (corpRes?.data) setCorporateFieldConfigs(corpRes.data);
+      } catch (err) {
+        console.error('Failed to load field configuration:', err);
+      }
+    };
+    fetchFieldConfigs();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const corpFieldReveal = useFieldReveal({
+    customerName: (profile as CorporateProfile | null)?.organizationName || 'Unknown',
+    customerType: 'Non-Individual',
+    customerId: (profile as CorporateProfile | null)?.brn || '',
+  });
 
   // ---------------------------------------------------------------------------
   // Rehydrate the active customer after a browser refresh.
@@ -1205,6 +1242,7 @@ export default function Customer360() {
                   subTab={activeTab}
                   profile={individualProfile}
                   contactInfo={contactInfo}
+                  fieldConfigs={individualFieldConfigs}
                 />
               )}
 
@@ -1958,356 +1996,41 @@ export default function Customer360() {
                   : { padding: '16px 20px', backgroundColor: '#FFFFFF' }
               }
             >
-              {/* COMPANY OVERVIEW */}
-              {activeTab === 'overview' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {/* Company Details */}
-                  <SectionContainer title="Company Details" icon={<Building2 size={16} />}>
-                    <div className="info-cards-grid">
-                      <div className="info-card">
-                        <div className="info-label">
-                          <Building2 size={14} />
-                          Type of Organization
-                        </div>
-                        <div className="info-value">
-                          {corporateProfile.organizationType || '-'}
-                        </div>
-                      </div>
+              {/* NON-INDIVIDUAL DETAIL TABS — config-driven, same as IndividualDetails.tsx. Which
+                  Sections render under which of these four tabs is a fixed navigational grouping
+                  (mirroring the tab structure this page already had); the fields/labels/order/
+                  visibility/masking within each Section come entirely from corporateFieldConfigs. */}
+              {(() => {
+                const CORP_SUBTAB_SECTIONS: Record<string, string[]> = {
+                  overview: ['Company Details', 'Online Banking Status', 'Business Registration'],
+                  company_info: ['Company Information'],
+                  contact_relationship: ['Contact Information', 'Referrer & Relationship Information'],
+                  rmManager: ['RM Manager Information'],
+                };
+                const sectionsForTab = CORP_SUBTAB_SECTIONS[activeTab];
+                if (!sectionsForTab) return null;
 
-                      <div className="info-card">
-                        <div className="info-label">
-                          <Globe size={14} />
-                          Country of Incorporation
-                        </div>
-                        <div className="info-value">
-                          {corporateProfile.country || '-'}
-                        </div>
-                      </div>
-                    </div>
-                  </SectionContainer>
+                const configsForTab = corporateFieldConfigs
+                  .filter((f) => sectionsForTab.includes(f.section))
+                  .sort((a, b) => a.displayOrder - b.displayOrder);
+                const grouped = groupBySection(configsForTab);
 
-                  {/* Online Banking Status */}
-                  <SectionContainer title="Online Banking Status" icon={<Globe size={16} />}>
-                    <div className="info-cards-grid">
-                      <div className="info-card">
-                        <div className="info-label">
-                          <User size={14} />
-                          Online Banking Registration Status
-                        </div>
-                        <div className="info-value">
-                          {corporateProfile.onlineBankingRegistrationStatus || '-'}
-                        </div>
-                      </div>
-
-                      <div className="info-card">
-                        <div className="info-label">
-                          <Shield size={14} />
-                          Online Banking Activation Status
-                        </div>
-                        <div className="info-value">
-                          {corporateProfile.onlineBankingActivationStatus || '-'}
-                        </div>
-                      </div>
-                    </div>
-                  </SectionContainer>
-
-                  {/* Business Registration */}
-                  <SectionContainer title="Business Registration" icon={<FileText size={16} />}>
-                    <div className="info-cards-grid">
-                      <div className="info-card">
-                        <div className="info-label">
-                          <Calendar size={14} />
-                          Date of Business Registration
-                        </div>
-                        <div className="info-value">
-                          {corporateProfile.businessRegDate || '-'}
-                        </div>
-                      </div>
-
-                      <div className="info-card">
-                        <div className="info-label">
-                          <Calendar size={14} />
-                          Organization Onboarding Date
-                        </div>
-                        <div className="info-value">
-                          {profile.openingDate || '-'}
-                        </div>
-                      </div>
-                    </div>
-                  </SectionContainer>
-                </div>
-              )}
-
-              {/* COMPANY INFORMATION */}
-              {activeTab === 'company_info' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <SectionContainer title="Company Information" icon={<Briefcase size={16} />}>
-                    <div className="info-cards-grid">
-                      <div className="info-card">
-                        <div className="info-label">
-                          <Building2 size={14} />
-                          Organization Name
-                        </div>
-                        <div className="info-value">
-                          {corporateProfile.organizationName || '-'}
-                        </div>
-                      </div>
-
-                      <div className="info-card">
-                        <div className="info-label">
-                          <FileText size={14} />
-                          Old Business Registration Number (BRN)
-                        </div>
-                        <div className="info-value">
-                          {corporateProfile.brn || '-'}
-                        </div>
-                      </div>
-
-                      <div className="info-card">
-                        <div className="info-label">
-                          <FileText size={14} />
-                          New Business Registration Number (BRN)
-                        </div>
-                        <div className="info-value">
-                          {corporateProfile.brn2 || '-'}
-                        </div>
-                      </div>
-
-                      <div className="info-card">
-                        <div className="info-label">
-                          <Building2 size={14} />
-                          Economic Sector
-                        </div>
-                        <div className="info-value">
-                          {corporateProfile.economicSector || '-'}
-                        </div>
-                      </div>
-
-                      <div className="info-card">
-                        <div className="info-label">
-                          <Globe size={14} />
-                          Company Website
-                        </div>
-                        <div className="info-value" style={{ color: '#004EEB', wordBreak: 'break-all' }}>
-                          {corporateProfile.companyWebsite ? (
-                            <a href={corporateProfile.companyWebsite} target="_blank" rel="noreferrer" style={{ color: '#004EEB', textDecoration: 'none' }}>{corporateProfile.companyWebsite}</a>
-                          ) : '-'}
-                        </div>
-                      </div>
-
-                      <div className="info-card">
-                        <div className="info-label">
-                          <FileText size={14} />
-                          Tax Identification Number
-                        </div>
-                        <div className="info-value" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: '8px' }}>
-                          <span>{revealed['corpTin'] ? (corporateProfile.tin || '-') : maskTIN(corporateProfile.tin)}</span>
-                          {corporateProfile.tin && corporateProfile.tin.trim() !== '' && corporateProfile.tin.toLowerCase() !== 'null' && (
-                            <button
-                              onClick={() => handleToggleReveal('corpTin', 'Tax Identification Number', corporateProfile.tin!)}
-                              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: '#004EEB', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                              title={revealed['corpTin'] ? 'Hide details' : 'Reveal details'}
-                            >
-                              {revealed['corpTin'] ? <EyeOff size={15} /> : <Eye size={15} />}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="info-card">
-                        <div className="info-label">
-                          <FileText size={14} />
-                          CIF Number
-                        </div>
-                        <div className="info-value">
-                          {corporateProfile.cifNumber || '-'}
-                        </div>
-                      </div>
-
-                      <div className="info-card">
-                        <div className="info-label">
-                          <DollarSign size={14} />
-                          Annual Income
-                        </div>
-                        <div className="info-value">
-                          {profile.annualIncome || '-'}
-                        </div>
-                      </div>
-
-                      <div className="info-card">
-                        <div className="info-label">
-                          <Globe size={14} />
-                          Resident Type
-                        </div>
-                        <div className="info-value">
-                          {corporateProfile.residentType || '-'}
-                        </div>
-                      </div>
-
-                      <div className="info-card full-width">
-                        <div className="info-label">
-                          <MapPin size={14} />
-                          Resident Address
-                        </div>
-                        <div className="info-value">
-                          {corporateProfile.residentAddress || '-'}
-                        </div>
-                      </div>
-                    </div>
-                  </SectionContainer>
-                </div>
-              )}
-
-              {/* CONTACT & RELATIONSHIP INFORMATION */}
-              {activeTab === 'contact_relationship' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {/* Contact Information */}
-                  <SectionContainer title="Contact Information" icon={<Phone size={16} />}>
-                    <div className="info-cards-grid">
-                      <div className="info-card">
-                        <div className="info-label">
-                          <Mail size={14} />
-                          Email
-                        </div>
-                        <div className="info-value">
-                          {contactInfo?.padrEmail1 || '-'}
-                        </div>
-                      </div>
-
-                      <div className="info-card">
-                        <div className="info-label">
-                          <Phone size={14} />
-                          Phone Number
-                        </div>
-                        <div className="info-value" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: '8px' }}>
-                          <span>{revealed['corpPhone'] ? (contactInfo?.contactNumber || '-') : maskPhone(contactInfo?.contactNumber)}</span>
-                          {contactInfo?.contactNumber && contactInfo.contactNumber.trim() !== '' && contactInfo.contactNumber.toLowerCase() !== 'null' && (
-                            <button
-                              onClick={() => handleToggleReveal('corpPhone', 'Corporate Phone Number', contactInfo.contactNumber!)}
-                              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: '#004EEB', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                              title={revealed['corpPhone'] ? 'Hide details' : 'Reveal details'}
-                            >
-                              {revealed['corpPhone'] ? <EyeOff size={15} /> : <Eye size={15} />}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="info-card">
-                        <div className="info-label">
-                          <TrendingUp size={14} />
-                          Marketing Message Opt-In/Out
-                        </div>
-                        <div className="info-value">
-                          {profile.marketMessageOpt || '-'}
-                        </div>
-                      </div>
-
-                      <div className="info-card full-width">
-                        <div className="info-label">
-                          <MapPin size={14} />
-                          Address
-                        </div>
-                        <div className="info-value">
-                          {contactInfo?.fixedAddress || '-'}
-                        </div>
-                      </div>
-                    </div>
-                  </SectionContainer>
-
-                  {/* Referral & Relationship */}
-                  <SectionContainer title="Referrer & Relationship Information" icon={<Globe size={16} />}>
-                    <div className="info-cards-grid">
-                      <div className="info-card">
-                        <div className="info-label">
-                          <User size={14} />
-                          Referrer Employee Name
-                        </div>
-                        <div className="info-value">
-                          {profile.refEmployeeName || '-'}
-                        </div>
-                      </div>
-
-                      <div className="info-card">
-                        <div className="info-label">
-                          <Mail size={14} />
-                          Referrer Employee Email
-                        </div>
-                        <div className="info-value">
-                          {profile.refEmployeeEmail || '-'}
-                        </div>
-                      </div>
-
-                      <div className="info-card">
-                        <div className="info-label">
-                          <Phone size={14} />
-                          Referrer Employee Phone Number
-                        </div>
-                        <div className="info-value">
-                          {corporateProfile.refEmployeePhoneNo || '-'}
-                        </div>
-                      </div>
-
-                      <div className="info-card">
-                        <div className="info-label">
-                          <FileText size={14} />
-                          Staff ID
-                        </div>
-                        <div className="info-value">
-                          {corporateProfile.refStaffId || '-'}
-                        </div>
-                      </div>
-                    </div>
-                  </SectionContainer>
-                </div>
-              )}
-
-              {/* RM MANAGER INFORMATION */}
-              {activeTab === 'rmManager' && (
-                <SectionContainer title="RM Manager Information" icon={<User size={16} />}>
-                  <div className="info-cards-grid">
-                    <div className="info-card">
-                      <div className="info-label">
-                        <User size={14} />
-                        RM Name
-                      </div>
-                      <div className="info-value">
-                        {profile.rmName || '-'}
-                      </div>
-                    </div>
-
-                    <div className="info-card">
-                      <div className="info-label">
-                        <FileText size={14} />
-                        RM ID
-                      </div>
-                      <div className="info-value">
-                        {profile.rmId || '-'}
-                      </div>
-                    </div>
-
-                    <div className="info-card">
-                      <div className="info-label">
-                        <Building2 size={14} />
-                        RM Branch Code
-                      </div>
-                      <div className="info-value">
-                        {profile.rmBranchCode || '-'}
-                      </div>
-                    </div>
-
-                    <div className="info-card">
-                      <div className="info-label">
-                        <Phone size={14} />
-                        RM Contact Number
-                      </div>
-                      <div className="info-value">
-                        {profile.rmContactNo || '-'}
-                      </div>
-                    </div>
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {grouped.map(({ section, fields }) => (
+                      <DynamicProfileSection
+                        key={section}
+                        section={section}
+                        fields={fields}
+                        profile={corporateProfile}
+                        contactInfo={contactInfo}
+                        revealed={corpFieldReveal.revealed}
+                        onToggleReveal={corpFieldReveal.toggleReveal}
+                      />
+                    ))}
                   </div>
-                </SectionContainer>
-              )}
+                );
+              })()}
 
               {/* PRODUCTS & SIGNATORIES TAB */}
               {activeTab === 'products_signatories' && (

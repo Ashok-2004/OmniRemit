@@ -4,12 +4,14 @@ import {
   User,
   Building2,
   ShieldCheck,
+  Settings,
 } from 'lucide-react';
 import { useNavigationStore, C360Page } from '../../store/navigationStore';
 import { useCustomerStore } from '../../store/customerStore';
 import {
   canViewProfile,
   canViewAuditLogs,
+  canManageFieldSettings,
 } from '../../api/hostBridge';
 
 interface SubNavItem {
@@ -30,6 +32,7 @@ export const HostSidebarCustomer360Nav: React.FC = () => {
 
   const userCanViewProfile = canViewProfile();
   const userCanViewAuditLogs = canViewAuditLogs();
+  const userCanManageFieldSettings = canManageFieldSettings();
 
   const navItems: SubNavItem[] = [
     {
@@ -59,6 +62,15 @@ export const HostSidebarCustomer360Nav: React.FC = () => {
       visible: userCanViewAuditLogs,
       onClick: () => {
         setActivePage('audit-logs');
+      },
+    },
+    {
+      id: 'field-settings',
+      label: 'Field Settings',
+      icon: <Settings size={15} />,
+      visible: userCanManageFieldSettings,
+      onClick: () => {
+        setActivePage('field-settings');
       },
     },
   ];

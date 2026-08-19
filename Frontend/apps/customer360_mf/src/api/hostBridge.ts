@@ -79,6 +79,10 @@ export const C360_SUBMODULE_PRODUCTS = 'remote.customer360.products';
 export const C360_SUBMODULE_INTERACTIONS = 'remote.customer360.interactions';
 export const C360_SUBMODULE_CONTACT = 'remote.customer360.contact';
 export const C360_SUBMODULE_AUDIT = 'remote.customer360.audit';
+// Matches Backend/Customer360Service/Controllers/FieldConfigController.cs's
+// [RequiresCapability("fieldsettings", ...)] — PermissionsController on that service discovers this
+// automatically by reflection, so nothing needs registering by hand on the host/ModuleRegistry side.
+export const C360_SUBMODULE_FIELD_SETTINGS = 'remote.customer360.fieldsettings';
 
 // Capability checks
 export const canViewProfile = (): boolean =>
@@ -92,3 +96,6 @@ export const canViewInteractions = (): boolean =>
 
 export const canViewAuditLogs = (): boolean =>
   hasCapability(C360_SUBMODULE_AUDIT, 'View') || hasCapability(C360_FEATURE_KEY, 'View');
+
+export const canManageFieldSettings = (): boolean =>
+  hasCapability(C360_SUBMODULE_FIELD_SETTINGS, 'Manage') || hasCapability(C360_FEATURE_KEY, 'View');

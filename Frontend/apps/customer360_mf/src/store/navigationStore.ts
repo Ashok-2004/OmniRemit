@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type C360Page = 'individual' | 'non-individual' | 'audit-logs' | 'customer-360' | 'products' | 'interactions';
+export type C360Page = 'individual' | 'non-individual' | 'audit-logs' | 'customer-360' | 'products' | 'interactions' | 'field-settings';
 
 interface NavigationState {
   activePage: C360Page;

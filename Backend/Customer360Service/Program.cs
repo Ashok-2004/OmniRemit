@@ -1,40 +1,33 @@
 using System.Security.Cryptography;
 using System.Text;
+using DotNetEnv;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using backend.Data;
 using backend.Controllers;
+using backend.Infrastructure;
 using backend.Middleware;
 
-// ---------------------------------------------------------------------------
-// Load local .env file if present
-// ---------------------------------------------------------------------------
-var envPaths = new[]
-{
-    Path.Combine(Directory.GetCurrentDirectory(), ".env"),
-    Path.Combine(Directory.GetCurrentDirectory(), "Backend", "Customer360Service", ".env"),
-    Path.Combine(AppContext.BaseDirectory, ".env")
-};
-
-foreach (var path in envPaths)
-{
-    if (File.Exists(path))
-    {
-        foreach (var line in File.ReadAllLines(path))
-        {
-            if (string.IsNullOrWhiteSpace(line) || line.StartsWith("#")) continue;
-            var parts = line.Split('=', 2);
-            if (parts.Length == 2)
-            {
-                Environment.SetEnvironmentVariable(parts[0].Trim(), parts[1].Trim());
-            }
-        }
-        break;
-    }
-}
+// Load Backend/Customer360Service/.env (git-ignored) before configuration is read — matches
+// AuthService/ModuleRegistry/LeadService's Program.cs exactly. Replaces the previous hand-rolled
+// line-by-line loader (same behavior, one well-tested implementation instead of a bespoke one).
+Env.TraversePath().Load();
 
 var builder = WebApplication.CreateBuilder(args);
+
+// ---------------------------------------------------------------------------
+// Database — this service's own Postgres DB (field-visibility/masking config, audit trail). New as
+// of this feature; previously this service had no database at all. Falls back to an "unconfigured"
+// placeholder connection string rather than throwing, matching ModuleRegistry's pattern, so the
+// service still boots (CRM-proxy endpoints keep working) even before the DB is wired up.
+// ---------------------------------------------------------------------------
+var connectionString = builder.Configuration.GetConnectionString("Customer360Db");
+var isDbConfigured = !string.IsNullOrWhiteSpace(connectionString);
+
+builder.Services.AddDbContext<Customer360DbContext>(options =>
+    options.UseNpgsql(isDbConfigured ? connectionString : "Host=unconfigured;Database=unconfigured;Username=unconfigured;Password=unconfigured"));
 
 // ---------------------------------------------------------------------------
 // Controllers + JSON serialization
@@ -43,11 +36,18 @@ builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.Converters.Add(new backend.Data.DualNamingConverterFactory());
+        // ProfileType/MaskingRule (FieldConfig) serialize as their string names ("Individual",
+        // "HideFirstShowLast", ...) rather than raw ints, matching what the frontend's TS union
+        // types expect.
+        options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
     });
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSingleton<CrmProxyService>();
-builder.Services.AddSingleton<AuditRepository>();
+// Scoped, not Singleton, now that it reads/writes through a (scoped) DbContext instead of an
+// in-memory List + local file.
+builder.Services.AddScoped<AuditRepository>();
+builder.Services.AddScoped<FieldConfigService>();
 
 // ---------------------------------------------------------------------------
 // CORS Policy
@@ -141,6 +141,22 @@ app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+
+if (!isDbConfigured)
+{
+    app.Logger.LogWarning(
+        "ConnectionStrings__Customer360Db is not set — the app will start, but the field-settings " +
+        "and audit-log endpoints will fail until Backend/Customer360Service/.env is filled in.");
+}
+else
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<Customer360DbContext>();
+    await db.Database.MigrateAsync();
+    // Seeds default field-visibility/masking rows on first boot only (idempotent — a populated table
+    // is left untouched), so an admin's edits are never overwritten by a redeploy.
+    await scope.ServiceProvider.GetRequiredService<FieldConfigService>().EnsureSeededAsync();
+}
 
 if (string.IsNullOrWhiteSpace(configuredPublicKeyPem))
 {
