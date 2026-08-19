@@ -19,7 +19,8 @@ public class AuditLogAppService(AuthDbContext db)
         string serviceName, Guid? actorUserId, string? actorName, string action,
         string? entityType, string? entityId, string? details, string? sourceIp = null,
         string? authMethod = null, string result = "Success", string? userAgent = null,
-        string? failureReason = null, string? correlationId = null, CancellationToken ct = default)
+        string? failureReason = null, string? correlationId = null, string? entityLabel = null,
+        CancellationToken ct = default)
     {
         db.AuditLogs.Add(new AuditLog
         {
@@ -31,6 +32,7 @@ public class AuditLogAppService(AuthDbContext db)
             Action = action,
             EntityType = entityType,
             EntityId = entityId,
+            EntityLabel = entityLabel,
             Details = details,
             SourceIp = sourceIp,
             AuthMethod = authMethod,
@@ -90,7 +92,7 @@ public class AuditLogAppService(AuthDbContext db)
             .ToListAsync(ct);
 
         var sb = new StringBuilder();
-        sb.AppendLine("Time,Service,Actor,Action,Result,AuthMethod,EntityType,EntityId,SourceIp,UserAgent,FailureReason,CorrelationId,Details");
+        sb.AppendLine("Time,Service,Actor,Action,Result,AuthMethod,EntityType,EntityLabel,EntityId,SourceIp,UserAgent,FailureReason,CorrelationId,Details");
         foreach (var a in items)
         {
             sb.AppendLine(string.Join(",", new[]
@@ -102,6 +104,7 @@ public class AuditLogAppService(AuthDbContext db)
                 CsvField(a.Result),
                 CsvField(a.AuthMethod),
                 CsvField(a.EntityType),
+                CsvField(a.EntityLabel),
                 CsvField(a.EntityId),
                 CsvField(a.SourceIp),
                 CsvField(a.UserAgent),
@@ -155,6 +158,6 @@ public class AuditLogAppService(AuthDbContext db)
     }
 
     private static AuditLogDto ToDto(AuditLog a) => new(
-        a.Id, a.OccurredAt, a.ServiceName, a.ActorUserId, a.ActorName, a.Action, a.EntityType, a.EntityId,
+        a.Id, a.OccurredAt, a.ServiceName, a.ActorUserId, a.ActorName, a.Action, a.EntityType, a.EntityId, a.EntityLabel,
         a.Details, a.SourceIp, a.AuthMethod, a.Result, a.UserAgent, a.FailureReason, a.CorrelationId);
 }

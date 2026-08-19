@@ -8,9 +8,15 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AuthService.Application.Services;
 
-public class UserAppService(AuthDbContext db, PasswordHasher passwordHasher, AuditLogAppService auditLog)
+public class UserAppService(AuthDbContext db, PasswordHasher passwordHasher, AuditLogAppService auditLog, IHttpContextAccessor httpContextAccessor)
 {
     private const string ServiceName = "AuthService";
+
+    // AuthService writes User audit rows in-process, so the current HttpContext IS the real
+    // end-user's own request — no service-to-service hop in between, unlike ModuleRegistry/
+    // EmployeeService/LeadService, which have to capture and forward these explicitly.
+    private string? SourceIp => httpContextAccessor.HttpContext?.Connection.RemoteIpAddress?.ToString();
+    private string? UserAgent => httpContextAccessor.HttpContext?.Request.Headers.UserAgent.ToString();
     public async Task<PagedResult<UserListItemDto>> ListAsync(
         int page, int pageSize, string? search, bool? isActive, Guid? roleId, CancellationToken ct = default)
     {
@@ -110,7 +116,7 @@ public class UserAppService(AuthDbContext db, PasswordHasher passwordHasher, Aud
         var saved = await FindWithRoleAsync(user.Id, ct) ?? throw NotFound(user.Id);
 
         var actorName = await ResolveActorNameAsync(actingUserId, ct);
-        await auditLog.WriteAsync(ServiceName, actingUserId, actorName, "user.created", "User", user.Id.ToString(), $"Created {user.Email}", ct: ct);
+        await auditLog.WriteAsync(ServiceName, actingUserId, actorName, "user.created", "User", user.Id.ToString(), $"Created {user.Email}", SourceIp, userAgent: UserAgent, entityLabel: user.Name, ct: ct);
 
         return new CreateUserResponse(ToDetailDto(saved, []), tempPassword);
     }
@@ -157,7 +163,7 @@ public class UserAppService(AuthDbContext db, PasswordHasher passwordHasher, Aud
         await db.SaveChangesAsync(ct);
 
         var actorName = await ResolveActorNameAsync(actingUserId, ct);
-        await auditLog.WriteAsync(ServiceName, actingUserId, actorName, "user.updated", "User", user.Id.ToString(), $"Updated {user.Email}", ct: ct);
+        await auditLog.WriteAsync(ServiceName, actingUserId, actorName, "user.updated", "User", user.Id.ToString(), $"Updated {user.Email}", SourceIp, userAgent: UserAgent, entityLabel: user.Name, ct: ct);
 
         if (statusChanged)
         {
@@ -165,7 +171,7 @@ public class UserAppService(AuthDbContext db, PasswordHasher passwordHasher, Aud
                 ServiceName, actingUserId, actorName,
                 request.IsActive ? "user.activated" : "user.deactivated",
                 "User", user.Id.ToString(),
-                $"{user.Email} was {(request.IsActive ? "activated" : "deactivated")}.", ct: ct);
+                $"{user.Email} was {(request.IsActive ? "activated" : "deactivated")}.", SourceIp, userAgent: UserAgent, entityLabel: user.Name, ct: ct);
         }
 
         var overrides = await LoadOverridesAsync(id, ct);
@@ -181,7 +187,7 @@ public class UserAppService(AuthDbContext db, PasswordHasher passwordHasher, Aud
         await db.SaveChangesAsync(ct);
 
         var actorName = await ResolveActorNameAsync(actingUserId, ct);
-        await auditLog.WriteAsync(ServiceName, actingUserId, actorName, isActive ? "user.activated" : "user.deactivated", "User", user.Id.ToString(), $"{(isActive ? "Activated" : "Deactivated")} {user.Email}", ct: ct);
+        await auditLog.WriteAsync(ServiceName, actingUserId, actorName, isActive ? "user.activated" : "user.deactivated", "User", user.Id.ToString(), $"{(isActive ? "Activated" : "Deactivated")} {user.Email}", SourceIp, userAgent: UserAgent, entityLabel: user.Name, ct: ct);
 
         var overrides = await LoadOverridesAsync(id, ct);
         return ToDetailDto(user, overrides);
@@ -197,7 +203,7 @@ public class UserAppService(AuthDbContext db, PasswordHasher passwordHasher, Aud
         await db.SaveChangesAsync(ct);
 
         var actorName = await ResolveActorNameAsync(actingUserId, ct);
-        await auditLog.WriteAsync(ServiceName, actingUserId, actorName, "user.deleted", "User", user.Id.ToString(), $"Deleted {user.Email}", ct: ct);
+        await auditLog.WriteAsync(ServiceName, actingUserId, actorName, "user.deleted", "User", user.Id.ToString(), $"Deleted {user.Email}", SourceIp, userAgent: UserAgent, entityLabel: user.Name, ct: ct);
     }
 
     private async Task<string?> ResolveActorNameAsync(Guid? actingUserId, CancellationToken ct)

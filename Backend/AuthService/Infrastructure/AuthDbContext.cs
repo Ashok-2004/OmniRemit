@@ -167,6 +167,7 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             entity.Property(a => a.ActorName).HasMaxLength(200);
             entity.Property(a => a.EntityType).HasMaxLength(100);
             entity.Property(a => a.EntityId).HasMaxLength(200);
+            entity.Property(a => a.EntityLabel).HasMaxLength(300);
             entity.Property(a => a.SourceIp).HasMaxLength(64);
         });
     }

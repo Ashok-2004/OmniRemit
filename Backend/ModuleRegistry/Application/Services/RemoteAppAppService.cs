@@ -130,7 +130,7 @@ public partial class RemoteAppAppService(
         }
 
         await authServiceClient.UpsertAsync(featureKey, displayName, request.SidebarOrder, ToCapabilityTuples(app), ct);
-        await authServiceClient.PushAuditLogAsync("remoteapp.created", "RemoteApp", app.Id.ToString(), $"Registered remote app '{displayName}' ({key}).", actingUserId, actorName, ct);
+        await authServiceClient.PushAuditLogAsync("remoteapp.created", "RemoteApp", app.Id.ToString(), $"Registered remote app '{displayName}' ({key}).", actingUserId, actorName, displayName, ct);
 
         return ToDto(app);
     }
@@ -180,7 +180,7 @@ public partial class RemoteAppAppService(
             await authServiceClient.UpsertAsync(app.PermissionFeatureKey, app.DisplayName, app.SidebarOrder, ToCapabilityTuples(app), ct);
         }
 
-        await authServiceClient.PushAuditLogAsync("remoteapp.updated", "RemoteApp", app.Id.ToString(), $"Updated remote app '{app.DisplayName}' ({app.Key}).", actingUserId, actorName, ct);
+        await authServiceClient.PushAuditLogAsync("remoteapp.updated", "RemoteApp", app.Id.ToString(), $"Updated remote app '{app.DisplayName}' ({app.Key}).", actingUserId, actorName, app.DisplayName, ct);
 
         return ToDto(app);
     }
@@ -219,7 +219,7 @@ public partial class RemoteAppAppService(
 
         await authServiceClient.PushAuditLogAsync(
             "remoteapp.status_changed", "RemoteApp", app.Id.ToString(),
-            $"Set '{app.DisplayName}' ({app.Key}) status to {parsedStatus}.", actingUserId, actorName, ct);
+            $"Set '{app.DisplayName}' ({app.Key}) status to {parsedStatus}.", actingUserId, actorName, app.DisplayName, ct);
 
         return ToDto(app);
     }
@@ -234,7 +234,26 @@ public partial class RemoteAppAppService(
         await db.SaveChangesAsync(ct);
 
         await authServiceClient.DeactivateAsync(app.PermissionFeatureKey, ct);
-        await authServiceClient.PushAuditLogAsync("remoteapp.deleted", "RemoteApp", id.ToString(), $"Removed remote app '{displayName}' ({key}).", actingUserId, actorName, ct);
+
+        // Deleting a remote app must pull it out of every user/role permission-assignment UI, not
+        // just deactivate its own feature key. The single DeactivateAsync call above is the same
+        // fire-and-forget-with-a-logged-warning HTTP call every other sync here is — a transient
+        // AuthService outage during THIS delete would previously leave the deleted app's permission
+        // feature silently active in AuthService's catalog until an admin remembered to click the
+        // manual "Resync Permissions" button. Following up with a full resync closes that gap: it
+        // re-pushes every remaining app AND sweeps (deactivates) any top-level feature whose key is
+        // no longer present — which now always includes this one, whether or not DeactivateAsync
+        // itself actually landed.
+        try
+        {
+            await ResyncPermissionsAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Post-delete permission resync failed for remote app '{DisplayName}' ({Key}). Run resync-permissions once AuthService is reachable.", displayName, key);
+        }
+
+        await authServiceClient.PushAuditLogAsync("remoteapp.deleted", "RemoteApp", id.ToString(), $"Removed remote app '{displayName}' ({key}).", actingUserId, actorName, displayName, ct);
     }
 
     /// <summary>

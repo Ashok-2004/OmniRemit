@@ -39,7 +39,7 @@ public class EmployeeService : IEmployeeService
 
         await _auditLog.PushAuditLogAsync(
             "employee.created", "Employee", created.Id.ToString(),
-            $"Created employee '{created.Name}' ({created.Email}).", actorUserId, actorName);
+            $"Created employee '{created.Name}' ({created.Email}).", actorUserId, actorName, created.Name);
 
         return created.ToResponse();
     }
@@ -57,7 +57,7 @@ public class EmployeeService : IEmployeeService
 
         await _auditLog.PushAuditLogAsync(
             "employee.updated", "Employee", updated.Id.ToString(),
-            $"Updated employee '{updated.Name}' ({updated.Email}).", actorUserId, actorName);
+            $"Updated employee '{updated.Name}' ({updated.Email}).", actorUserId, actorName, updated.Name);
 
         return updated.ToResponse();
     }
@@ -72,7 +72,7 @@ public class EmployeeService : IEmployeeService
 
         await _auditLog.PushAuditLogAsync(
             "employee.deleted", "Employee", id.ToString(),
-            $"Removed employee '{existing.Name}' ({existing.Email}).", actorUserId, actorName);
+            $"Removed employee '{existing.Name}' ({existing.Email}).", actorUserId, actorName, existing.Name);
 
         return true;
     }

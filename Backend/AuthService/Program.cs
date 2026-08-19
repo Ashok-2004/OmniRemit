@@ -23,6 +23,9 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers(options => options.Filters.Add<AppExceptionFilter>());
 builder.Services.AddOpenApi();
+// Lets UserAppService/RoleAppService (in-process audit writers) read the real caller's IP/User-Agent
+// off the current request without every mutation method threading HttpContext through as a param.
+builder.Services.AddHttpContextAccessor();
 
 builder.Services.Configure<CorsOptions>(builder.Configuration.GetSection(CorsOptions.SectionName));
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));

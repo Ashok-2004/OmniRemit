@@ -675,9 +675,9 @@ export function AuditLogsPage() {
                       {log.entityType ? (
                         <div className={styles.entityWrap}>
                           <span className={styles.entityType}>{log.entityType}</span>
-                          {log.entityId && (
-                            <span className={styles.entityId} title={log.entityId}>
-                              {log.entityId.slice(0, 8)}
+                          {log.entityLabel && (
+                            <span className={styles.entityId} title={log.entityLabel}>
+                              {log.entityLabel}
                             </span>
                           )}
                         </div>
@@ -757,65 +757,95 @@ export function AuditLogsPage() {
               </div>
 
               <div className={drawerStyles.tabBody}>
-                <dl className={styles.detailList}>
-                  <dt>Time</dt>
-                  <dd>{formatTimestamp(viewingLog.occurredAt)}</dd>
+                <div className={styles.drawerSections}>
+                  {/* Overview — when, who, what happened, how it ended. The four facts anyone opening
+                      this drawer wants first, before drilling into entity/network detail below. */}
+                  <section className={styles.drawerSection}>
+                    <h3 className={styles.drawerSectionTitle}>Overview</h3>
+                    <dl className={styles.detailList}>
+                      <dt>Time</dt>
+                      <dd>{formatTimestamp(viewingLog.occurredAt)}</dd>
 
-                  <dt>Service</dt>
-                  <dd><Badge tone={serviceTone(viewingLog.serviceName)}>{viewingLog.serviceName}</Badge></dd>
+                      <dt>Service</dt>
+                      <dd><Badge tone={serviceTone(viewingLog.serviceName)}>{viewingLog.serviceName}</Badge></dd>
 
-                  <dt>Actor</dt>
-                  <dd>{viewingLog.actorName ?? 'System'}</dd>
+                      <dt>Actor</dt>
+                      <dd>{viewingLog.actorName ?? 'System'}</dd>
 
-                  <dt>Action</dt>
-                  <dd>
-                    {formatActionLabel(viewingLog.action)}{' '}
-                    <span className={styles.monoText}>({viewingLog.action})</span>
-                  </dd>
+                      <dt>Action</dt>
+                      <dd>{formatActionLabel(viewingLog.action)}</dd>
 
-                  {viewingLog.entityType && (
-                    <>
-                      <dt>Entity</dt>
+                      <dt>Result</dt>
                       <dd>
-                        {viewingLog.entityType}
-                        {viewingLog.entityId ? ` · ${viewingLog.entityId}` : ''}
+                        <Badge tone={viewingLog.result === 'Success' ? 'success' : 'danger'} dot>
+                          {viewingLog.result}
+                        </Badge>
                       </dd>
-                    </>
+
+                      {viewingLog.failureReason && (
+                        <>
+                          <dt>Failure Reason</dt>
+                          <dd className={styles.dangerText}>{viewingLog.failureReason}</dd>
+                        </>
+                      )}
+                    </dl>
+                  </section>
+
+                  {/* Entity — what record this action touched, in the friendly name an admin actually
+                      recognizes ("Lead Management"), never the raw type/UUID pair. */}
+                  {viewingLog.entityType && (
+                    <section className={styles.drawerSection}>
+                      <h3 className={styles.drawerSectionTitle}>Entity</h3>
+                      <dl className={styles.detailList}>
+                        <dt>Type</dt>
+                        <dd><Badge tone="neutral">{viewingLog.entityType}</Badge></dd>
+
+                        <dt>Name</dt>
+                        <dd>{viewingLog.entityLabel ?? <span className={styles.mutedText}>Not recorded</span>}</dd>
+                      </dl>
+                    </section>
                   )}
 
-                  <dt>Result</dt>
-                  <dd>
-                    <Badge tone={viewingLog.result === 'Success' ? 'success' : 'danger'} dot>
-                      {viewingLog.result}
-                    </Badge>
-                  </dd>
-
-                  <dt>Auth Method</dt>
-                  <dd>{viewingLog.authMethod ?? 'Local'}</dd>
-
-                  <dt>IP Address</dt>
-                  <dd className={styles.monoText}>{viewingLog.sourceIp ?? '—'}</dd>
-
-                  {viewingLog.failureReason && (
-                    <>
-                      <dt>Failure Reason</dt>
-                      <dd style={{ color: '#dc2626', fontWeight: 600 }}>{viewingLog.failureReason}</dd>
-                    </>
-                  )}
-
+                  {/* Details — free-form context the writer chose to include, e.g. what specifically
+                      changed. Not present on every action type. */}
                   {viewingLog.details && (
-                    <>
-                      <dt>Details</dt>
-                      <dd className={styles.wrapText}>{viewingLog.details}</dd>
-                    </>
+                    <section className={styles.drawerSection}>
+                      <h3 className={styles.drawerSectionTitle}>Details</h3>
+                      <p className={styles.detailsText}>{viewingLog.details}</p>
+                    </section>
                   )}
 
-                  <dt>Browser / Device</dt>
-                  <dd className={styles.wrapText}>{viewingLog.userAgent ?? '—'}</dd>
+                  {/* Sign-in-only fields render inside the same Network & Device section below when
+                      present; auth method only makes sense for login/logout-shaped events. */}
+                  <section className={styles.drawerSection}>
+                    <h3 className={styles.drawerSectionTitle}>Network &amp; Device</h3>
+                    <dl className={styles.detailList}>
+                      {viewingLog.authMethod && (
+                        <>
+                          <dt>Auth Method</dt>
+                          <dd>{viewingLog.authMethod}</dd>
+                        </>
+                      )}
 
-                  <dt>Correlation ID</dt>
-                  <dd className={styles.monoText}>{viewingLog.correlationId}</dd>
-                </dl>
+                      <dt>IP Address</dt>
+                      <dd className={styles.monoText}>{viewingLog.sourceIp ?? '—'}</dd>
+
+                      <dt>Browser / Device</dt>
+                      <dd>
+                        {(() => {
+                          const parsed = parseUserAgent(viewingLog.userAgent)
+                          if (!parsed) return <span className={styles.mutedText}>—</span>
+                          return (
+                            <div className={styles.devicePillGroup}>
+                              <span className={styles.browserPill}>{parsed.browser}</span>
+                              <span className={styles.osPill}>{parsed.os}</span>
+                            </div>
+                          )
+                        })()}
+                      </dd>
+                    </dl>
+                  </section>
+                </div>
               </div>
             </div>
           </div>

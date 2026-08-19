@@ -484,11 +484,16 @@
   border: 1px solid #eaecf0;
   border-radius: 16px;
   box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
-  overflow: hidden;
+  /* overflow-x lets the table scroll horizontally on a narrow viewport instead of forcing the whole
+     page to scroll sideways or crushing columns illegibly; overflow-y stays hidden so the container's
+     own border-radius still clips the table's corners as before. */
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .logTable {
   width: 100%;
+  min-width: 720px;
   border-collapse: collapse;
   text-align: left;
 }
@@ -608,6 +613,10 @@
   font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
   font-size: 12px;
   color: #64748b;
+  /* .wrapText already had this; .monoText didn't, so a long value (a raw IP, a stray long ID) could
+     overflow the "auto 1fr" .detailList grid on a narrow drawer instead of wrapping onto its own line. */
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 /* IP address badge */
@@ -648,13 +657,19 @@
 }
 
 .entityId {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
+  /* Now holds the friendly entity name (e.g. "Lead Management"), not a raw UUID fragment — no longer
+     monospaced, and allowed to wrap/truncate gracefully instead of a fixed-width mono badge. */
+  font-size: 11.5px;
+  font-weight: 500;
   color: #64748b;
   background: #f1f5f9;
   border: 1px solid #e2e8f0;
-  padding: 1px 5px;
+  padding: 1px 6px;
   border-radius: 4px;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 
@@ -959,14 +974,45 @@
 }
 
 /* ════════════════════════════════════════════════════
-   DETAIL MODAL — login failure drilldown
+   RECORD DETAILS DRAWER — grouped sections, badges,
+   matches the host's other enterprise drawer views
    ════════════════════════════════════════════════════ */
+
+.drawerSections {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.drawerSection {
+  padding-bottom: 20px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.drawerSection:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.drawerSectionTitle {
+  font-size: 11px;
+  font-weight: 700;
+  color: #2563eb;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin: 0 0 12px;
+}
 
 .detailList {
   display: grid;
-  grid-template-columns: auto 1fr;
+  /* minmax(0, ...) instead of a bare auto — a bare auto/1fr track never shrinks below its content's
+     intrinsic width, so a long label or an un-wrappable value could still force the grid (and this
+     narrow side drawer) wider than its container. minmax(0, ...) lets both tracks actually shrink,
+     which is what makes overflow-wrap on the value column effective at all. */
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
   gap: 12px 20px;
   align-items: baseline;
+  min-width: 0;
 }
 
 .detailList dt {
@@ -976,6 +1022,9 @@
   text-transform: uppercase;
   letter-spacing: 0.06em;
   white-space: nowrap;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .detailList dd {
@@ -983,6 +1032,23 @@
   color: #0f172a;
   margin: 0;
   font-weight: 500;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.detailsText {
+  font-size: 13.5px;
+  color: #1e293b;
+  line-height: 1.6;
+  margin: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.dangerText {
+  color: #dc2626;
+  font-weight: 600;
 }
 
 .wrapText {
@@ -1025,25 +1091,26 @@
     gap: 14px;
   }
 
-  /* Make the audit table horizontally scrollable on mobile */
-  .tableWrapper {
-    overflow-x: auto;
+  /* .tableContainer already scrolls horizontally at any width (see its overflow-x: auto rule above);
+     -webkit-overflow-scrolling adds native momentum scrolling on iOS specifically for that gesture. */
+  .tableContainer {
     -webkit-overflow-scrolling: touch;
   }
 
-  /* Minimum width so columns don't collapse illegibly */
-  .table { min-width: 640px; }
-
-  /* Filter toolbar wraps on mobile */
-  .filterBar {
-    flex-wrap: wrap;
-    gap: 8px;
+  /* The side drawer itself narrows on mobile (handled by SettingsDrawer.module.css), so its two-column
+     detail grid no longer has room for a fixed label column — stack label above value instead. */
+  .detailList {
+    grid-template-columns: 1fr;
+    gap: 4px 0;
   }
 
-  .filterBar > * { min-width: 0; }
+  .detailList dt {
+    max-width: none;
+  }
 
-  /* Page-size select fits within wrapped row */
-  .pageSizeSelect { width: auto; }
+  .detailList dd {
+    margin-bottom: 8px;
+  }
 }
 
 @media (max-width: 480px) {

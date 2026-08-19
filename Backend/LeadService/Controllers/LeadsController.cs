@@ -52,7 +52,7 @@ namespace LeadManagement.Api.Controllers
                 await _authServiceClient.PushAuditLogAsync(
                     "lead.created", "Lead", result.Id,
                     $"Created lead for '{result.Name}' ({result.Product})",
-                    CurrentUserId(), CurrentUserName());
+                    CurrentUserId(), CurrentUserName(), result.Name);
 
                 return CreatedAtAction(nameof(GetLeadById), new { id = result.Id }, new ApiResponseDto<LeadRecordDto>
                 {
@@ -149,7 +149,7 @@ namespace LeadManagement.Api.Controllers
                 await _authServiceClient.PushAuditLogAsync(
                     "lead.updated", "Lead", id,
                     $"Updated lead '{updated.Name}'",
-                    CurrentUserId(), CurrentUserName());
+                    CurrentUserId(), CurrentUserName(), updated.Name);
 
                 return Ok(new ApiResponseDto<LeadRecordDto>
                 {
@@ -191,6 +191,10 @@ namespace LeadManagement.Api.Controllers
 
             try
             {
+                // Captured before delete purely for the audit entry's friendly entity name — the
+                // lead itself is gone from the DB by the time PushAuditLogAsync runs below.
+                var leadName = (await _leadService.GetLeadByIdAsync(id))?.Name;
+
                 var success = await _leadService.DeleteLeadAsync(id, dto);
                 if (!success)
                 {
@@ -205,7 +209,7 @@ namespace LeadManagement.Api.Controllers
                 await _authServiceClient.PushAuditLogAsync(
                     "lead.deleted", "Lead", id,
                     $"Deleted lead (Reason: {dto.DeleteReason})",
-                    CurrentUserId(), CurrentUserName());
+                    CurrentUserId(), CurrentUserName(), leadName);
 
                 return Ok(new ApiResponseDto<bool>
                 {

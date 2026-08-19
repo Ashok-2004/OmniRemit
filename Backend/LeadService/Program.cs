@@ -33,6 +33,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+// Lets AuthServiceClient read the real caller's IP/User-Agent off the current request when it pushes
+// an audit-log entry to AuthService, instead of that entry showing this server's own address.
+builder.Services.AddHttpContextAccessor();
 
 // Response compression
 builder.Services.AddResponseCompression(options => options.EnableForHttps = true);

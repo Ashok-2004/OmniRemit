@@ -8,14 +8,24 @@ namespace LeadManagement.Api.Infrastructure;
 /// Pushes LeadService mutation audit-log entries to AuthService's central AuditLogs table
 /// using the shared X-Internal-Api-Key trust boundary. Failures are logged, not thrown.
 /// </summary>
-public class AuthServiceClient(HttpClient httpClient, IOptions<AuthIntegrationOptions> options, ILogger<AuthServiceClient> logger)
+public class AuthServiceClient(HttpClient httpClient, IOptions<AuthIntegrationOptions> options, ILogger<AuthServiceClient> logger, IHttpContextAccessor httpContextAccessor)
 {
     private readonly AuthIntegrationOptions _options = options.Value;
 
-    private record RecordAuditLogRequest(string ServiceName, Guid? ActorUserId, string? ActorName, string Action, string? EntityType, string? EntityId, string? Details);
+    private record RecordAuditLogRequest(
+        string ServiceName, Guid? ActorUserId, string? ActorName, string Action, string? EntityType, string? EntityId, string? Details,
+        string? EntityLabel, string? SourceIp, string? UserAgent);
 
-    public Task<bool> PushAuditLogAsync(string action, string? entityType, string? entityId, string? details, Guid? actorUserId, string? actorName, CancellationToken ct = default) =>
-        PostAsync("internal/audit-logs", new RecordAuditLogRequest("LeadService", actorUserId, actorName, action, entityType, entityId, details), ct);
+    // sourceIp/userAgent come off THIS service's own current HttpContext — the real end user's
+    // browser talks to LeadService directly, so this is where that information actually is;
+    // AuthService's own connection for the internal POST below would just be this server's address.
+    public Task<bool> PushAuditLogAsync(string action, string? entityType, string? entityId, string? details, Guid? actorUserId, string? actorName, string? entityLabel = null, CancellationToken ct = default)
+    {
+        var httpContext = httpContextAccessor.HttpContext;
+        var sourceIp = httpContext?.Connection.RemoteIpAddress?.ToString();
+        var userAgent = httpContext?.Request.Headers.UserAgent.ToString();
+        return PostAsync("internal/audit-logs", new RecordAuditLogRequest("LeadService", actorUserId, actorName, action, entityType, entityId, details, entityLabel, sourceIp, userAgent), ct);
+    }
 
     private async Task<bool> PostAsync<TBody>(string path, TBody body, CancellationToken ct)
     {

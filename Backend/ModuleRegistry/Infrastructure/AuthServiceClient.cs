@@ -22,7 +22,7 @@ namespace ModuleRegistry.Infrastructure;
 /// registry edit shouldn't block the admin's edit here; POST /api/remote-apps/resync-permissions
 /// exists as the manual recovery path once everything is back.
 /// </summary>
-public class AuthServiceClient(HttpClient httpClient, IOptions<AuthIntegrationOptions> options, ILogger<AuthServiceClient> logger)
+public class AuthServiceClient(HttpClient httpClient, IOptions<AuthIntegrationOptions> options, ILogger<AuthServiceClient> logger, IHttpContextAccessor httpContextAccessor)
 {
     private readonly AuthIntegrationOptions _options = options.Value;
 
@@ -39,7 +39,9 @@ public class AuthServiceClient(HttpClient httpClient, IOptions<AuthIntegrationOp
         IReadOnlyList<UpsertModuleRequest> Modules);
     private record DeactivateFeatureRequest(string Key);
     private record ResyncFeaturesRequest(IReadOnlyList<UpsertFeatureRequest> Features);
-    private record RecordAuditLogRequest(string ServiceName, Guid? ActorUserId, string? ActorName, string Action, string? EntityType, string? EntityId, string? Details);
+    private record RecordAuditLogRequest(
+        string ServiceName, Guid? ActorUserId, string? ActorName, string Action, string? EntityType, string? EntityId, string? Details,
+        string? EntityLabel, string? SourceIp, string? UserAgent);
 
     public Task<bool> UpsertAsync(
         string featureKey, string displayName, int sortOrder,
@@ -62,11 +64,21 @@ public class AuthServiceClient(HttpClient httpClient, IOptions<AuthIntegrationOp
                 .ToList()),
             ct);
 
-    public Task<bool> PushAuditLogAsync(string action, string? entityType, string? entityId, string? details, Guid? actorUserId, string? actorName, CancellationToken ct = default) =>
-        PostAsync(
+    // sourceIp/userAgent are pulled off THIS service's own current HttpContext, not AuthService's —
+    // by the time a request reaches AuthService's internal endpoint it's this service calling that
+    // one, so AuthService's own connection info would just be this server's address, not the real
+    // end user's. entityLabel is the one thing that can't be derived from ambient state — the
+    // caller passes the specific record's human-readable name (e.g. a remote app's display name).
+    public Task<bool> PushAuditLogAsync(string action, string? entityType, string? entityId, string? details, Guid? actorUserId, string? actorName, string? entityLabel = null, CancellationToken ct = default)
+    {
+        var httpContext = httpContextAccessor.HttpContext;
+        var sourceIp = httpContext?.Connection.RemoteIpAddress?.ToString();
+        var userAgent = httpContext?.Request.Headers.UserAgent.ToString();
+        return PostAsync(
             "internal/audit-logs",
-            new RecordAuditLogRequest("ModuleRegistry", actorUserId, actorName, action, entityType, entityId, details),
+            new RecordAuditLogRequest("ModuleRegistry", actorUserId, actorName, action, entityType, entityId, details, entityLabel, sourceIp, userAgent),
             ct);
+    }
 
     private record RemoteCapabilitiesResponse(
         [property: JsonPropertyName("modules")] List<RemoteModuleEntry>? Modules,

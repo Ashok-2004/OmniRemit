@@ -17,6 +17,9 @@ builder.Services.AddControllers();
 // AddHealthChecks() with no checks registered always reported healthy — it could not fail even with
 // the database completely unreachable. Now it actually verifies the DbContext can connect.
 builder.Services.AddHealthChecks().AddDbContextCheck<EmployeeService.Data.AppDbContext>("database");
+// Lets AuthServiceClient read the real caller's IP/User-Agent off the current request when it pushes
+// an audit-log entry to AuthService, instead of that entry showing this server's own address.
+builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddResponseCompression(options => options.EnableForHttps = true);
 

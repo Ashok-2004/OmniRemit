@@ -21,11 +21,22 @@ public class InternalAuditLogsController(AuditLogAppService auditLog) : Controll
     [HttpPost]
     public async Task<IActionResult> Record([FromBody] RecordAuditLogRequest request, CancellationToken ct)
     {
-        var sourceIp = HttpContext.Connection.RemoteIpAddress?.ToString();
+        // Prefer what the caller reports — it's the origin service's own request, which is where the
+        // real end-user's IP/User-Agent actually lands (this controller's own HttpContext only ever
+        // sees the calling microservice's server, not the original browser). Fall back to this
+        // connection's own address only for an older caller that hasn't been updated to send them.
+        var sourceIp = string.IsNullOrWhiteSpace(request.SourceIp)
+            ? HttpContext.Connection.RemoteIpAddress?.ToString()
+            : request.SourceIp;
+        var userAgent = string.IsNullOrWhiteSpace(request.UserAgent)
+            ? HttpContext.Request.Headers.UserAgent.ToString()
+            : request.UserAgent;
+
         await auditLog.WriteAsync(
             request.ServiceName, request.ActorUserId, request.ActorName, request.Action,
             request.EntityType, request.EntityId, request.Details, sourceIp,
-            request.AuthMethod, request.Result, request.UserAgent, request.FailureReason, request.CorrelationId, ct);
+            request.AuthMethod, request.Result, userAgent, request.FailureReason, request.CorrelationId,
+            request.EntityLabel, ct);
         return NoContent();
     }
 }

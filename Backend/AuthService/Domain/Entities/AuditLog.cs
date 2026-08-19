@@ -23,6 +23,14 @@ public class AuditLog
     public string? EntityType { get; set; }
     public string? EntityId { get; set; }
 
+    /// <summary>
+    /// Human-readable name of the specific entity this action touched — e.g. a remote app's display
+    /// name, a user's email, a role's name. Lets the UI show "Entity: Lead Management" instead of a
+    /// raw EntityType/EntityId pair; falls back to EntityType alone when null (older rows, or actions
+    /// with no single natural name).
+    /// </summary>
+    public string? EntityLabel { get; set; }
+
     /// <summary>Free-form JSON blob with whatever extra context is useful for this action — never parsed structurally, display-only.</summary>
     public string? Details { get; set; }
 

@@ -6,9 +6,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AuthService.Application.Services;
 
-public class RoleAppService(AuthDbContext db, AuditLogAppService auditLog)
+public class RoleAppService(AuthDbContext db, AuditLogAppService auditLog, IHttpContextAccessor httpContextAccessor)
 {
     private const string ServiceName = "AuthService";
+
+    // Same reasoning as UserAppService: this runs in-process inside AuthService, so the ambient
+    // HttpContext is the real end-user's own request, not a service-to-service hop.
+    private string? SourceIp => httpContextAccessor.HttpContext?.Connection.RemoteIpAddress?.ToString();
+    private string? UserAgent => httpContextAccessor.HttpContext?.Request.Headers.UserAgent.ToString();
     public async Task<PagedResult<RoleListItemDto>> ListAsync(int page, int pageSize, string? search, CancellationToken ct = default)
     {
         var query = db.Roles.AsNoTracking().AsQueryable();
@@ -65,7 +70,7 @@ public class RoleAppService(AuthDbContext db, AuditLogAppService auditLog)
         await ApplyPermissionsAsync(role.Id, request.Permissions, ct);
         await db.SaveChangesAsync(ct);
 
-        await WriteAuditAsync(actingUserId, "role.created", role.Id, $"Created role '{role.Name}'", ct);
+        await WriteAuditAsync(actingUserId, "role.created", role.Id, $"Created role '{role.Name}'", role.Name, ct);
 
         var permissions = await LoadPermissionsAsync(role.Id, ct);
         return ToDetailDto(role, permissions);
@@ -90,7 +95,7 @@ public class RoleAppService(AuthDbContext db, AuditLogAppService auditLog)
 
         await db.SaveChangesAsync(ct);
 
-        await WriteAuditAsync(actingUserId, "role.updated", role.Id, $"Updated role '{role.Name}' — permissions modified", ct);
+        await WriteAuditAsync(actingUserId, "role.updated", role.Id, $"Updated role '{role.Name}' — permissions modified", role.Name, ct);
 
         var permissions = await LoadPermissionsAsync(id, ct);
         return ToDetailDto(role, permissions);
@@ -116,15 +121,15 @@ public class RoleAppService(AuthDbContext db, AuditLogAppService auditLog)
         db.Roles.Remove(role);
         await db.SaveChangesAsync(ct);
 
-        await WriteAuditAsync(actingUserId, "role.deleted", id, $"Deleted role '{role.Name}'", ct);
+        await WriteAuditAsync(actingUserId, "role.deleted", id, $"Deleted role '{role.Name}'", role.Name, ct);
     }
 
-    private async Task WriteAuditAsync(Guid? actingUserId, string action, Guid roleId, string details, CancellationToken ct)
+    private async Task WriteAuditAsync(Guid? actingUserId, string action, Guid roleId, string details, string? entityLabel, CancellationToken ct)
     {
         var actorName = actingUserId is null
             ? null
             : await db.Users.AsNoTracking().Where(u => u.Id == actingUserId).Select(u => u.Name).FirstOrDefaultAsync(ct);
-        await auditLog.WriteAsync(ServiceName, actingUserId, actorName, action, "Role", roleId.ToString(), details, ct: ct);
+        await auditLog.WriteAsync(ServiceName, actingUserId, actorName, action, "Role", roleId.ToString(), details, SourceIp, userAgent: UserAgent, entityLabel: entityLabel, ct: ct);
     }
 
     /// <summary>

@@ -16,6 +16,9 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers(options => options.Filters.Add<AppExceptionFilter>());
 builder.Services.AddOpenApi();
+// Lets AuthServiceClient read the real caller's IP/User-Agent off the current request when it pushes
+// an audit-log entry to AuthService, instead of that entry showing this server's own address.
+builder.Services.AddHttpContextAccessor();
 
 builder.Services.Configure<CorsOptions>(builder.Configuration.GetSection(CorsOptions.SectionName));
 builder.Services.Configure<JwtValidationOptions>(builder.Configuration.GetSection(JwtValidationOptions.SectionName));

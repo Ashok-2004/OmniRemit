@@ -15,6 +15,7 @@ export interface AuditLogDto {
   action: string
   entityType: string | null
   entityId: string | null
+  entityLabel: string | null
   details: string | null
   sourceIp: string | null
   authMethod: string | null

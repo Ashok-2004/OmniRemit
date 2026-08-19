@@ -9,6 +9,7 @@ public record AuditLogDto(
     string Action,
     string? EntityType,
     string? EntityId,
+    string? EntityLabel,
     string? Details,
     string? SourceIp,
     string? AuthMethod,
@@ -17,7 +18,7 @@ public record AuditLogDto(
     string? FailureReason,
     string CorrelationId);
 
-/// <summary>What any service (ModuleRegistry, EmployeeService, any future remote's backend) posts to record one audit entry.</summary>
+/// <summary>What any service (ModuleRegistry, EmployeeService, LeadService, any future remote's backend) posts to record one audit entry.</summary>
 public record RecordAuditLogRequest(
     string ServiceName,
     Guid? ActorUserId,
@@ -26,6 +27,8 @@ public record RecordAuditLogRequest(
     string? EntityType,
     string? EntityId,
     string? Details,
+    string? EntityLabel = null,
+    string? SourceIp = null,
     string? AuthMethod = null,
     string Result = "Success",
     string? UserAgent = null,
