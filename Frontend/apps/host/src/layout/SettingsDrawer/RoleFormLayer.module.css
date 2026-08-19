@@ -96,60 +96,110 @@
   font-size: 13px;
 }
 
-/* Tabs List */
-.tabsList {
+/* Stepper Progress Bar — same pattern as UserFormLayer.module.css's, so the two wizards share one
+   visual language rather than each inventing its own. Replaces the old flat .tabsList/.tabBtn tab bar
+   (every tab independently clickable, Submit always visible regardless of tab), removed as part of
+   Task 6's real-stepper restructure. */
+.stepperContainer {
   display: flex;
   align-items: center;
-  gap: 18px;
-  padding: 0 24px;
-  border-bottom: 1px solid #f1f5f9;
-  background: #ffffff;
+  padding: 12px 24px;
+  background: #f8fafc;
+  border-bottom: 1px solid #eaecf0;
+  gap: 12px;
   overflow-x: auto;
 }
 
-.tabBtn {
+.stepTab {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   background: none;
   border: none;
-  padding: 12px 0;
-  font-size: 12px;
-  font-weight: 600;
-  color: #64748b;
+  padding: 4px 8px;
   cursor: pointer;
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  border-radius: 8px;
+  transition: all 0.15s ease;
+  text-align: left;
   white-space: nowrap;
-  transition: color 0.15s ease;
 }
 
-.tabBtn:hover {
-  color: #0f172a;
+.stepTab:hover {
+  background: #f1f5f9;
 }
 
-.tabBtnActive {
+.stepBadge {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #e2e8f0;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.stepTabActive .stepBadge {
+  background: #2563eb;
+  color: #ffffff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+}
+
+.stepTabDone .stepBadge {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.stepCheckIcon {
+  color: #059669;
+}
+
+.stepTabText {
+  display: flex;
+  flex-direction: column;
+}
+
+.stepTitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+  line-height: 1.2;
+}
+
+.stepTabActive .stepTitle {
   color: #2563eb;
 }
 
-.tabBtnActive::after {
-  content: '';
-  position: absolute;
-  bottom: -1px;
-  left: 0;
-  right: 0;
-  height: 2.5px;
-  background: linear-gradient(90deg, #2563eb, #60a5fa);
-  border-radius: 2px;
+.stepDesc {
+  font-size: 10px;
+  color: #94a3b8;
 }
 
-.tabBadge {
+.stepperLine {
+  flex: 1;
+  height: 1px;
+  background: #e2e8f0;
+  min-width: 16px;
+}
+
+/* Platform Administrator info banner — Task 5, shown on the Basic step in place of the now-hidden
+   Host Permissions / Application Access steps. Same treatment as UserFormLayer's .adminRoleNotice. */
+.adminRoleBanner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 10px;
   background: #eff6ff;
   color: #2563eb;
   border: 1px solid #bfdbfe;
-  font-size: 10px;
-  font-weight: 700;
-  padding: 1px 6px;
-  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
 }
 
 /* Form and content area */
@@ -729,6 +779,50 @@
 .cancelBtn:hover {
   background: #f8fafc;
   border-color: #c8d4e4;
+}
+
+.secondaryBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 9px;
+  padding: 9px 18px;
+  font-size: 13px;
+  font-family: 'Inter', -apple-system, sans-serif;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  transition: background 130ms ease, border-color 130ms ease;
+}
+
+.secondaryBtn:hover {
+  background: #f8fafc;
+  border-color: #c8d4e4;
+  color: #0f172a;
+}
+
+.primaryNextBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  border: none;
+  border-radius: 9px;
+  padding: 9px 22px;
+  font-size: 13px;
+  font-family: 'Inter', -apple-system, sans-serif;
+  font-weight: 600;
+  color: #ffffff;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.28);
+  transition: box-shadow 140ms ease, transform 120ms ease;
+}
+
+.primaryNextBtn:hover {
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.38);
+  transform: translateY(-1px);
 }
 
 .saveBtn {

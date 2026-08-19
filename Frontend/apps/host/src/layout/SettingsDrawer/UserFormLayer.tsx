@@ -340,6 +340,27 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
     setCurrentStep('permissions')
   }
 
+  /**
+   * Jumping directly to a later step via its badge used to only check `name && email` — the same two
+   * fields the very first version of this form validated, before per-field rules (email format, phone
+   * format, max lengths) existed. The Next button on Step 1 already enforces the full `fieldErrors`
+   * set; a badge click bypassing that let an admin reach Review with an invalid phone number still in
+   * the field, because nothing after Step 1 re-checks it.
+   */
+  const attemptJumpTo = (target: Step) => {
+    if (target === 'basic') {
+      setCurrentStep('basic')
+      return
+    }
+    setSubmitAttempted(true)
+    if (!isValid(fieldErrors)) {
+      setError(null)
+      return
+    }
+    setError(null)
+    setCurrentStep(target)
+  }
+
   const handleSubmit = async () => {
     setError(null)
     setSaving(true)
@@ -514,16 +535,18 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
           <button
             type="button"
             className={`${styles.stepTab} ${currentStep === 'permissions' ? styles.stepTabActive : ''}`}
-            onClick={() => {
-              if (name && email) setCurrentStep('permissions')
-            }}
+            onClick={() => attemptJumpTo('permissions')}
           >
             <div className={styles.stepBadge}>
               <span>2</span>
             </div>
             <div className={styles.stepTabText}>
               <span className={styles.stepTitle}>Extra Permissions</span>
-              <span className={styles.stepDesc}>{selectedPermKeys.size} Permissions Active</span>
+              <span className={styles.stepDesc}>
+                {selectedRole?.isAdministrator
+                  ? 'Full Access (Administrator)'
+                  : `${selectedPermKeys.size} Permissions Active`}
+              </span>
             </div>
           </button>
 
@@ -532,9 +555,7 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
           <button
             type="button"
             className={`${styles.stepTab} ${currentStep === 'review' ? styles.stepTabActive : ''}`}
-            onClick={() => {
-              if (name && email) setCurrentStep('review')
-            }}
+            onClick={() => attemptJumpTo('review')}
           >
             <div className={styles.stepBadge}>
               <span>3</span>
@@ -707,6 +728,26 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
             {/* STEP 2: Extra Permissions */}
             {currentStep === 'permissions' && (
               <div className={styles.formSection}>
+                {selectedRole?.isAdministrator ? (
+                  /*
+                   * Platform Administrator Access: the assigned role already grants everything (see
+                   * fetchRolePermSet's admin branch — rolePermSet is every grantable pair in the
+                   * catalog, and handleRoleChange pre-checks selectedPermKeys to match). Granular
+                   * checkboxes/accordions here would only ever show every box already ticked, with no
+                   * meaningful Grant/Revoke to make — showing them anyway invites an admin to think
+                   * they're configuring something that unchecking wouldn't actually restrict, since a
+                   * new capability the role gains later is still covered automatically. Hide the
+                   * section entirely and say so plainly instead.
+                   */
+                  <div className={styles.adminRoleNotice} style={{ fontSize: '13px', padding: '16px 18px' }}>
+                    <Icon.ShieldCheck width={20} height={20} />
+                    <span>
+                      Platform Administrator has full access to all features and applications. Granular
+                      permission selection is not applicable while this role is assigned.
+                    </span>
+                  </div>
+                ) : (
+                <>
                 {/* Global Select All Toolbar */}
                 <div className={styles.globalSelectToolbar}>
                   <label className={styles.globalCheckboxLabel}>
@@ -974,6 +1015,8 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
                       )
                     })}
                 </div>
+                </>
+                )}
               </div>
             )}
 

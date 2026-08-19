@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { Fragment, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useAuthStore } from '../../features/auth/store/authStore'
 import { permissionsApi, type PermissionFeatureDto } from '../../shared/api/permissionsApi'
 import { rolesApi, type RolePermissionGrantDto, type RoleUserDto } from '../../features/settings-roles/api/rolesApi'
@@ -10,6 +10,7 @@ import { SkeletonBlock } from '../../shared/components/Skeleton'
 import { resolveIcon } from '../../shared/components/Icon/resolveIcon'
 import { groupsFromCatalog, columnsForRows } from '../../shared/permissions/catalog'
 import { toast } from '../../shared/stores/toastStore'
+import { LIMITS, required, maxLength, firstError, isValid, type FieldErrors } from '../../shared/validation/rules'
 import styles from './RoleFormLayer.module.css'
 
 interface RoleFormLayerProps {
@@ -18,6 +19,13 @@ interface RoleFormLayerProps {
 }
 
 type TabType = 'basic' | 'host' | 'apps' | 'users'
+
+const STEP_META: Record<TabType, { title: string; desc: string }> = {
+  basic: { title: 'Basic Details', desc: 'Name & Admin Access' },
+  host: { title: 'Host Permissions', desc: 'Platform Modules' },
+  apps: { title: 'Application Access', desc: 'Remote Apps' },
+  users: { title: 'Assigned Users', desc: 'Role Members' },
+}
 
 export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
   const isEdit = Boolean(roleId)
@@ -103,13 +111,24 @@ export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
    * `applications:Register`, `audit-logs:Export` and `profile:ChangePassword` each get a checkbox —
    * all four were previously ungrantable because the grid only had View/Create/Edit/Delete.
    */
-  // Turning the administrator flag on while standing on a permission tab would otherwise leave the
-  // drawer showing a tab whose button no longer exists.
+  /*
+   * The step sequence itself shrinks when Platform Administrator Access is on — Host Permissions and
+   * Application Access are not just visually hidden, they are removed from the stepper entirely, since
+   * an administrator's grants have no effect to configure (see isGranted/togglePermission below, both
+   * short-circuit on isAdministrator). Turning the flag on while standing on either step would
+   * otherwise leave the drawer showing a step that no longer has a button in the header.
+   */
+  const stepOrder: TabType[] = isAdministrator ? ['basic', 'users'] : ['basic', 'host', 'apps', 'users']
+
   useEffect(() => {
-    if (isAdministrator && (activeTab === 'host' || activeTab === 'apps')) {
+    if (!stepOrder.includes(activeTab)) {
       setActiveTab('basic')
     }
-  }, [isAdministrator, activeTab])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdministrator])
+
+  const currentStepIndex = stepOrder.indexOf(activeTab)
+  const isLastStep = currentStepIndex === stepOrder.length - 1
 
   const hostGroups = useMemo(() => groupsFromCatalog(catalog, 'Host'), [catalog])
   const hostColumns = useMemo(
@@ -195,8 +214,55 @@ export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
     ])
   }
 
-  const handleSubmit = async (e: FormEvent) => {
+  /**
+   * Per-field validation mirroring the server's annotations on UpsertRoleRequest, the same pattern
+   * UserFormLayer uses. The old flat tab bar had no validation at all beyond the Name input's HTML5
+   * `required` attribute, which only ever fires if the field sits inside a form that gets submitted —
+   * true here only for the Basic step's own mini-form (see below), not for jumping straight to a later
+   * tab, which is the gap this closes.
+   */
+  const fieldErrors: FieldErrors<'name' | 'description'> = {
+    name: firstError(required(name, 'Role name'), maxLength(name, LIMITS.roleName, 'Role name')),
+    description: maxLength(description, LIMITS.roleDescription, 'Description'),
+  }
+
+  const [touched, setTouched] = useState<Record<string, boolean>>({})
+  const [submitAttempted, setSubmitAttempted] = useState(false)
+  const showError = (field: keyof typeof fieldErrors) =>
+    touched[field] || submitAttempted ? fieldErrors[field] : undefined
+
+  const handleNextFromBasic = (e: FormEvent) => {
     e.preventDefault()
+    setSubmitAttempted(true)
+    if (!isValid(fieldErrors)) {
+      setError(null)
+      return
+    }
+    setError(null)
+    setActiveTab(stepOrder[currentStepIndex + 1])
+  }
+
+  const goToPreviousStep = () => {
+    if (currentStepIndex > 0) setActiveTab(stepOrder[currentStepIndex - 1])
+  }
+
+  /** Jumping directly to a later step badge is held to the same Basic-step validation as Next. */
+  const attemptJumpTo = (target: TabType) => {
+    const targetIndex = stepOrder.indexOf(target)
+    if (targetIndex <= currentStepIndex || targetIndex === 0) {
+      setActiveTab(target)
+      return
+    }
+    setSubmitAttempted(true)
+    if (!isValid(fieldErrors)) {
+      setError(null)
+      return
+    }
+    setError(null)
+    setActiveTab(target)
+  }
+
+  const handleSubmit = async () => {
     setError(null)
     setSaving(true)
 
@@ -354,63 +420,64 @@ export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
         </button>
       </div>
 
-      {error && <div className={styles.errorAlert}>{error}</div>}
+      {/*
+        Real stepper, matching UserFormLayer's — Next/Previous between steps, per-step validation, and
+        the Create/Update button reachable only from the last step (see the bottom bar below). Replaces
+        the previous flat tab bar, where every tab was independently clickable and Submit was always
+        visible regardless of which tab was open, so a role could be created/saved without the admin
+        ever having looked at Host Permissions or Application Access.
 
-      {/* Tabs Bar */}
-      <div className={styles.tabsList}>
-        <button
-          type="button"
-          className={`${styles.tabBtn} ${activeTab === 'basic' ? styles.tabBtnActive : ''}`}
-          onClick={() => setActiveTab('basic')}
-        >
-          <span>Basic Details</span>
-        </button>
-        {/*
-          Both permission tabs are hidden while the role is an administrator. An administrator holds
-          every capability unconditionally, so a grid of checkboxes there would be describing a choice
-          that has no effect — worse, it would show boxes unticked while the role in fact has that
-          access. The underlying grants are kept (see the submit handler), so turning the flag back off
-          restores exactly what was configured.
-        */}
-        {!isAdministrator && (
-          <button
-            type="button"
-            className={`${styles.tabBtn} ${activeTab === 'host' ? styles.tabBtnActive : ''}`}
-            onClick={() => setActiveTab('host')}
-          >
-            <span>Host Permissions</span>
-          </button>
-        )}
-        {!isAdministrator && (
-        <button
-          type="button"
-          className={`${styles.tabBtn} ${activeTab === 'apps' ? styles.tabBtnActive : ''}`}
-          onClick={() => setActiveTab('apps')}
-        >
-          <span>Application Access</span>
-          {visibleAppGroups.length > 0 && (
-            <span className={styles.tabBadge}>{visibleAppGroups.length}</span>
-          )}
-        </button>
-        )}
-        <button
-          type="button"
-          className={`${styles.tabBtn} ${activeTab === 'users' ? styles.tabBtnActive : ''}`}
-          onClick={() => setActiveTab('users')}
-        >
-          <span>Assigned Users</span>
-          {assignedUsersTotal > 0 && (
-            <span className={styles.tabBadge}>{assignedUsersTotal}</span>
-          )}
-        </button>
+        Both permission steps disappear from the sequence entirely while the role is an administrator
+        (see stepOrder above) — an administrator holds every capability unconditionally, so a grid of
+        checkboxes there would be describing a choice that has no effect. The underlying grants are
+        kept (see handleSubmit's comment), so turning the flag back off restores exactly what was
+        configured.
+      */}
+      <div className={styles.stepperContainer}>
+        {stepOrder.map((step, idx) => {
+          const meta = STEP_META[step]
+          const isDone = idx < currentStepIndex
+          const count =
+            step === 'apps'
+              ? visibleAppGroups.length
+              : step === 'users'
+              ? assignedUsersTotal
+              : undefined
+          return (
+            <Fragment key={step}>
+              <button
+                type="button"
+                className={`${styles.stepTab} ${activeTab === step ? styles.stepTabActive : ''} ${isDone ? styles.stepTabDone : ''}`}
+                onClick={() => attemptJumpTo(step)}
+              >
+                <div className={styles.stepBadge}>
+                  {isDone ? (
+                    <Icon.CheckCircle width={14} height={14} className={styles.stepCheckIcon} />
+                  ) : (
+                    <span>{idx + 1}</span>
+                  )}
+                </div>
+                <div className={styles.stepTabText}>
+                  <span className={styles.stepTitle}>{meta.title}</span>
+                  <span className={styles.stepDesc}>
+                    {count !== undefined ? `${count} ${step === 'apps' ? 'Apps' : 'Members'}` : meta.desc}
+                  </span>
+                </div>
+              </button>
+              {idx < stepOrder.length - 1 && <div className={styles.stepperLine} />}
+            </Fragment>
+          )
+        })}
       </div>
 
+      {error && <div className={styles.errorAlert}>{error}</div>}
+
       {/* Form Content */}
-      <form id="role-form" onSubmit={(e) => void handleSubmit(e)} className={styles.form}>
+      <div className={styles.form}>
         <div className={styles.contentArea}>
           {/* Tab 1: Basic Details */}
           {activeTab === 'basic' && (
-            <div className={styles.tabSection}>
+            <form id="role-basic-form" onSubmit={handleNextFromBasic} className={styles.tabSection}>
               <div className={styles.formCard}>
                 <h4 className={styles.formCardTitle}>Role Details</h4>
                 <div className={styles.fieldsGrid}>
@@ -421,14 +488,22 @@ export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
                     <div className={styles.inputIconWrap}>
                       <input
                         type="text"
-                        required
-                        className={styles.inputWithIcon}
+                        className={`${styles.inputWithIcon} ${showError('name') ? styles.inputInvalid : ''}`}
                         placeholder="e.g. Employee Operations Manager"
                         value={name}
+                        maxLength={LIMITS.roleName}
+                        aria-invalid={Boolean(showError('name'))}
+                        aria-describedby={showError('name') ? 'role-name-error' : undefined}
                         onChange={(e) => setName(e.target.value)}
+                        onBlur={() => setTouched((t) => ({ ...t, name: true }))}
                       />
                       <Icon.ShieldCheck width={16} height={16} className={styles.fieldLeftIcon} />
                     </div>
+                    {showError('name') && (
+                      <span id="role-name-error" className={styles.fieldError} role="alert">
+                        {showError('name')}
+                      </span>
+                    )}
                   </div>
 
                   <div className={styles.inputGroupFull}>
@@ -438,8 +513,15 @@ export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
                       placeholder="Briefly describe the operational scope and capabilities of this role..."
                       rows={3}
                       value={description}
+                      maxLength={LIMITS.roleDescription}
                       onChange={(e) => setDescription(e.target.value)}
+                      onBlur={() => setTouched((t) => ({ ...t, description: true }))}
                     />
+                    {showError('description') && (
+                      <span className={styles.fieldError} role="alert">
+                        {showError('description')}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -460,7 +542,22 @@ export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
                   onChange={(e) => setIsAdministrator(e.target.checked)}
                 />
               </div>
-            </div>
+
+              {/* Task 5: hide/disable granular permission sections when Platform Administrator Access
+                  is on, and say so plainly — Host Permissions and Application Access have already
+                  dropped out of the step sequence above (see stepOrder), so this is the one place in
+                  the wizard where that fact needs to be visible to the admin configuring it. */}
+              {isAdministrator && (
+                <div className={styles.adminRoleBanner}>
+                  <Icon.ShieldCheck width={20} height={20} />
+                  <span>
+                    Platform Administrator has full access to all features and applications. Host
+                    Permissions and Application Access are hidden — granular selection has no effect
+                    while this is enabled.
+                  </span>
+                </div>
+              )}
+            </form>
           )}
 
           {/* Tab 2: Host Permissions */}
@@ -748,31 +845,57 @@ export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
           )}
         </div>
 
-        {/* Sticky Bottom Bar */}
+        {/* Sticky Bottom Bar — Task 6: Next/Previous on every step except the last, where the only
+            forward action is Create/Update. The API is never called before that final click: Next
+            only ever calls setActiveTab (via handleNextFromBasic / attemptJumpTo), and handleSubmit is
+            wired to nothing but this one button. */}
         <div className={styles.bottomBar}>
-          <button
-            type="button"
-            className={styles.cancelBtn}
-            onClick={popLayer}
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className={styles.saveBtn}
-            disabled={saving}
-          >
-            {saving ? (
-              <span>Saving...</span>
-            ) : (
-              <>
-                <Icon.CheckCircle width={16} height={16} />
-                <span>{isEdit ? 'Save Changes' : 'Create System Role'}</span>
-              </>
-            )}
-          </button>
+          {currentStepIndex === 0 ? (
+            <>
+              <button type="button" className={styles.cancelBtn} onClick={popLayer}>
+                Cancel
+              </button>
+              <button type="submit" form="role-basic-form" className={styles.primaryNextBtn}>
+                <span>Next: {STEP_META[stepOrder[1]].title}</span>
+                <Icon.ChevronRight width={16} height={16} />
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" className={styles.secondaryBtn} onClick={goToPreviousStep}>
+                <Icon.ChevronLeft width={16} height={16} />
+                <span>Back to {STEP_META[stepOrder[currentStepIndex - 1]].title}</span>
+              </button>
+              {isLastStep ? (
+                <button
+                  type="button"
+                  className={styles.saveBtn}
+                  disabled={saving}
+                  onClick={() => void handleSubmit()}
+                >
+                  {saving ? (
+                    <span>Saving...</span>
+                  ) : (
+                    <>
+                      <Icon.CheckCircle width={16} height={16} />
+                      <span>{isEdit ? 'Save Changes' : 'Create System Role'}</span>
+                    </>
+                  )}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className={styles.primaryNextBtn}
+                  onClick={() => setActiveTab(stepOrder[currentStepIndex + 1])}
+                >
+                  <span>Next: {STEP_META[stepOrder[currentStepIndex + 1]].title}</span>
+                  <Icon.ChevronRight width={16} height={16} />
+                </button>
+              )}
+            </>
+          )}
         </div>
-      </form>
+      </div>
     </div>
   )
 }
