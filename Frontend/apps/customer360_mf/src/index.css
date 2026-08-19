@@ -1125,16 +1125,27 @@
 
 /* ---- Customer360.tsx: two-column detail layout ---- */
 
+/* Scroll isolation: previously this container had no bounded height, so the whole page — including
+   the host's own sidebar/topbar, since they share the host's single page-level scroll container —
+   scrolled together with the customer detail content. The host's own shell (AppShell.module.css) is
+   already correctly isolated on its side (.shell/.main use overflow:hidden; Sidebar/Topbar sit
+   outside .content, the one real scroll container) — the gap was entirely here: nothing capped this
+   row's height, so it just kept growing and rode that same host-level scroll. Capping it to the
+   viewport (minus the host Topbar's 64px and .content's 26px top+bottom padding) and giving only the
+   right column its own overflow means the host chrome and this profile card never move, and only the
+   detail content underneath scrolls. */
 .customer-layout-container {
   display: grid;
   grid-template-columns: 260px 1fr;
   gap: 18px;
   align-items: start;
+  height: calc(100vh - 116px);
 }
 
 @media (max-width: 900px) {
   .customer-layout-container {
     grid-template-columns: 1fr;
+    height: auto;
   }
 }
 
@@ -1145,7 +1156,10 @@
   box-shadow: var(--shadow-card);
   padding: 20px;
   position: sticky;
-  top: 20px;
+  top: 0;
+  align-self: start;
+  max-height: 100%;
+  overflow-y: auto;
 }
 
 .customer-right-column {
@@ -1153,6 +1167,23 @@
   flex-direction: column;
   gap: 16px;
   min-width: 0;
+  height: 100%;
+  overflow-y: auto;
+  /* Small gutter so the scrollbar doesn't sit flush against card edges/content. */
+  padding-right: 4px;
+}
+
+@media (max-width: 900px) {
+  /* On narrow screens the two columns stack into one; a nested scroll region there just fights the
+     page's own scroll and touch scrolling, so let this flow with the page like a normal single
+     column instead. */
+  .customer-left-column,
+  .customer-right-column {
+    position: static;
+    max-height: none;
+    height: auto;
+    overflow: visible;
+  }
 }
 
 .left-tab-btn {
