@@ -15,29 +15,44 @@ public class PermissionClaimsBuilder(AuthDbContext db)
 {
     public async Task<PermissionClaimsResult> BuildAsync(User user, CancellationToken ct = default)
     {
-        if (user.RoleId is null)
+        /*
+         * A "No Role" user is NOT the same as "no permissions, full stop" — the Extra Permissions step
+         * on the user form explicitly supports granting individual overrides to any user regardless of
+         * role, "no role" included (that's precisely how a Maker-Checker approval works: a checker who
+         * needs only the Approvals capability and nothing else, with no role to attach it to). This
+         * used to early-return `[]` the moment RoleId was null, before UserPermissionOverrides was ever
+         * queried — so a roleless user's overrides were computed correctly by ReplacePermissionOverridesAsync,
+         * stored correctly, visible correctly in the edit form... and then silently discarded every
+         * single time an access token was actually minted. The bug was invisible because almost every
+         * account in practice has a role; it surfaced testing a role-less checker granted the Approvals
+         * capability directly, whose freshly-minted token still carried zero permissions.
+         *
+         * Fix: treat "no role" as "zero role grants", not as "skip permissions entirely" — the override
+         * loop below still runs and Grant overrides still take effect on top of that empty base.
+         */
+        Role? role = null;
+        if (user.RoleId is not null)
         {
-            return new PermissionClaimsResult(false, []);
+            role = await db.Roles.AsNoTracking().FirstOrDefaultAsync(r => r.Id == user.RoleId, ct);
         }
 
-        var role = await db.Roles.AsNoTracking().FirstOrDefaultAsync(r => r.Id == user.RoleId, ct);
-        if (role is null)
-        {
-            return new PermissionClaimsResult(false, []);
-        }
-
-        if (role.IsAdministrator)
+        if (role is { IsAdministrator: true })
         {
             // Unrestricted — no need to materialize the full grant list, the frontend/backend both
             // treat IsAdministrator as "every capability on every feature, forever".
             return new PermissionClaimsResult(true, []);
         }
 
-        var roleGrants = await db.RolePermissions
-            .AsNoTracking()
-            .Where(rp => rp.RoleId == role.Id && rp.Feature!.IsActive)
-            .Select(rp => new { rp.Feature!.Key, rp.Capability })
-            .ToListAsync(ct);
+        var roleGrantPairs = new List<(string Key, string Capability)>();
+        if (role is not null)
+        {
+            var roleGrants = await db.RolePermissions
+                .AsNoTracking()
+                .Where(rp => rp.RoleId == role.Id && rp.Feature!.IsActive)
+                .Select(rp => new { rp.Feature!.Key, rp.Capability })
+                .ToListAsync(ct);
+            roleGrantPairs.AddRange(roleGrants.Select(g => (g.Key, g.Capability)));
+        }
 
         var overrides = await db.UserPermissionOverrides
             .AsNoTracking()
@@ -45,8 +60,7 @@ public class PermissionClaimsBuilder(AuthDbContext db)
             .Select(o => new { o.Feature!.Key, o.Capability, o.Effect })
             .ToListAsync(ct);
 
-        var effective = new HashSet<(string Key, string Capability)>(
-            roleGrants.Select(g => (g.Key, g.Capability)));
+        var effective = new HashSet<(string Key, string Capability)>(roleGrantPairs);
 
         foreach (var o in overrides)
         {

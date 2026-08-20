@@ -13,6 +13,8 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     public DbSet<UserPermissionOverride> UserPermissionOverrides => Set<UserPermissionOverride>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<ApprovalRequest> ApprovalRequests => Set<ApprovalRequest>();
+    public DbSet<CheckerAssignment> CheckerAssignments => Set<CheckerAssignment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -169,6 +171,49 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             entity.Property(a => a.EntityId).HasMaxLength(200);
             entity.Property(a => a.EntityLabel).HasMaxLength(300);
             entity.Property(a => a.SourceIp).HasMaxLength(64);
+        });
+
+        modelBuilder.Entity<ApprovalRequest>(entity =>
+        {
+            entity.Property(a => a.Module).HasMaxLength(100);
+            entity.Property(a => a.Action).HasMaxLength(30);
+            entity.Property(a => a.EntityType).HasMaxLength(100);
+            entity.Property(a => a.EntityId).HasMaxLength(200);
+            entity.Property(a => a.EntityLabel).HasMaxLength(300);
+            entity.Property(a => a.Status).HasMaxLength(20);
+            entity.Property(a => a.MakerName).HasMaxLength(200);
+            entity.Property(a => a.CheckerName).HasMaxLength(200);
+            entity.Property(a => a.RejectionReason).HasMaxLength(1000);
+            entity.Property(a => a.SourceService).HasMaxLength(100);
+            entity.Property(a => a.CallbackUrl).HasMaxLength(500);
+
+            // Approval Center's default view: pending, newest first.
+            entity.HasIndex(a => new { a.Status, a.RequestedAt }).IsDescending(false, true);
+            // A checker's own queue, and the real-time "assigned to me, pending" badge count.
+            entity.HasIndex(a => new { a.CheckerId, a.Status });
+            // My Requests, newest first.
+            entity.HasIndex(a => new { a.MakerId, a.RequestedAt }).IsDescending(false, true);
+            // Approval Center's module/application filter.
+            entity.HasIndex(a => new { a.Module, a.Status });
+
+            // Restrict, not Cascade — an approval request is itself a historical/audit record and must
+            // never silently disappear because the maker or checker account was later deleted (soft
+            // delete already keeps the User row in place regardless, so this should never actually fire).
+            entity.HasOne<User>().WithMany().HasForeignKey(a => a.MakerId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<User>().WithMany().HasForeignKey(a => a.CheckerId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<CheckerAssignment>(entity =>
+        {
+            entity.Property(c => c.Module).HasMaxLength(100);
+            entity.HasIndex(c => new { c.Module, c.CheckerUserId }).IsUnique();
+            // Backs both IsGatedAsync's existence check and the least-workload selection query.
+            entity.HasIndex(c => c.Module);
+
+            entity.HasOne(c => c.CheckerUser)
+                .WithMany()
+                .HasForeignKey(c => c.CheckerUserId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

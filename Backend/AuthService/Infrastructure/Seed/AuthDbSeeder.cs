@@ -25,6 +25,8 @@ public static class AuthDbSeeder
         public const string SettingsRoles = "host.settings.roles";
         public const string SettingsApplications = "host.settings.applications";
         public const string SystemAuditLogs = "host.system.audit-logs";
+        public const string SystemApprovals = "host.system.approvals";
+        public const string SystemCheckerAssignment = "host.system.checker-assignment";
     }
 
     private static readonly string[] StandardCrud = ["View", "Create", "Edit", "Delete"];
@@ -39,6 +41,15 @@ public static class AuthDbSeeder
     private static readonly string[] UsersCapabilities = ["View", "Create", "Edit", "Delete", "Disable"];
     private static readonly string[] ApplicationsCapabilities = ["View", "Register", "Edit", "Delete", "Disable"];
     private static readonly string[] AuditLogsCapabilities = ["View", "Export"];
+
+    // Maker-Checker Approval Workflow — Approvals covers viewing the centralized Approval Center and
+    // acting on requests (Approve covers both approve and reject, matching how Disable already covers
+    // both enable and disable above); Checker Assignment is deliberately its own, separate, narrower
+    // feature — "only users with Manage Checker Assignment permission" per the requirement, kept apart
+    // from Approvals' own View/Approve so a checker doesn't automatically get to reconfigure who the
+    // checkers are.
+    private static readonly string[] ApprovalsCapabilities = ["View", "Approve"];
+    private static readonly string[] CheckerAssignmentCapabilities = ["View", "Manage"];
 
     /// <summary>Pre-rename feature key. Its absence is the marker that legacy data migrations are already done.</summary>
     private const string LegacyMaintenanceFeatureKey = "host.settings.maintenance";
@@ -150,6 +161,8 @@ public static class AuthDbSeeder
             new { Key = HostFeatureKeys.SettingsRoles, DisplayName = "Setup — Role", SortOrder = 20, Capabilities = StandardCrud },
             new { Key = HostFeatureKeys.SettingsApplications, DisplayName = "Setup — Applications", SortOrder = 30, Capabilities = ApplicationsCapabilities },
             new { Key = HostFeatureKeys.SystemAuditLogs, DisplayName = "System — Audit Logs", SortOrder = 40, Capabilities = AuditLogsCapabilities },
+            new { Key = HostFeatureKeys.SystemApprovals, DisplayName = "System — Approval Center", SortOrder = 50, Capabilities = ApprovalsCapabilities },
+            new { Key = HostFeatureKeys.SystemCheckerAssignment, DisplayName = "System — Checker Assignment", SortOrder = 60, Capabilities = CheckerAssignmentCapabilities },
         };
 
         var existing = await db.PermissionFeatures.Include(f => f.Capabilities).ToDictionaryAsync(f => f.Key, ct);
@@ -238,6 +251,10 @@ public static class AuthDbSeeder
                 [HostFeatureKeys.SettingsRoles] = ["View", "Create", "Edit"],
                 [HostFeatureKeys.SettingsApplications] = ["View", "Register", "Edit", "Disable"],
                 [HostFeatureKeys.SystemAuditLogs] = ["View", "Export"],
+                [HostFeatureKeys.SystemApprovals] = ["View", "Approve"],
+                // Manage stays Super-Admin-only, per "only users with Manage Checker Assignment
+                // permission" — Admin can see who's assigned but not reassign checkers.
+                [HostFeatureKeys.SystemCheckerAssignment] = ["View"],
             }),
             ("Manager", "Runs campaigns, contacts and boards day to day.", false, new()
             {
@@ -258,6 +275,8 @@ public static class AuthDbSeeder
                 [HostFeatureKeys.SettingsRoles] = ["View"],
                 [HostFeatureKeys.SettingsApplications] = ["View"],
                 [HostFeatureKeys.SystemAuditLogs] = ["View"],
+                [HostFeatureKeys.SystemApprovals] = ["View"],
+                [HostFeatureKeys.SystemCheckerAssignment] = ["View"],
             }),
         };
 

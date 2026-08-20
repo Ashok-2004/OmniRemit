@@ -29,28 +29,39 @@ public class UsersController(UserAppService users) : ControllerBase
 
     [HttpPost]
     [RequirePermission(Feature, "Create")]
-    public async Task<ActionResult<CreateUserResponse>> Create([FromBody] CreateUserRequest request, CancellationToken ct)
+    public async Task<IActionResult> Create([FromBody] CreateUserRequest request, CancellationToken ct)
     {
         var result = await users.CreateAsync(request, CurrentUserId(), ct);
-        return CreatedAtAction(nameof(Get), new { id = result.User.Id }, result);
+        if (result.Applied is not null)
+        {
+            return CreatedAtAction(nameof(Get), new { id = result.Applied.User.Id }, result.Applied);
+        }
+        // Gated: nothing was created. 202 Accepted — the request is understood and queued, not applied.
+        return Accepted(result.Pending);
     }
 
     [HttpPut("{id:guid}")]
     [RequirePermission(Feature, "Edit")]
-    public async Task<ActionResult<UserDetailDto>> Update(Guid id, [FromBody] UpdateUserRequest request, CancellationToken ct)
-        => Ok(await users.UpdateAsync(id, request, CurrentUserId(), ct));
+    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateUserRequest request, CancellationToken ct)
+    {
+        var result = await users.UpdateAsync(id, request, CurrentUserId(), ct);
+        return result.Applied is not null ? Ok(result.Applied) : Accepted(result.Pending);
+    }
 
     [HttpPatch("{id:guid}/status")]
     [RequirePermission(Feature, "Disable")]
-    public async Task<ActionResult<UserDetailDto>> UpdateStatus(Guid id, [FromBody] UpdateUserStatusRequest request, CancellationToken ct)
-        => Ok(await users.UpdateStatusAsync(id, request.IsActive, CurrentUserId(), ct));
+    public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] UpdateUserStatusRequest request, CancellationToken ct)
+    {
+        var result = await users.UpdateStatusAsync(id, request.IsActive, CurrentUserId(), ct);
+        return result.Applied is not null ? Ok(result.Applied) : Accepted(result.Pending);
+    }
 
     [HttpDelete("{id:guid}")]
     [RequirePermission(Feature, "Delete")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
-        await users.DeleteAsync(id, CurrentUserId(), ct);
-        return NoContent();
+        var pending = await users.DeleteAsync(id, CurrentUserId(), ct);
+        return pending is null ? NoContent() : Accepted(pending);
     }
 
     [HttpGet("{id:guid}/permission-overrides")]

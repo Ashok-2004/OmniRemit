@@ -1,3 +1,4 @@
+using System.Text.Json;
 using AuthService.Application.DTOs;
 using AuthService.Application.Exceptions;
 using AuthService.Domain.Entities;
@@ -6,7 +7,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AuthService.Application.Services;
 
-public class RoleAppService(AuthDbContext db, AuditLogAppService auditLog, IHttpContextAccessor httpContextAccessor)
+public class RoleAppService(
+    AuthDbContext db, AuditLogAppService auditLog, IHttpContextAccessor httpContextAccessor, ApprovalGatingService gating)
 {
     private const string ServiceName = "AuthService";
 
@@ -46,12 +48,21 @@ public class RoleAppService(AuthDbContext db, AuditLogAppService auditLog, IHttp
         return ToDetailDto(role, permissions);
     }
 
-    public async Task<RoleDetailDto> CreateAsync(UpsertRoleRequest request, Guid? actingUserId, CancellationToken ct = default)
+    public async Task<MutationResult<RoleDetailDto>> CreateAsync(
+        UpsertRoleRequest request, Guid? actingUserId, CancellationToken ct = default, bool bypassApproval = false)
     {
         var name = request.Name.Trim();
         if (await db.Roles.AnyAsync(r => r.Name == name, ct))
         {
             throw new ConflictAppException($"A role named '{name}' already exists.");
+        }
+
+        if (!bypassApproval && actingUserId is not null && await gating.IsGatedAsync(ApprovalModuleKeys.Roles, ct))
+        {
+            var pending = await gating.SubmitAsync(
+                ApprovalModuleKeys.Roles, ApprovalActionKeys.Create, "Role", null, name,
+                null, JsonSerializer.Serialize(request), actingUserId.Value, ct);
+            return MutationResult<RoleDetailDto>.PendingApproval(pending);
         }
 
         var now = DateTimeOffset.UtcNow;
@@ -73,10 +84,11 @@ public class RoleAppService(AuthDbContext db, AuditLogAppService auditLog, IHttp
         await WriteAuditAsync(actingUserId, "role.created", role.Id, $"Created role '{role.Name}'", role.Name, ct);
 
         var permissions = await LoadPermissionsAsync(role.Id, ct);
-        return ToDetailDto(role, permissions);
+        return MutationResult<RoleDetailDto>.Ok(ToDetailDto(role, permissions));
     }
 
-    public async Task<RoleDetailDto> UpdateAsync(Guid id, UpsertRoleRequest request, Guid? actingUserId, CancellationToken ct = default)
+    public async Task<MutationResult<RoleDetailDto>> UpdateAsync(
+        Guid id, UpsertRoleRequest request, Guid? actingUserId, CancellationToken ct = default, bool bypassApproval = false)
     {
         var role = await db.Roles.FirstOrDefaultAsync(r => r.Id == id, ct) ?? throw NotFound(id);
 
@@ -84,6 +96,16 @@ public class RoleAppService(AuthDbContext db, AuditLogAppService auditLog, IHttp
         if (name != role.Name && await db.Roles.AnyAsync(r => r.Name == name && r.Id != id, ct))
         {
             throw new ConflictAppException($"A role named '{name}' already exists.");
+        }
+
+        if (!bypassApproval && actingUserId is not null && await gating.IsGatedAsync(ApprovalModuleKeys.Roles, ct))
+        {
+            var oldPermissions = await LoadPermissionsAsync(id, ct);
+            var oldSnapshot = JsonSerializer.Serialize(new { role.Name, role.Description, role.IsAdministrator, Permissions = oldPermissions });
+            var pending = await gating.SubmitAsync(
+                ApprovalModuleKeys.Roles, ApprovalActionKeys.Update, "Role", id.ToString(), role.Name,
+                oldSnapshot, JsonSerializer.Serialize(request), actingUserId.Value, ct);
+            return MutationResult<RoleDetailDto>.PendingApproval(pending);
         }
 
         role.Name = name;
@@ -98,10 +120,11 @@ public class RoleAppService(AuthDbContext db, AuditLogAppService auditLog, IHttp
         await WriteAuditAsync(actingUserId, "role.updated", role.Id, $"Updated role '{role.Name}' — permissions modified", role.Name, ct);
 
         var permissions = await LoadPermissionsAsync(id, ct);
-        return ToDetailDto(role, permissions);
+        return MutationResult<RoleDetailDto>.Ok(ToDetailDto(role, permissions));
     }
 
-    public async Task DeleteAsync(Guid id, Guid? actingUserId, CancellationToken ct = default)
+    public async Task<ApprovalPendingDto?> DeleteAsync(
+        Guid id, Guid? actingUserId, CancellationToken ct = default, bool bypassApproval = false)
     {
         var role = await db.Roles.FirstOrDefaultAsync(r => r.Id == id, ct) ?? throw NotFound(id);
 
@@ -116,12 +139,22 @@ public class RoleAppService(AuthDbContext db, AuditLogAppService auditLog, IHttp
             throw new ConflictAppException("This role is still assigned to one or more users and cannot be deleted.");
         }
 
+        if (!bypassApproval && actingUserId is not null && await gating.IsGatedAsync(ApprovalModuleKeys.Roles, ct))
+        {
+            var oldPermissions = await LoadPermissionsAsync(id, ct);
+            var oldSnapshot = JsonSerializer.Serialize(new { role.Name, role.Description, role.IsAdministrator, Permissions = oldPermissions });
+            return await gating.SubmitAsync(
+                ApprovalModuleKeys.Roles, ApprovalActionKeys.Delete, "Role", id.ToString(), role.Name,
+                oldSnapshot, "{}", actingUserId.Value, ct);
+        }
+
         var grants = await db.RolePermissions.Where(rp => rp.RoleId == id).ToListAsync(ct);
         db.RolePermissions.RemoveRange(grants);
         db.Roles.Remove(role);
         await db.SaveChangesAsync(ct);
 
         await WriteAuditAsync(actingUserId, "role.deleted", id, $"Deleted role '{role.Name}'", role.Name, ct);
+        return null;
     }
 
     private async Task WriteAuditAsync(Guid? actingUserId, string action, Guid roleId, string details, string? entityLabel, CancellationToken ct)

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuthStore } from '../../features/auth/store/authStore'
 import { usersApi, type UserListItemDto } from '../../features/settings-users/api/usersApi'
 import { rolesApi, type RoleListItemDto } from '../../features/settings-roles/api/rolesApi'
+import { isApprovalPending } from '../../features/approvals/api/approvalsApi'
 import { useSettingsDrawerStore } from '../../shared/stores/settingsDrawerStore'
 import { useDebouncedValue } from '../../shared/hooks/useDebouncedValue'
 import { Icon } from '../../shared/components/Icon/Icon'
@@ -121,8 +122,12 @@ export function SettingsUsersTab() {
     const willBeActive = !userTarget.isActive
     setStatusUpdating(true)
     try {
-      await usersApi.updateStatus(accessToken, userTarget.id, willBeActive)
+      const result = await usersApi.updateStatus(accessToken, userTarget.id, willBeActive)
       setPendingStatusToggle(null)
+      if (isApprovalPending(result)) {
+        toast.success(result.message)
+        return
+      }
       toast.success(
         `User '${userTarget.name || userTarget.email}' ${willBeActive ? 'activated' : 'deactivated'} successfully.`
       )
@@ -140,8 +145,12 @@ export function SettingsUsersTab() {
     const userName = pendingDelete.name || pendingDelete.email
     setDeleting(true)
     try {
-      await usersApi.remove(accessToken, pendingDelete.id)
+      const result = await usersApi.remove(accessToken, pendingDelete.id)
       setPendingDelete(null)
+      if (isApprovalPending(result)) {
+        toast.success(result.message)
+        return
+      }
       toast.success(`User '${userName}' deleted successfully.`)
       if (users.length === 1 && page > 1) setPage((p) => p - 1)
       else notifyMutation()

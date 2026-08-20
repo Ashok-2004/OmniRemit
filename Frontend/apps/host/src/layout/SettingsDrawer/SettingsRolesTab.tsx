@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuthStore } from '../../features/auth/store/authStore'
 import { rolesApi, type RoleListItemDto } from '../../features/settings-roles/api/rolesApi'
+import { isApprovalPending } from '../../features/approvals/api/approvalsApi'
 import { useSettingsDrawerStore } from '../../shared/stores/settingsDrawerStore'
 import { useDebouncedValue } from '../../shared/hooks/useDebouncedValue'
 import { Icon } from '../../shared/components/Icon/Icon'
@@ -84,8 +85,12 @@ export function SettingsRolesTab() {
     const roleName = pendingDelete.name
     setDeleting(true)
     try {
-      await rolesApi.remove(accessToken, pendingDelete.id)
+      const result = await rolesApi.remove(accessToken, pendingDelete.id)
       setPendingDelete(null)
+      if (isApprovalPending(result)) {
+        toast.success(result.message)
+        return
+      }
       toast.success(`Role '${roleName}' deleted successfully.`)
       // If the last row on the final page just went, step back rather than showing an empty page.
       if (roles.length === 1 && page > 1) setPage((p) => p - 1)

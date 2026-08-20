@@ -34,12 +34,19 @@ const ProfilePage = lazy(() => import('./features/profile/pages/ProfilePage').th
 const AuditLogsPage = lazy(() =>
   import('./features/system-audit-logs/pages/AuditLogsPage').then((m) => ({ default: m.AuditLogsPage })),
 )
+const ApprovalCenterPage = lazy(() =>
+  import('./features/approvals/pages/ApprovalCenterPage').then((m) => ({ default: m.ApprovalCenterPage })),
+)
+const MyRequestsPage = lazy(() =>
+  import('./features/approvals/pages/MyRequestsPage').then((m) => ({ default: m.MyRequestsPage })),
+)
 
 const FEATURE_KEYS = {
   users: 'host.settings.users',
   roles: 'host.settings.roles',
   applications: 'host.settings.applications',
   auditLogs: 'host.system.audit-logs',
+  approvals: 'host.system.approvals',
 } as const
 
 /**
@@ -168,6 +175,7 @@ function AuthenticatedShell() {
     applications: isAdministrator || hasCapability(FEATURE_KEYS.applications, 'View'),
   }
   const canAccessAuditLogs = isAdministrator || hasCapability(FEATURE_KEYS.auditLogs, 'View')
+  const canAccessApprovals = isAdministrator || hasCapability(FEATURE_KEYS.approvals, 'View')
 
   return (
     <AppShell
@@ -176,6 +184,7 @@ function AuthenticatedShell() {
       userName={user?.name}
       settingsAccess={settingsAccess}
       canAccessAuditLogs={canAccessAuditLogs}
+      canAccessApprovals={canAccessApprovals}
       onLogout={() => {
         void logout().then(() => navigate('/login', { replace: true }))
       }}
@@ -215,6 +224,20 @@ function AppRoutes() {
             </RequireCapability>
           }
         />
+
+        <Route
+          path="system/approvals"
+          element={
+            <RequireCapability featureKey={FEATURE_KEYS.approvals}>
+              <ApprovalCenterPage />
+            </RequireCapability>
+          }
+        />
+
+        {/* No capability gate — every authenticated user tracks their own submitted requests
+            regardless of whether they hold Approval Center access; the backend scopes this to the
+            caller's own id server-side (see GET /api/approvals/mine), so there is nothing to leak. */}
+        <Route path="my-requests" element={<MyRequestsPage />} />
 
         {/*
           Settings has no pages of its own — it IS the gear drawer, rendered globally by AppShell.

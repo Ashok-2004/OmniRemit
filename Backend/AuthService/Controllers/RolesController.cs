@@ -27,23 +27,30 @@ public class RolesController(RoleAppService roles) : ControllerBase
 
     [HttpPost]
     [RequirePermission(Feature, "Create")]
-    public async Task<ActionResult<RoleDetailDto>> Create([FromBody] UpsertRoleRequest request, CancellationToken ct)
+    public async Task<IActionResult> Create([FromBody] UpsertRoleRequest request, CancellationToken ct)
     {
         var result = await roles.CreateAsync(request, CurrentUserId(), ct);
-        return CreatedAtAction(nameof(Get), new { id = result.Id }, result);
+        if (result.Applied is not null)
+        {
+            return CreatedAtAction(nameof(Get), new { id = result.Applied.Id }, result.Applied);
+        }
+        return Accepted(result.Pending);
     }
 
     [HttpPut("{id:guid}")]
     [RequirePermission(Feature, "Edit")]
-    public async Task<ActionResult<RoleDetailDto>> Update(Guid id, [FromBody] UpsertRoleRequest request, CancellationToken ct)
-        => Ok(await roles.UpdateAsync(id, request, CurrentUserId(), ct));
+    public async Task<IActionResult> Update(Guid id, [FromBody] UpsertRoleRequest request, CancellationToken ct)
+    {
+        var result = await roles.UpdateAsync(id, request, CurrentUserId(), ct);
+        return result.Applied is not null ? Ok(result.Applied) : Accepted(result.Pending);
+    }
 
     [HttpDelete("{id:guid}")]
     [RequirePermission(Feature, "Delete")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
-        await roles.DeleteAsync(id, CurrentUserId(), ct);
-        return NoContent();
+        var pending = await roles.DeleteAsync(id, CurrentUserId(), ct);
+        return pending is null ? NoContent() : Accepted(pending);
     }
 
     [HttpGet("{id:guid}/users")]

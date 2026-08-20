@@ -1,3 +1,4 @@
+using System.Text.Json;
 using AuthService.Application.DTOs;
 using AuthService.Application.Exceptions;
 using AuthService.Domain.Entities;
@@ -8,7 +9,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AuthService.Application.Services;
 
-public class UserAppService(AuthDbContext db, PasswordHasher passwordHasher, AuditLogAppService auditLog, IHttpContextAccessor httpContextAccessor)
+public class UserAppService(
+    AuthDbContext db, PasswordHasher passwordHasher, AuditLogAppService auditLog,
+    IHttpContextAccessor httpContextAccessor, ApprovalGatingService gating)
 {
     private const string ServiceName = "AuthService";
 
@@ -61,7 +64,8 @@ public class UserAppService(AuthDbContext db, PasswordHasher passwordHasher, Aud
         return ToDetailDto(user, overrides);
     }
 
-    public async Task<CreateUserResponse> CreateAsync(CreateUserRequest request, Guid? actingUserId, CancellationToken ct = default)
+    public async Task<MutationResult<CreateUserResponse>> CreateAsync(
+        CreateUserRequest request, Guid? actingUserId, CancellationToken ct = default, bool bypassApproval = false)
     {
         var email = request.Email.Trim().ToLowerInvariant();
         if (await db.Users.AnyAsync(u => u.Email == email, ct))
@@ -77,6 +81,23 @@ public class UserAppService(AuthDbContext db, PasswordHasher passwordHasher, Aud
         if (!Enum.TryParse<Domain.Enums.AuthProvider>(request.AuthProvider, out var authProvider))
         {
             throw new ValidationAppException($"Unknown authentication provider '{request.AuthProvider}'.");
+        }
+
+        /*
+         * Maker-Checker gate. Runs AFTER every validation above (a request doomed to fail must never
+         * be submitted for approval) but BEFORE anything is actually created. bypassApproval:true is
+         * set only by ApprovalAppService.ApproveAsync when REPLAYING an already-approved request
+         * through this same method — never by an ordinary caller — which is also why re-running these
+         * exact validations at replay time is deliberate: it correctly surfaces "someone else took
+         * this email while the request was pending" as a real error instead of silently corrupting
+         * data.
+         */
+        if (!bypassApproval && actingUserId is not null && await gating.IsGatedAsync(ApprovalModuleKeys.Users, ct))
+        {
+            var pending = await gating.SubmitAsync(
+                ApprovalModuleKeys.Users, ApprovalActionKeys.Create, "User", null, request.Name.Trim(),
+                null, JsonSerializer.Serialize(request), actingUserId.Value, ct);
+            return MutationResult<CreateUserResponse>.PendingApproval(pending);
         }
 
         var now = DateTimeOffset.UtcNow;
@@ -118,10 +139,11 @@ public class UserAppService(AuthDbContext db, PasswordHasher passwordHasher, Aud
         var actorName = await ResolveActorNameAsync(actingUserId, ct);
         await auditLog.WriteAsync(ServiceName, actingUserId, actorName, "user.created", "User", user.Id.ToString(), $"Created {user.Email}", SourceIp, userAgent: UserAgent, entityLabel: user.Name, ct: ct);
 
-        return new CreateUserResponse(ToDetailDto(saved, []), tempPassword);
+        return MutationResult<CreateUserResponse>.Ok(new CreateUserResponse(ToDetailDto(saved, []), tempPassword));
     }
 
-    public async Task<UserDetailDto> UpdateAsync(Guid id, UpdateUserRequest request, Guid? actingUserId, CancellationToken ct = default)
+    public async Task<MutationResult<UserDetailDto>> UpdateAsync(
+        Guid id, UpdateUserRequest request, Guid? actingUserId, CancellationToken ct = default, bool bypassApproval = false)
     {
         var user = await FindWithRoleAsync(id, ct) ?? throw NotFound(id);
 
@@ -134,6 +156,19 @@ public class UserAppService(AuthDbContext db, PasswordHasher passwordHasher, Aud
         if (request.RoleId is not null && !await db.Roles.AnyAsync(r => r.Id == request.RoleId, ct))
         {
             throw new NotFoundAppException($"Role '{request.RoleId}' was not found.");
+        }
+
+        if (!bypassApproval && actingUserId is not null && await gating.IsGatedAsync(ApprovalModuleKeys.Users, ct))
+        {
+            var oldSnapshot = JsonSerializer.Serialize(new
+            {
+                user.Name, user.Email, user.PhoneNumber, user.RoleId,
+                IsActive = user.Status == UserStatus.Active,
+            });
+            var pending = await gating.SubmitAsync(
+                ApprovalModuleKeys.Users, ApprovalActionKeys.Update, "User", id.ToString(), user.Name,
+                oldSnapshot, JsonSerializer.Serialize(request), actingUserId.Value, ct);
+            return MutationResult<UserDetailDto>.PendingApproval(pending);
         }
 
         user.Name = request.Name.Trim();
@@ -175,12 +210,24 @@ public class UserAppService(AuthDbContext db, PasswordHasher passwordHasher, Aud
         }
 
         var overrides = await LoadOverridesAsync(id, ct);
-        return ToDetailDto(user, overrides);
+        return MutationResult<UserDetailDto>.Ok(ToDetailDto(user, overrides));
     }
 
-    public async Task<UserDetailDto> UpdateStatusAsync(Guid id, bool isActive, Guid? actingUserId, CancellationToken ct = default)
+    public async Task<MutationResult<UserDetailDto>> UpdateStatusAsync(
+        Guid id, bool isActive, Guid? actingUserId, CancellationToken ct = default, bool bypassApproval = false)
     {
         var user = await FindWithRoleAsync(id, ct) ?? throw NotFound(id);
+
+        if (!bypassApproval && actingUserId is not null && await gating.IsGatedAsync(ApprovalModuleKeys.Users, ct))
+        {
+            var oldSnapshot = JsonSerializer.Serialize(new { IsActive = user.Status == UserStatus.Active });
+            var pending = await gating.SubmitAsync(
+                ApprovalModuleKeys.Users, isActive ? ApprovalActionKeys.Enable : ApprovalActionKeys.Disable,
+                "User", id.ToString(), user.Name, oldSnapshot,
+                JsonSerializer.Serialize(new UpdateUserStatusRequest(isActive)), actingUserId.Value, ct);
+            return MutationResult<UserDetailDto>.PendingApproval(pending);
+        }
+
         user.Status = isActive ? UserStatus.Active : UserStatus.Inactive;
         user.UpdatedAt = DateTimeOffset.UtcNow;
         user.UpdatedBy = actingUserId;
@@ -190,12 +237,22 @@ public class UserAppService(AuthDbContext db, PasswordHasher passwordHasher, Aud
         await auditLog.WriteAsync(ServiceName, actingUserId, actorName, isActive ? "user.activated" : "user.deactivated", "User", user.Id.ToString(), $"{(isActive ? "Activated" : "Deactivated")} {user.Email}", SourceIp, userAgent: UserAgent, entityLabel: user.Name, ct: ct);
 
         var overrides = await LoadOverridesAsync(id, ct);
-        return ToDetailDto(user, overrides);
+        return MutationResult<UserDetailDto>.Ok(ToDetailDto(user, overrides));
     }
 
-    public async Task DeleteAsync(Guid id, Guid? actingUserId, CancellationToken ct = default)
+    public async Task<ApprovalPendingDto?> DeleteAsync(
+        Guid id, Guid? actingUserId, CancellationToken ct = default, bool bypassApproval = false)
     {
         var user = await db.Users.FirstOrDefaultAsync(u => u.Id == id, ct) ?? throw NotFound(id);
+
+        if (!bypassApproval && actingUserId is not null && await gating.IsGatedAsync(ApprovalModuleKeys.Users, ct))
+        {
+            var oldSnapshot = JsonSerializer.Serialize(new { user.Name, user.Email, user.PhoneNumber, user.RoleId });
+            return await gating.SubmitAsync(
+                ApprovalModuleKeys.Users, ApprovalActionKeys.Delete, "User", id.ToString(), user.Name,
+                oldSnapshot, "{}", actingUserId.Value, ct);
+        }
+
         user.IsDeleted = true;
         user.Status = UserStatus.Inactive;
         user.UpdatedAt = DateTimeOffset.UtcNow;
@@ -204,6 +261,7 @@ public class UserAppService(AuthDbContext db, PasswordHasher passwordHasher, Aud
 
         var actorName = await ResolveActorNameAsync(actingUserId, ct);
         await auditLog.WriteAsync(ServiceName, actingUserId, actorName, "user.deleted", "User", user.Id.ToString(), $"Deleted {user.Email}", SourceIp, userAgent: UserAgent, entityLabel: user.Name, ct: ct);
+        return null;
     }
 
     private async Task<string?> ResolveActorNameAsync(Guid? actingUserId, CancellationToken ct)

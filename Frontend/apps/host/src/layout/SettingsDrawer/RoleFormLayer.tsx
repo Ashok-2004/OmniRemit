@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useAuthStore } from '../../features/auth/store/authStore'
 import { permissionsApi, type PermissionFeatureDto } from '../../shared/api/permissionsApi'
 import { rolesApi, type RolePermissionGrantDto, type RoleUserDto } from '../../features/settings-roles/api/rolesApi'
+import { isApprovalPending } from '../../features/approvals/api/approvalsApi'
 import { remoteAppsApi, type RemoteAppDto } from '../../features/settings-applications/api/remoteAppsApi'
 import { useSettingsDrawerStore } from '../../shared/stores/settingsDrawerStore'
 import { Icon } from '../../shared/components/Icon/Icon'
@@ -287,14 +288,18 @@ export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
         permissions,
       }
 
-      if (isEdit && roleId) {
-        await rolesApi.update(token, roleId, body)
-        toast.success(`Role '${name}' updated successfully.`)
-      } else {
-        await rolesApi.create(token, body)
-        toast.success(`Role '${name}' created successfully.`)
+      const result = isEdit && roleId ? await rolesApi.update(token, roleId, body) : await rolesApi.create(token, body)
+
+      if (isApprovalPending(result)) {
+        // Nothing was actually created/changed — the "Roles" module has a checker assigned, so this
+        // submission is queued instead of applied. No refreshSession/notifyMutation: there is nothing
+        // stale to refresh yet.
+        toast.success(result.message)
+        useSettingsDrawerStore.getState().resetToRoot('roles')
+        return
       }
 
+      toast.success(`Role '${name}' ${isEdit ? 'updated' : 'created'} successfully.`)
       void refreshSession()
       useSettingsDrawerStore.getState().notifyMutation()
       useSettingsDrawerStore.getState().resetToRoot('roles')

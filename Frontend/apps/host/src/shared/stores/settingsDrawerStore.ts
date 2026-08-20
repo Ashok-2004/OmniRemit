@@ -1,12 +1,13 @@
 import { create } from 'zustand'
 
-export type SettingsTab = 'users' | 'roles' | 'applications' | 'departments' | 'general'
+export type SettingsTab = 'users' | 'roles' | 'applications' | 'departments' | 'general' | 'checker-assignment'
 
 export type DrawerLayer =
   | { type: 'root'; tab?: SettingsTab }
   | { type: 'role-form'; roleId?: string; initialTab?: string }
   | { type: 'user-form'; userId?: string }
   | { type: 'app-form'; appId?: string }
+  | { type: 'checker-assignment-form'; module?: string }
 
 interface SettingsDrawerState {
   isOpen: boolean

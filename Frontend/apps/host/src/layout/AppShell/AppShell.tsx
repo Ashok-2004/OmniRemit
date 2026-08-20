@@ -27,10 +27,11 @@ export interface AppShellProps {
   userName?: string
   settingsAccess?: TopbarSettingsAccess
   canAccessAuditLogs?: boolean
+  canAccessApprovals?: boolean
   onLogout?: () => void
 }
 
-export function AppShell({ apps, appsError, userName, settingsAccess, canAccessAuditLogs, onLogout }: AppShellProps) {
+export function AppShell({ apps, appsError, userName, settingsAccess, canAccessAuditLogs, canAccessApprovals, onLogout }: AppShellProps) {
   // Subscribed so the drawer is only mounted when it is actually open — mounting it unconditionally
   // would resolve the lazy component on first render and negate the split.
   const drawerOpen = useSettingsDrawerStore((s) => s.isOpen)
@@ -65,6 +66,7 @@ export function AppShell({ apps, appsError, userName, settingsAccess, canAccessA
         apps={apps}
         error={appsError}
         canAccessAuditLogs={canAccessAuditLogs}
+        canAccessApprovals={canAccessApprovals}
         mobileOpen={sidebarOpen}
         onMobileClose={closeSidebar}
       />

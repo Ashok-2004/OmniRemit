@@ -48,10 +48,17 @@ builder.Services.AddScoped<JwtTokenService>();
 builder.Services.AddScoped<RefreshTokenService>();
 builder.Services.AddScoped<PermissionClaimsBuilder>();
 builder.Services.AddScoped<AuthAppService>();
+builder.Services.AddScoped<AuditLogAppService>();
+// ApprovalGatingService has no dependency on UserAppService/RoleAppService/ApprovalAppService, so it
+// must be registered (and read here) before them to make the dependency direction obvious: gating is
+// depended ON by UserAppService/RoleAppService, and ApprovalAppService depends on all three of those —
+// never the other way, or ApproveAsync's replay-through-the-original-method call would cycle.
+builder.Services.AddScoped<ApprovalGatingService>();
 builder.Services.AddScoped<UserAppService>();
 builder.Services.AddScoped<RoleAppService>();
+builder.Services.AddScoped<ApprovalAppService>();
+builder.Services.AddScoped<CheckerAssignmentAppService>();
 builder.Services.AddScoped<PermissionCatalogAppService>();
-builder.Services.AddScoped<AuditLogAppService>();
 builder.Services.AddScoped<DashboardAppService>();
 builder.Services.AddScoped<SearchAppService>();
 

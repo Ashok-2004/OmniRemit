@@ -19,6 +19,7 @@ public class AppExceptionFilter(ILogger<AppExceptionFilter> logger) : IException
             NotFoundAppException ex => (StatusCodes.Status404NotFound, ex.Message),
             ConflictAppException ex => (StatusCodes.Status409Conflict, ex.Message),
             ValidationAppException ex => (StatusCodes.Status400BadRequest, ex.Message),
+            ForbiddenAppException ex => (StatusCodes.Status403Forbidden, ex.Message),
 
             // A constraint the application layer did not anticipate. This used to fall through to the
             // default handler, which in development returns the raw exception TYPE NAME as the

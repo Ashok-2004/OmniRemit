@@ -1,6 +1,7 @@
 import { env } from '../../../config/env'
 import { apiFetch } from '../../../shared/api/httpClient'
 import type { PagedResult } from '../../settings-users/api/usersApi'
+import type { ApprovalPendingDto } from '../../approvals/api/approvalsApi'
 
 const base = env.authServiceUrl
 
@@ -71,13 +72,16 @@ export const rolesApi = {
 
   get: (accessToken: string, id: string) => apiFetch<RoleDetailDto>(`${base}/api/roles/${id}`, { accessToken }),
 
+  // Widened for Maker-Checker: 202 (ApprovalPendingDto) when the "Roles" module has a checker
+  // assigned; the real result otherwise, identical to before. Callers must branch with isApprovalPending().
   create: (accessToken: string, body: UpsertRoleRequest) =>
-    apiFetch<RoleDetailDto>(`${base}/api/roles`, { method: 'POST', accessToken, body }),
+    apiFetch<RoleDetailDto | ApprovalPendingDto>(`${base}/api/roles`, { method: 'POST', accessToken, body }),
 
   update: (accessToken: string, id: string, body: UpsertRoleRequest) =>
-    apiFetch<RoleDetailDto>(`${base}/api/roles/${id}`, { method: 'PUT', accessToken, body }),
+    apiFetch<RoleDetailDto | ApprovalPendingDto>(`${base}/api/roles/${id}`, { method: 'PUT', accessToken, body }),
 
-  remove: (accessToken: string, id: string) => apiFetch<void>(`${base}/api/roles/${id}`, { method: 'DELETE', accessToken }),
+  remove: (accessToken: string, id: string) =>
+    apiFetch<ApprovalPendingDto | undefined>(`${base}/api/roles/${id}`, { method: 'DELETE', accessToken }),
 
   /**
    * Users assigned to a role. Capped server-side (the endpoint used to return every member

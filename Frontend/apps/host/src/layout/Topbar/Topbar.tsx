@@ -6,6 +6,7 @@ import { useSettingsDrawerStore } from '../../shared/stores/settingsDrawerStore'
 import { useAuthStore } from '../../features/auth/store/authStore'
 import { GlobalSearch } from '../../features/search/components/GlobalSearch/GlobalSearch'
 import { SecurityAlertsMenu } from '../../features/notifications/components/SecurityAlertsMenu/SecurityAlertsMenu'
+import { ApprovalsMenu } from '../../features/notifications/components/ApprovalsMenu/ApprovalsMenu'
 import { Icon } from '../../shared/components/Icon/Icon'
 import styles from './Topbar.module.css'
 
@@ -93,6 +94,11 @@ export function Topbar({ userName, settingsAccess, onLogout, onMobileMenuToggle 
           and shows the dot only when there are recent ones.
         */}
         <SecurityAlertsMenu />
+
+        {/* Approvals awaiting the signed-in user as checker — every gated request lands here as soon
+            as it's assigned, badge count is a real server figure (see ApprovalsMenu's own doc comment
+            for why it doesn't use SecurityAlertsMenu's "last seen" heuristic). */}
+        <ApprovalsMenu />
 
         <div className={styles.actionsDivider} aria-hidden="true" />
 

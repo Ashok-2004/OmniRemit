@@ -6,6 +6,7 @@ import {
   type PermissionOverrideDto,
 } from '../../features/settings-users/api/usersApi'
 import { rolesApi, type RoleListItemDto } from '../../features/settings-roles/api/rolesApi'
+import { isApprovalPending, type ApprovalPendingDto } from '../../features/approvals/api/approvalsApi'
 import { remoteAppsApi, type RemoteAppDto } from '../../features/settings-applications/api/remoteAppsApi'
 import { permissionsApi, type PermissionFeatureDto } from '../../shared/api/permissionsApi'
 import { useSettingsDrawerStore } from '../../shared/stores/settingsDrawerStore'
@@ -51,6 +52,9 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [createdResult, setCreatedResult] = useState<CreateUserResponse | null>(null)
+  // Set only on the CREATE path when Maker-Checker gates the "Users" module — the account doesn't
+  // exist yet, so there's no temp password to show, just confirmation the request is queued.
+  const [pendingApproval, setPendingApproval] = useState<ApprovalPendingDto | null>(null)
 
   // Step 1: Basic Fields
   const [name, setName] = useState('')
@@ -368,7 +372,7 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
     try {
       const token = await ensureFreshAccessToken()
       if (isEdit && userId) {
-        await usersApi.update(token, userId, {
+        const result = await usersApi.update(token, userId, {
           name,
           email,
           phoneNumber: phoneNumber || null,
@@ -376,6 +380,16 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
           // The toggle's value now actually reaches the server; it was previously dropped here.
           isActive,
         })
+
+        if (isApprovalPending(result)) {
+          // Nothing was actually changed yet — the extra-permissions part of this same submission is
+          // held with it rather than applied separately, so replaceOverrides is deliberately skipped
+          // here; it runs once this same edit is approved and replayed.
+          toast.success(result.message)
+          useSettingsDrawerStore.getState().resetToRoot('users')
+          return
+        }
+
         await usersApi.replaceOverrides(token, userId, computedOverrides)
         // The acting admin may have just changed their own role or permissions, and the list behind
         // the drawer is now stale — without these the drawer closed onto old rows and only a full page
@@ -392,6 +406,13 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
           roleId: roleId || null,
           isActive,
         })
+
+        if (isApprovalPending(res)) {
+          // No account exists yet — nothing to attach permission overrides to, and nothing to list.
+          toast.success(res.message)
+          setPendingApproval(res)
+          return
+        }
 
         if (computedOverrides.length > 0) {
           await usersApi.replaceOverrides(token, res.user.id, computedOverrides)
@@ -510,7 +531,7 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
       </div>
 
       {/* Modern Stepper Progress Navigation */}
-      {!createdResult && (
+      {!createdResult && !pendingApproval && (
         <div className={styles.stepperContainer}>
           <button
             type="button"
@@ -570,7 +591,30 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
 
       {error && <div className={styles.errorAlert}>{error}</div>}
 
-      {createdResult ? (
+      {pendingApproval ? (
+        <div className={styles.successArea}>
+          <div className={styles.successCard}>
+            <div className={styles.successIconWrap}>
+              <Icon.ShieldCheck width={42} height={42} />
+            </div>
+            <h3 className={styles.successTitle}>Request Submitted for Approval</h3>
+            <p className={styles.successText}>
+              Creating <strong>{name}</strong> requires approval before the account exists.
+              {pendingApproval.checkerName && pendingApproval.checkerName !== 'Unassigned'
+                ? ` It's been assigned to ${pendingApproval.checkerName}.`
+                : ''}{' '}
+              Track its status any time from My Requests.
+            </p>
+            <button
+              type="button"
+              className={styles.doneBtn}
+              onClick={() => useSettingsDrawerStore.getState().resetToRoot('users')}
+            >
+              Done & Return to Users List
+            </button>
+          </div>
+        </div>
+      ) : createdResult ? (
         <div className={styles.successArea}>
           <div className={styles.successCard}>
             <div className={styles.successIconWrap}>

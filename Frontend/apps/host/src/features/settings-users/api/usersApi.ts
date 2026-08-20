@@ -1,5 +1,6 @@
 import { env } from '../../../config/env'
 import { apiFetch } from '../../../shared/api/httpClient'
+import type { ApprovalPendingDto } from '../../approvals/api/approvalsApi'
 
 const base = env.authServiceUrl
 
@@ -103,16 +104,21 @@ export const usersApi = {
 
   get: (accessToken: string, id: string) => apiFetch<UserDetailDto>(`${base}/api/users/${id}`, { accessToken }),
 
+  // Every mutation below returns the real result on the ungated path (identical to before Maker-Checker
+  // existed) or an ApprovalPendingDto (202) if the "Users" module has a checker assigned — callers must
+  // branch with isApprovalPending() before treating the result as the real thing.
   create: (accessToken: string, body: CreateUserRequest) =>
-    apiFetch<CreateUserResponse>(`${base}/api/users`, { method: 'POST', accessToken, body }),
+    apiFetch<CreateUserResponse | ApprovalPendingDto>(`${base}/api/users`, { method: 'POST', accessToken, body }),
 
   update: (accessToken: string, id: string, body: UpdateUserRequest) =>
-    apiFetch<UserDetailDto>(`${base}/api/users/${id}`, { method: 'PUT', accessToken, body }),
+    apiFetch<UserDetailDto | ApprovalPendingDto>(`${base}/api/users/${id}`, { method: 'PUT', accessToken, body }),
 
   updateStatus: (accessToken: string, id: string, isActive: boolean) =>
-    apiFetch<UserDetailDto>(`${base}/api/users/${id}/status`, { method: 'PATCH', accessToken, body: { isActive } }),
+    apiFetch<UserDetailDto | ApprovalPendingDto>(`${base}/api/users/${id}/status`, { method: 'PATCH', accessToken, body: { isActive } }),
 
-  remove: (accessToken: string, id: string) => apiFetch<void>(`${base}/api/users/${id}`, { method: 'DELETE', accessToken }),
+  /** Resolves `undefined` on the ungated path (204, deleted for real) or an ApprovalPendingDto (202) if gated. */
+  remove: (accessToken: string, id: string) =>
+    apiFetch<ApprovalPendingDto | undefined>(`${base}/api/users/${id}`, { method: 'DELETE', accessToken }),
 
   getOverrides: (accessToken: string, id: string) =>
     apiFetch<PermissionOverrideDto[]>(`${base}/api/users/${id}/permission-overrides`, { accessToken }),

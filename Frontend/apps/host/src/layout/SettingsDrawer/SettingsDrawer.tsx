@@ -1,12 +1,15 @@
 import { useEffect, useRef } from 'react'
+import { useAuthStore } from '../../features/auth/store/authStore'
 import { useSettingsDrawerStore } from '../../shared/stores/settingsDrawerStore'
 import { Icon } from '../../shared/components/Icon/Icon'
 import { SettingsUsersTab } from './SettingsUsersTab'
 import { SettingsRolesTab } from './SettingsRolesTab'
 import { SettingsApplicationsTab } from './SettingsApplicationsTab'
+import { SettingsCheckerAssignmentTab } from './SettingsCheckerAssignmentTab'
 import { RoleFormLayer } from './RoleFormLayer'
 import { UserFormLayer } from './UserFormLayer'
 import { ApplicationFormLayer } from './ApplicationFormLayer'
+import { CheckerAssignmentFormLayer } from './CheckerAssignmentFormLayer'
 import styles from './SettingsDrawer.module.css'
 
 export function SettingsDrawer() {
@@ -17,6 +20,14 @@ export function SettingsDrawer() {
   const setActiveTab = useSettingsDrawerStore((s) => s.setActiveTab)
   const popLayer = useSettingsDrawerStore((s) => s.popLayer)
   const drawerRef = useRef<HTMLDivElement>(null)
+
+  const isAdministrator = Boolean(useAuthStore((s) => s.user)?.isAdministrator)
+  const hasCapability = useAuthStore((s) => s.hasCapability)
+  // Deliberately its own, narrower gate than Users/Roles/Applications' own View capability — only
+  // someone who can at least VIEW who's assigned as a checker sees this tab at all; Manage (a
+  // separate, further-narrowed capability) is what actually lets them add/remove assignments, see
+  // SettingsCheckerAssignmentTab's own canManage check.
+  const canAccessCheckerAssignment = isAdministrator || hasCapability('host.system.checker-assignment', 'View')
 
   // ESC key to close or pop layer
   useEffect(() => {
@@ -56,6 +67,9 @@ export function SettingsDrawer() {
             )}
             {currentLayer.type === 'app-form' && (
               <ApplicationFormLayer appId={currentLayer.appId} />
+            )}
+            {currentLayer.type === 'checker-assignment-form' && (
+              <CheckerAssignmentFormLayer module={currentLayer.module} />
             )}
           </div>
         ) : (
@@ -108,6 +122,16 @@ export function SettingsDrawer() {
                 <Icon.Grid width={16} height={16} />
                 <span>Applications</span>
               </button>
+              {canAccessCheckerAssignment && (
+                <button
+                  type="button"
+                  className={`${styles.tabBtn} ${activeTab === 'checker-assignment' ? styles.tabBtnActive : ''}`}
+                  onClick={() => setActiveTab('checker-assignment')}
+                >
+                  <Icon.UserCheck width={16} height={16} />
+                  <span>Checker Assignment</span>
+                </button>
+              )}
             </div>
 
             {/* Tab Body */}
@@ -115,6 +139,7 @@ export function SettingsDrawer() {
               {activeTab === 'users' && <SettingsUsersTab />}
               {activeTab === 'roles' && <SettingsRolesTab />}
               {activeTab === 'applications' && <SettingsApplicationsTab />}
+              {activeTab === 'checker-assignment' && canAccessCheckerAssignment && <SettingsCheckerAssignmentTab />}
             </div>
           </div>
         )}
