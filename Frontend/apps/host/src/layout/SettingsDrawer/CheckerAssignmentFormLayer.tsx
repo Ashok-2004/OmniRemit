@@ -141,10 +141,6 @@ export function CheckerAssignmentFormLayer({ module: initialModule }: CheckerAss
                   </option>
                 ))}
               </select>
-              <span className={styles.hint}>
-                A module can have several checkers — the system automatically assigns each new
-                request to whichever eligible checker currently has the fewest pending requests.
-              </span>
             </div>
           </div>
         </div>

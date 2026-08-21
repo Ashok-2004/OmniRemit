@@ -84,11 +84,7 @@ export function SettingsCheckerAssignmentTab() {
         <div>
           <h3 className={styles.title}>Checker Assignment</h3>
           <p className={styles.subtitle}>
-            Map each module to one or more checkers. A gated module's sensitive actions become
-            approval requests instead of applying directly — see the Approval Center. This list comes
-            straight from every registered app's own permission catalog — whether a module here
-            actually enforces gating depends on that service's own backend calling the check; a module
-            appearing does not by itself guarantee its mutations are wired to gate on it yet.
+            Map each module to one or more checkers.
           </p>
         </div>
       </div>

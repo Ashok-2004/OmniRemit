@@ -168,6 +168,27 @@ function AuthenticatedShell() {
     }
   }, [accessToken, registryStatus, ensureFreshAccessToken, fetchForSidebar])
 
+  const refetchHealth = useModuleRegistryStore((s) => s.refetchHealth)
+
+  /*
+   * Periodic self-correction for the one-shot fetch above.
+   *
+   * The fetch above deliberately only runs once per session — see its comment. That means a remote
+   * app that happened to be down at that single moment (e.g. still starting up) stayed badged
+   * "Unreachable" for the rest of the session with no way to self-correct short of a full reload.
+   * This polls the lightweight health-only endpoint instead of re-running the fetch above, so it
+   * only ever merges `health`/`lastHealthCheckAt` into the existing apps array and never touches
+   * `status` — it can't trigger the 'loading' skeleton this file (line ~182) and RemoteAppPage both
+   * render whenever status is 'idle' or 'loading'.
+   */
+  useEffect(() => {
+    if (!accessToken) return
+    const interval = setInterval(() => {
+      void refetchHealth()
+    }, 60_000)
+    return () => clearInterval(interval)
+  }, [accessToken, refetchHealth])
+
   const isAdministrator = Boolean(user?.isAdministrator)
   const settingsAccess = {
     users: isAdministrator || hasCapability(FEATURE_KEYS.users, 'View'),
