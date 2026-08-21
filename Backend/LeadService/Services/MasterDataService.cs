@@ -7,6 +7,7 @@ namespace LeadManagement.Api.Services
     public interface IMasterDataService
     {
         Task<List<DropdownOptionDto>> GetProductsAsync();
+        Task<List<ProductWithIdDto>> GetProductsWithIdAsync();
         Task<List<DropdownOptionDto>> GetStatesAsync();
         Task<List<DropdownOptionDto>> GetBranchesAsync(string? stateName, string? query);
         Task<List<DropdownOptionDto>> GetSalesExecutivesAsync(string? query);
@@ -32,6 +33,18 @@ namespace LeadManagement.Api.Services
                     Value = p.Name,
                     Label = p.Name
                 })
+                .ToListAsync();
+        }
+
+        /// <summary>For Field Settings' product tabs — needs the real Guid to call
+        /// GET/PUT /api/lead-field-config/{productId}, which GetProductsAsync's name-only shape can't
+        /// provide.</summary>
+        public async Task<List<ProductWithIdDto>> GetProductsWithIdAsync()
+        {
+            return await _db.Products
+                .Where(p => p.IsActive)
+                .OrderBy(p => p.Name)
+                .Select(p => new ProductWithIdDto { Id = p.Id, Name = p.Name })
                 .ToListAsync();
         }
 

@@ -3,6 +3,7 @@ import { Building2 } from 'lucide-react';
 import { useLeadStore } from '../../../store/useLeadStore';
 import { DatePicker } from '../../common/DatePicker';
 import { SearchableDropdown } from '../../common/SearchableDropdown';
+import { isFieldVisible, isFieldRequired, isFieldEditable, getFieldLabel } from '../../../config/fieldControlRegistry';
 
 interface MicrofinanceFieldsProps {
   isEdit?: boolean;
@@ -15,6 +16,7 @@ export const MicrofinanceFields: React.FC<MicrofinanceFieldsProps> = ({ isEdit =
   const setFieldValue = isEdit ? store.setEditFieldValue : store.setFieldValue;
   const entityTypes = store.entityTypes;
   const validateField = isEdit ? () => {} : store.validateField;
+  const config = store.fieldConfig;
 
   return (
     <div className="form-section">
@@ -25,44 +27,54 @@ export const MicrofinanceFields: React.FC<MicrofinanceFieldsProps> = ({ isEdit =
 
       <div className="form-grid-1">
         {/* Date of Incorporation */}
-        <DatePicker
-          id="date-of-incorporation-picker"
-          label="Date of Incorporation"
-          placeholder="DD/MM/YYYY"
-          value={formData.dateOfIncorporation}
-          onChange={(val) => setFieldValue('dateOfIncorporation', val)}
-          required
-          error={errors.dateOfIncorporation}
-        />
+        {isFieldVisible(config, 'dateOfIncorporation') && (
+          <DatePicker
+            id="date-of-incorporation-picker"
+            label={getFieldLabel(config, 'dateOfIncorporation', 'Date of Incorporation')}
+            placeholder="DD/MM/YYYY"
+            value={formData.dateOfIncorporation}
+            disabled={isEdit && !isFieldEditable(config, 'dateOfIncorporation')}
+            onChange={(val) => setFieldValue('dateOfIncorporation', val)}
+            required={isFieldRequired(config, 'dateOfIncorporation')}
+            error={errors.dateOfIncorporation}
+          />
+        )}
 
         {/* Company Name */}
-        <div className="form-field-group">
-          <label className="form-label">
-            Company Name <span className="required-asterisk">*</span>
-          </label>
-          <input
-            type="text"
-            className={`form-input ${errors.companyName ? 'has-error' : ''}`}
-            value={formData.companyName}
-            onChange={(e) => setFieldValue('companyName', e.target.value)}
-            onBlur={() => validateField('companyName')}
-          />
-          {errors.companyName && (
-            <div className="field-error-message">{errors.companyName}</div>
-          )}
-        </div>
+        {isFieldVisible(config, 'companyName') && (
+          <div className="form-field-group">
+            <label className="form-label">
+              {getFieldLabel(config, 'companyName', 'Company Name')}{' '}
+              {isFieldRequired(config, 'companyName') && <span className="required-asterisk">*</span>}
+            </label>
+            <input
+              type="text"
+              className={`form-input ${errors.companyName ? 'has-error' : ''}`}
+              value={formData.companyName}
+              disabled={isEdit && !isFieldEditable(config, 'companyName')}
+              onChange={(e) => setFieldValue('companyName', e.target.value)}
+              onBlur={() => validateField('companyName')}
+            />
+            {errors.companyName && (
+              <div className="field-error-message">{errors.companyName}</div>
+            )}
+          </div>
+        )}
 
         {/* Entity Type */}
-        <SearchableDropdown
-          label="Entity Type"
-          placeholder="Select Entity Type"
-          options={entityTypes}
-          value={formData.entityType}
-          onChange={(val) => setFieldValue('entityType', val)}
-          onBlur={() => validateField('entityType')}
-          required
-          error={errors.entityType}
-        />
+        {isFieldVisible(config, 'entityType') && (
+          <SearchableDropdown
+            label={getFieldLabel(config, 'entityType', 'Entity Type')}
+            placeholder="Select Entity Type"
+            options={entityTypes}
+            value={formData.entityType}
+            disabled={isEdit && !isFieldEditable(config, 'entityType')}
+            onChange={(val) => setFieldValue('entityType', val)}
+            onBlur={() => validateField('entityType')}
+            required={isFieldRequired(config, 'entityType')}
+            error={errors.entityType}
+          />
+        )}
       </div>
     </div>
   );

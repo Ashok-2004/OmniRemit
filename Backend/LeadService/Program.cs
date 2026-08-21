@@ -69,6 +69,7 @@ builder.Services.AddHealthChecks().AddDbContextCheck<ApplicationDbContext>("data
 builder.Services.AddScoped<IMasterDataService, MasterDataService>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 builder.Services.AddScoped<ILeadService, LeadService>();
+builder.Services.AddScoped<LeadFieldConfigService>();
 builder.Services.AddHttpClient<IDashboardExternalService, DashboardExternalService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 // Explicit timeout: a gating check now sits in the hot path of every Lead mutation, so an unbounded
@@ -189,6 +190,7 @@ else
         // no-op here and a real migration path from now on.
         await dbContext.Database.MigrateAsync();
         await LeadDbSeeder.SeedAsync(dbContext);
+        await scope.ServiceProvider.GetRequiredService<LeadFieldConfigService>().EnsureSeededAsync();
         app.Logger.LogInformation("Database initialized and seeded successfully.");
     }
     catch (Exception ex)

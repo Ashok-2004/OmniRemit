@@ -6,6 +6,7 @@ import { CreateLeadPage } from '../../pages/CreateLeadPage';
 import { DashboardPage } from '../../pages/DashboardPage';
 import { ViewLeadPage } from '../../pages/ViewLeadPage';
 import { AuditLogsPage } from '../../pages/AuditLogsPage';
+import { FieldSettingsPage } from '../../pages/FieldSettingsPage';
 
 export const MainLayout: React.FC = () => {
   const { activePage, fetchDashboardData, fetchMasterData, fetchLeads, products } = useLeadStore();
@@ -28,6 +29,8 @@ export const MainLayout: React.FC = () => {
         return <ViewLeadPage />;
       case 'audit-logs':
         return <AuditLogsPage />;
+      case 'field-settings':
+        return <FieldSettingsPage />;
       default:
         return <DashboardPage />;
     }
@@ -40,7 +43,7 @@ export const MainLayout: React.FC = () => {
 
       {/* Main Workspace Content Area (Full Width) */}
       <div className="lead-workspace-content-area">
-        <main className={`lead-workspace-viewport${activePage === 'dashboard' || activePage === 'view-lead' || activePage === 'audit-logs' ? ' lead-workspace-viewport--wide' : ''}`}>
+        <main className={`lead-workspace-viewport${activePage === 'dashboard' || activePage === 'view-lead' || activePage === 'audit-logs' || activePage === 'field-settings' ? ' lead-workspace-viewport--wide' : ''}`}>
           {renderActivePage()}
         </main>
       </div>

@@ -80,6 +80,12 @@ namespace LeadManagement.Api.Controllers
                 // it — never collapse this into the generic 500 branch below.
                 return StatusCode(503, new ApiResponseDto<LeadRecordDto> { Success = false, Message = ex.Message });
             }
+            catch (InvalidOperationException ex)
+            {
+                // A validation failure the service layer already produced a clear message for (unknown
+                // product, a field-config Required/Editable violation) — 400, not a generic 500.
+                return BadRequest(new ApiResponseDto<LeadRecordDto> { Success = false, Message = ex.Message });
+            }
             catch (Exception ex)
             {
                 return StatusCode(500, new ApiResponseDto<LeadRecordDto>
@@ -200,6 +206,10 @@ namespace LeadManagement.Api.Controllers
             catch (ApprovalServiceUnavailableException ex)
             {
                 return StatusCode(503, new ApiResponseDto<LeadRecordDto> { Success = false, Message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new ApiResponseDto<LeadRecordDto> { Success = false, Message = ex.Message });
             }
             catch (Exception ex)
             {

@@ -9,6 +9,7 @@ interface DatePickerProps {
   required?: boolean;
   error?: string;
   placeholder?: string;
+  disabled?: boolean;
 }
 
 const MONTHS = [
@@ -26,6 +27,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
   required = false,
   error,
   placeholder = 'DD/MM/YYYY',
+  disabled = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -107,13 +109,14 @@ export const DatePicker: React.FC<DatePickerProps> = ({
           className={`dropdown-trigger ${isOpen ? 'open' : ''} ${error ? 'has-error' : ''} ${
             !value ? 'placeholder-text' : ''
           }`}
-          onClick={() => setIsOpen(!isOpen)}
+          onClick={() => !disabled && setIsOpen(!isOpen)}
           role="button"
-          tabIndex={0}
+          tabIndex={disabled ? -1 : 0}
+          style={disabled ? { cursor: 'not-allowed', opacity: 0.6, background: '#f1f5f9' } : undefined}
         >
           <span>{value || placeholder}</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            {value && (
+            {value && !disabled && (
               <button
                 type="button"
                 onClick={(e) => {
@@ -135,7 +138,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
           </div>
         </div>
 
-        {isOpen && (
+        {isOpen && !disabled && (
           <div className="date-picker-popup">
             {/* Header with Month / Year selection */}
             <div className="date-picker-header">

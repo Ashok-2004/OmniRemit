@@ -41,13 +41,15 @@ namespace LeadManagement.Api.Services
         private readonly IAuditLogService _auditLogService;
         private readonly AuthServiceClient _authServiceClient;
         private readonly SelfOptions _selfOptions;
+        private readonly LeadFieldConfigService _fieldConfigService;
 
-        public LeadService(ApplicationDbContext db, IAuditLogService auditLogService, AuthServiceClient authServiceClient, IOptions<SelfOptions> selfOptions)
+        public LeadService(ApplicationDbContext db, IAuditLogService auditLogService, AuthServiceClient authServiceClient, IOptions<SelfOptions> selfOptions, LeadFieldConfigService fieldConfigService)
         {
             _db = db;
             _auditLogService = auditLogService;
             _authServiceClient = authServiceClient;
             _selfOptions = selfOptions.Value;
+            _fieldConfigService = fieldConfigService;
         }
 
         /// <summary>Checks gating and, if gated, submits — the same "after validation, before mutation"
@@ -93,6 +95,13 @@ namespace LeadManagement.Api.Services
             {
                 salesExec = await _db.SalesExecutives.FirstOrDefaultAsync(se => se.Name.ToLower() == dto.PreferredSalesExecutive.Trim().ToLower());
             }
+
+            // Field Settings' per-product Required rule — CreateLeadDto's own [Required] attributes
+            // were deliberately removed from every catalog field so this config-driven check is the
+            // only thing deciding presence (format validators like [EmailAddress]/[RegularExpression]
+            // stay on the DTO and still apply once a value IS present).
+            var fieldConfigs = await _fieldConfigService.GetByProductAsync(product.Id);
+            LeadFieldConfigService.EnsureRequiredFieldsPresent(fieldConfigs, dto, product.Name);
 
             var pending = await TrySubmitForApprovalAsync("Create", null, dto.CustomerName.Trim(), null, dto, actingUserId, bypassApproval);
             if (pending is not null)
@@ -471,6 +480,14 @@ namespace LeadManagement.Api.Services
             {
                 salesExec = await _db.SalesExecutives.FirstOrDefaultAsync(se => se.Name.ToLower() == dto.PreferredSalesExecutive.Trim().ToLower());
             }
+
+            // Field Settings' per-product Required/Editable rules — see CreateLeadAsync's comment for
+            // why Required is config-driven rather than a DTO attribute. Editable is checked here
+            // (Update only — nothing to compare against on Create) against previousDto, the same
+            // pre-mutation read-model snapshot already fetched above for the audit diff.
+            var fieldConfigs = await _fieldConfigService.GetByProductAsync(product.Id);
+            LeadFieldConfigService.EnsureRequiredFieldsPresent(fieldConfigs, dto, product.Name);
+            LeadFieldConfigService.EnsureEditableFieldsUnchanged(fieldConfigs, dto, previousDto!);
 
             var oldSnapshot = System.Text.Json.JsonSerializer.Serialize(previousDto);
             var pending = await TrySubmitForApprovalAsync("Update", id, lead.CustomerName, oldSnapshot, dto, actingUserId, bypassApproval);

@@ -2,9 +2,16 @@ import React from 'react';
 import { User } from 'lucide-react';
 import { useLeadStore } from '../../store/useLeadStore';
 import { SearchableDropdown } from '../common/SearchableDropdown';
+import { isFieldVisible, isFieldRequired, isFieldEditable, getFieldLabel } from '../../config/fieldControlRegistry';
 
 interface CustomerInformationSectionProps {
   isEdit?: boolean;
+}
+
+/** Renders a `*` only when Field Settings marks the field Required for the currently selected
+ * product — never hardcoded. */
+function RequiredAsterisk({ show }: { show: boolean }) {
+  return show ? <span className="required-asterisk">*</span> : null;
 }
 
 export const CustomerInformationSection: React.FC<CustomerInformationSectionProps> = ({ isEdit = false }) => {
@@ -15,6 +22,7 @@ export const CustomerInformationSection: React.FC<CustomerInformationSectionProp
   const states = store.states;
   const branches = store.branches;
   const validateField = isEdit ? () => {} : store.validateField;
+  const config = store.fieldConfig;
 
   return (
     <div className="form-section">
@@ -25,139 +33,164 @@ export const CustomerInformationSection: React.FC<CustomerInformationSectionProp
 
       <div className="form-grid-1">
         {/* Customer Name */}
-        <div className="form-field-group">
-          <label className="form-label">
-            Customer Name <span className="required-asterisk">*</span>
-          </label>
-          <input
-            type="text"
-            className={`form-input ${errors.customerName ? 'has-error' : ''}`}
-            value={formData.customerName}
-            onChange={(e) => setFieldValue('customerName', e.target.value)}
-            onBlur={() => validateField('customerName')}
-          />
-          {errors.customerName && (
-            <div className="field-error-message">{errors.customerName}</div>
-          )}
-        </div>
+        {isFieldVisible(config, 'customerName') && (
+          <div className="form-field-group">
+            <label className="form-label">
+              {getFieldLabel(config, 'customerName', 'Customer Name')} <RequiredAsterisk show={isFieldRequired(config, 'customerName')} />
+            </label>
+            <input
+              type="text"
+              className={`form-input ${errors.customerName ? 'has-error' : ''}`}
+              value={formData.customerName}
+              disabled={isEdit && !isFieldEditable(config, 'customerName')}
+              onChange={(e) => setFieldValue('customerName', e.target.value)}
+              onBlur={() => validateField('customerName')}
+            />
+            {errors.customerName && (
+              <div className="field-error-message">{errors.customerName}</div>
+            )}
+          </div>
+        )}
 
         {/* IC Number */}
-        <div className="form-field-group">
-          <label className="form-label">
-            IC Number <span className="required-asterisk">*</span>
-          </label>
-          <input
-            type="text"
-            className={`form-input ${errors.icNumber ? 'has-error' : ''}`}
-            value={formData.icNumber}
-            onChange={(e) => setFieldValue('icNumber', e.target.value)}
-            onBlur={() => validateField('icNumber')}
-          />
-          {errors.icNumber && (
-            <div className="field-error-message" style={{ marginTop: '4px' }}>
-              <div>{errors.icNumber}</div>
-              <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px', fontWeight: 400 }}>
-                Format: <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#334155' }}>YYMMDD-PB-XXXX</span>
+        {isFieldVisible(config, 'icNumber') && (
+          <div className="form-field-group">
+            <label className="form-label">
+              {getFieldLabel(config, 'icNumber', 'IC Number')} <RequiredAsterisk show={isFieldRequired(config, 'icNumber')} />
+            </label>
+            <input
+              type="text"
+              className={`form-input ${errors.icNumber ? 'has-error' : ''}`}
+              value={formData.icNumber}
+              disabled={isEdit && !isFieldEditable(config, 'icNumber')}
+              onChange={(e) => setFieldValue('icNumber', e.target.value)}
+              onBlur={() => validateField('icNumber')}
+            />
+            {errors.icNumber && (
+              <div className="field-error-message" style={{ marginTop: '4px' }}>
+                <div>{errors.icNumber}</div>
+                <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px', fontWeight: 400 }}>
+                  Format: <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#334155' }}>YYMMDD-PB-XXXX</span>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         {/* Phone */}
-        <div className="form-field-group">
-          <label className="form-label">
-            Phone <span className="required-asterisk">*</span>
-          </label>
-          <div className={`phone-input-container ${errors.phoneNumber ? 'has-error' : ''}`}>
-            <div className="phone-prefix-box">
-              <span style={{ fontSize: '15px' }}>🇲🇾</span>
-              <span>+60</span>
+        {isFieldVisible(config, 'phoneNumber') && (
+          <div className="form-field-group">
+            <label className="form-label">
+              {getFieldLabel(config, 'phoneNumber', 'Phone')} <RequiredAsterisk show={isFieldRequired(config, 'phoneNumber')} />
+            </label>
+            <div className={`phone-input-container ${errors.phoneNumber ? 'has-error' : ''}`}>
+              <div className="phone-prefix-box">
+                <span style={{ fontSize: '15px' }}>🇲🇾</span>
+                <span>+60</span>
+              </div>
+              <input
+                type="tel"
+                className="form-input phone-input-field"
+                value={formData.phoneNumber}
+                disabled={isEdit && !isFieldEditable(config, 'phoneNumber')}
+                onChange={(e) => setFieldValue('phoneNumber', e.target.value)}
+                onBlur={() => validateField('phoneNumber')}
+              />
             </div>
-            <input
-              type="tel"
-              className="form-input phone-input-field"
-              value={formData.phoneNumber}
-              onChange={(e) => setFieldValue('phoneNumber', e.target.value)}
-              onBlur={() => validateField('phoneNumber')}
-            />
+            {errors.phoneNumber && (
+              <div className="field-error-message">{errors.phoneNumber}</div>
+            )}
           </div>
-          {errors.phoneNumber && (
-            <div className="field-error-message">{errors.phoneNumber}</div>
-          )}
-        </div>
+        )}
 
         {/* Email */}
-        <div className="form-field-group">
-          <label className="form-label">
-            Email <span className="required-asterisk">*</span>
-          </label>
-          <input
-            type="email"
-            className={`form-input ${errors.email ? 'has-error' : ''}`}
-            value={formData.email}
-            onChange={(e) => setFieldValue('email', e.target.value)}
-            onBlur={() => validateField('email')}
-          />
-          {errors.email && (
-            <div className="field-error-message">{errors.email}</div>
-          )}
-        </div>
+        {isFieldVisible(config, 'email') && (
+          <div className="form-field-group">
+            <label className="form-label">
+              {getFieldLabel(config, 'email', 'Email')} <RequiredAsterisk show={isFieldRequired(config, 'email')} />
+            </label>
+            <input
+              type="email"
+              className={`form-input ${errors.email ? 'has-error' : ''}`}
+              value={formData.email}
+              disabled={isEdit && !isFieldEditable(config, 'email')}
+              onChange={(e) => setFieldValue('email', e.target.value)}
+              onBlur={() => validateField('email')}
+            />
+            {errors.email && (
+              <div className="field-error-message">{errors.email}</div>
+            )}
+          </div>
+        )}
 
         {/* State */}
-        <SearchableDropdown
-          label="State"
-          placeholder="Select state"
-          options={states}
-          value={formData.state}
-          onChange={(val) => setFieldValue('state', val)}
-          onBlur={() => validateField('state')}
-          required
-          error={errors.state}
-        />
+        {isFieldVisible(config, 'state') && (
+          <SearchableDropdown
+            label={getFieldLabel(config, 'state', 'State')}
+            placeholder="Select state"
+            options={states}
+            value={formData.state}
+            disabled={isEdit && !isFieldEditable(config, 'state')}
+            onChange={(val) => setFieldValue('state', val)}
+            onBlur={() => validateField('state')}
+            required={isFieldRequired(config, 'state')}
+            error={errors.state}
+          />
+        )}
 
         {/* Preferred Servicing Branch */}
-        <SearchableDropdown
-          label="Preferred Servicing Branch"
-          placeholder="Select servicing branch"
-          options={branches}
-          value={formData.preferredBranch}
-          onChange={(val) => setFieldValue('preferredBranch', val)}
-          emptyMessage="No branch options currently available"
-        />
+        {isFieldVisible(config, 'branch') && (
+          <SearchableDropdown
+            label={getFieldLabel(config, 'branch', 'Preferred Servicing Branch')}
+            placeholder="Select servicing branch"
+            options={branches}
+            value={formData.preferredBranch}
+            disabled={isEdit && !isFieldEditable(config, 'branch')}
+            onChange={(val) => setFieldValue('preferredBranch', val)}
+            required={isFieldRequired(config, 'branch')}
+            emptyMessage="No branch options currently available"
+          />
+        )}
 
         {/* Employer Name */}
-        <div className="form-field-group">
-          <label className="form-label">
-            Employer Name <span className="required-asterisk">*</span>
-          </label>
-          <input
-            type="text"
-            className={`form-input ${errors.employerName ? 'has-error' : ''}`}
-            value={formData.employerName}
-            onChange={(e) => setFieldValue('employerName', e.target.value)}
-            onBlur={() => validateField('employerName')}
-          />
-          {errors.employerName && (
-            <div className="field-error-message">{errors.employerName}</div>
-          )}
-        </div>
+        {isFieldVisible(config, 'employerName') && (
+          <div className="form-field-group">
+            <label className="form-label">
+              {getFieldLabel(config, 'employerName', 'Employer Name')} <RequiredAsterisk show={isFieldRequired(config, 'employerName')} />
+            </label>
+            <input
+              type="text"
+              className={`form-input ${errors.employerName ? 'has-error' : ''}`}
+              value={formData.employerName}
+              disabled={isEdit && !isFieldEditable(config, 'employerName')}
+              onChange={(e) => setFieldValue('employerName', e.target.value)}
+              onBlur={() => validateField('employerName')}
+            />
+            {errors.employerName && (
+              <div className="field-error-message">{errors.employerName}</div>
+            )}
+          </div>
+        )}
 
         {/* Applied Amount */}
-        <div className="form-field-group">
-          <label className="form-label">
-            Applied Amount <span className="required-asterisk">*</span>
-          </label>
-          <input
-            type="text"
-            className={`form-input ${errors.appliedAmount ? 'has-error' : ''}`}
-            value={formData.appliedAmount}
-            onChange={(e) => setFieldValue('appliedAmount', e.target.value)}
-            onBlur={() => validateField('appliedAmount')}
-          />
-          {errors.appliedAmount && (
-            <div className="field-error-message">{errors.appliedAmount}</div>
-          )}
-        </div>
+        {isFieldVisible(config, 'appliedAmount') && (
+          <div className="form-field-group">
+            <label className="form-label">
+              {getFieldLabel(config, 'appliedAmount', 'Applied Amount')} <RequiredAsterisk show={isFieldRequired(config, 'appliedAmount')} />
+            </label>
+            <input
+              type="text"
+              className={`form-input ${errors.appliedAmount ? 'has-error' : ''}`}
+              value={formData.appliedAmount}
+              disabled={isEdit && !isFieldEditable(config, 'appliedAmount')}
+              onChange={(e) => setFieldValue('appliedAmount', e.target.value)}
+              onBlur={() => validateField('appliedAmount')}
+            />
+            {errors.appliedAmount && (
+              <div className="field-error-message">{errors.appliedAmount}</div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

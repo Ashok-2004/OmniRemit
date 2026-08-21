@@ -2,6 +2,7 @@ import React from 'react';
 import { Home } from 'lucide-react';
 import { useLeadStore } from '../../../store/useLeadStore';
 import { SearchableDropdown } from '../../common/SearchableDropdown';
+import { isFieldVisible, isFieldRequired, isFieldEditable, getFieldLabel } from '../../../config/fieldControlRegistry';
 
 interface HomeFinancingFieldsProps {
   isEdit?: boolean;
@@ -15,6 +16,7 @@ export const HomeFinancingFields: React.FC<HomeFinancingFieldsProps> = ({ isEdit
   const propertyTypes = store.propertyTypes;
   const propertyStatuses = store.propertyStatuses;
   const validateField = isEdit ? () => {} : store.validateField;
+  const config = store.fieldConfig;
 
   return (
     <div className="form-section">
@@ -24,27 +26,33 @@ export const HomeFinancingFields: React.FC<HomeFinancingFieldsProps> = ({ isEdit
       </div>
 
       <div className="form-grid-2">
-        <SearchableDropdown
-          label="Property Type"
-          placeholder="Select Property Type"
-          options={propertyTypes}
-          value={formData.propertyType}
-          onChange={(val) => setFieldValue('propertyType', val)}
-          onBlur={() => validateField('propertyType')}
-          required
-          error={errors.propertyType}
-        />
+        {isFieldVisible(config, 'propertyType') && (
+          <SearchableDropdown
+            label={getFieldLabel(config, 'propertyType', 'Property Type')}
+            placeholder="Select Property Type"
+            options={propertyTypes}
+            value={formData.propertyType}
+            disabled={isEdit && !isFieldEditable(config, 'propertyType')}
+            onChange={(val) => setFieldValue('propertyType', val)}
+            onBlur={() => validateField('propertyType')}
+            required={isFieldRequired(config, 'propertyType')}
+            error={errors.propertyType}
+          />
+        )}
 
-        <SearchableDropdown
-          label="Property Status"
-          placeholder="Select Property Status"
-          options={propertyStatuses}
-          value={formData.propertyStatus}
-          onChange={(val) => setFieldValue('propertyStatus', val)}
-          onBlur={() => validateField('propertyStatus')}
-          required
-          error={errors.propertyStatus}
-        />
+        {isFieldVisible(config, 'propertyStatus') && (
+          <SearchableDropdown
+            label={getFieldLabel(config, 'propertyStatus', 'Property Status')}
+            placeholder="Select Property Status"
+            options={propertyStatuses}
+            value={formData.propertyStatus}
+            disabled={isEdit && !isFieldEditable(config, 'propertyStatus')}
+            onChange={(val) => setFieldValue('propertyStatus', val)}
+            onBlur={() => validateField('propertyStatus')}
+            required={isFieldRequired(config, 'propertyStatus')}
+            error={errors.propertyStatus}
+          />
+        )}
       </div>
     </div>
   );

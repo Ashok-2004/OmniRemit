@@ -2,6 +2,7 @@ using System.Text.Json;
 using LeadManagement.Api.Infrastructure;
 using LeadManagement.Api.Infrastructure.Security;
 using LeadManagement.Api.Models.Dtos;
+using LeadManagement.Api.Models.Entities;
 using LeadManagement.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -24,11 +25,22 @@ namespace LeadManagement.Api.Controllers;
 [Route("internal/approvals")]
 [AllowAnonymous]
 [TypeFilter(typeof(InternalApiKeyFilter))]
-public class InternalApprovalsController(ILeadService leadService, AuthServiceClient authServiceClient) : ControllerBase
+public class InternalApprovalsController(ILeadService leadService, AuthServiceClient authServiceClient, LeadFieldConfigService fieldConfigService) : ControllerBase
 {
     [HttpPost("apply")]
     public async Task<IActionResult> Apply([FromBody] ApplyApprovedMutationRequest request)
     {
+        // LeadFieldConfig replays are also submitted with Action="Update" (see
+        // LeadFieldConfigService.TrySubmitForApprovalAsync) — branch on EntityType FIRST so this never
+        // collides with the Lead-update case in the switch below.
+        if (request.EntityType == "LeadFieldConfig")
+        {
+            var productId = Guid.Parse(request.EntityId!);
+            var fields = JsonSerializer.Deserialize<List<LeadFieldConfig>>(request.NewDataJson)!;
+            await fieldConfigService.ReplaceAsync(productId, fields, request.ActingUserId, request.ActingUserName, bypassApproval: true);
+            return NoContent();
+        }
+
         switch (request.Action)
         {
             case "Create":

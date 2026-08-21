@@ -27,6 +27,17 @@ namespace LeadManagement.Api.Controllers
             var data = await _masterDataService.GetProductsAsync();
             return Ok(new ApiResponseDto<List<DropdownOptionDto>> { Success = true, Data = data });
         }
+
+        /// <summary>Field Settings' product tabs need the real Product Guid — GetProducts above
+        /// deliberately returns name-only dropdown options, which every existing consumer (lead
+        /// submission, filters) matches by name, not id.</summary>
+        [HttpGet("full")]
+        [RequiresCapability("FieldSettings", "View")]
+        public async Task<ActionResult<ApiResponseDto<List<ProductWithIdDto>>>> GetProductsWithId()
+        {
+            var data = await _masterDataService.GetProductsWithIdAsync();
+            return Ok(new ApiResponseDto<List<ProductWithIdDto>> { Success = true, Data = data });
+        }
     }
 
     [ApiController]

@@ -9,6 +9,28 @@ import {
   BranchDistribution,
   DashboardFilterParams,
 } from '../api/apiClient';
+import { isFieldRequired, type LeadFieldConfig } from '../config/fieldControlRegistry';
+
+/** LeadFormData's field names match the backend's apiField catalog 1:1 with exactly one exception —
+ * the form calls it `preferredBranch`, the catalog calls it `branch`. Central so both validateField
+ * and validateForm stay in sync. */
+const CATALOG_FIELD_TO_FORM_FIELD: Partial<Record<string, keyof LeadFormData>> = {
+  customerName: 'customerName',
+  icNumber: 'icNumber',
+  phoneNumber: 'phoneNumber',
+  email: 'email',
+  state: 'state',
+  branch: 'preferredBranch',
+  employerName: 'employerName',
+  appliedAmount: 'appliedAmount',
+  propertyType: 'propertyType',
+  propertyStatus: 'propertyStatus',
+  dateOfIncorporation: 'dateOfIncorporation',
+  companyName: 'companyName',
+  entityType: 'entityType',
+  marketingConsent: 'marketingConsent',
+  agreedToPrivacyPolicy: 'agreedToPrivacyPolicy',
+};
 
 interface ToastState {
   show: boolean;
@@ -51,6 +73,22 @@ interface LeadStoreState {
   setFieldValue: <K extends keyof LeadFormData>(field: K, value: LeadFormData[K]) => void;
   setProduct: (product: string) => void;
   resetForm: () => void;
+
+  // Field Settings — the selected product's config, driving which sections/fields render, their
+  // label/required/editable state, and (for View/Details) masking. Keyed by product NAME -> Guid id
+  // since LeadFormData.product is a name but the config API is keyed by the real Product id.
+  productIdByName: Record<string, string>;
+  fieldConfig: LeadFieldConfig[];
+  isLoadingFieldConfig: boolean;
+  fetchFieldConfigForProduct: (productName: string) => Promise<void>;
+
+  /** The View Leads table shows leads from every product at once, so its columns can't reflect any
+   * ONE product's config the way the Create/Edit forms do — they're driven by the common-field
+   * subset of a single deterministic reference product's config instead (the first product returned
+   * by the products endpoint). Kept separate from `fieldConfig` above so navigating Create/Edit
+   * elsewhere never changes what the table displays. */
+  commonFieldConfig: LeadFieldConfig[];
+  fetchCommonFieldConfig: () => Promise<void>;
 
   // Validation
   errors: FormValidationErrors;
@@ -242,6 +280,7 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
     set({ activePage: page });
     if (page === 'view-lead') {
       get().fetchLeads();
+      void get().fetchCommonFieldConfig();
     } else if (page === 'dashboard') {
       get().fetchDashboardData();
     } else if (page === 'audit-logs') {
@@ -250,6 +289,36 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
   },
   isSidebarExpanded: true,
   toggleSidebar: () => set((state) => ({ isSidebarExpanded: !state.isSidebarExpanded })),
+
+  // Field Settings
+  productIdByName: {},
+  fieldConfig: [],
+  isLoadingFieldConfig: false,
+  fetchFieldConfigForProduct: async (productName) => {
+    const productId = get().productIdByName[productName];
+    if (!productId) {
+      set({ fieldConfig: [] });
+      return;
+    }
+    set({ isLoadingFieldConfig: true });
+    try {
+      const config = await apiClient.getFieldConfig(productId);
+      set({ fieldConfig: config, isLoadingFieldConfig: false });
+    } catch {
+      set({ fieldConfig: [], isLoadingFieldConfig: false });
+    }
+  },
+
+  commonFieldConfig: [],
+  fetchCommonFieldConfig: async () => {
+    const productsWithId = await apiClient.getProductsWithId();
+    if (productsWithId.length === 0) {
+      set({ commonFieldConfig: [] });
+      return;
+    }
+    const config = await apiClient.getFieldConfig(productsWithId[0].id);
+    set({ commonFieldConfig: config });
+  },
 
   // Master Data Options
   products: [],
@@ -264,11 +333,12 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
   fetchMasterData: async () => {
     set({ isLoadingMasterData: true });
     try {
-      const [products, states, referenceData, salesExecs] = await Promise.all([
+      const [products, states, referenceData, salesExecs, productsWithId] = await Promise.all([
         apiClient.getProducts(),
         apiClient.getStates(),
         apiClient.getReferenceData(),
         apiClient.getSalesExecutives(),
+        apiClient.getProductsWithId(),
       ]);
 
       set({
@@ -278,6 +348,7 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
         propertyStatuses: referenceData.propertyStatuses,
         entityTypes: referenceData.entityTypes,
         salesExecutives: salesExecs,
+        productIdByName: Object.fromEntries(productsWithId.map((p) => [p.name, p.id])),
         isLoadingMasterData: false,
       });
 
@@ -342,6 +413,7 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
       },
       errors: {},
     }));
+    void get().fetchFieldConfigForProduct(product);
   },
 
   resetForm: () => set({ formData: initialFormData, errors: {} }),
@@ -356,12 +428,19 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
 
       const isValEmpty = val === undefined || val === null || (typeof val === 'string' && !val.trim()) || val === false;
 
-      const requiredFields: (keyof LeadFormData)[] = [
-        'product', 'customerName', 'icNumber', 'phoneNumber', 'email', 'state', 'employerName', 'appliedAmount', 'marketingConsent', 'agreedToPrivacyPolicy'
-      ];
+      // Driven by Field Settings' per-product Required flag. A field absent from the currently
+      // loaded config — either not applicable to this product (e.g. propertyType for a non-Home
+      // Financing product) or not loaded yet — is never treated as required here: the corresponding
+      // input isn't rendered in either case (LeadFormContainer gates on the same config), so requiring
+      // an unrenderable field would block submission with no way to satisfy it.
+      const requiredFields: (keyof LeadFormData)[] = ['product'];
+      for (const [apiField, formField] of Object.entries(CATALOG_FIELD_TO_FORM_FIELD)) {
+        if (formField && isFieldRequired(state.fieldConfig, apiField)) requiredFields.push(formField);
+      }
+      // hasPreferredSalesExecutive/preferredSalesExecutive's "if checked, the dropdown becomes
+      // mandatory" pairing stays its own hardcoded rule, independent of Field Settings — see
+      // LeadFieldConfigService's own doc comment for why.
       if (state.formData.hasPreferredSalesExecutive) requiredFields.push('preferredSalesExecutive');
-      if (state.formData.product === 'Home Financing') requiredFields.push('propertyType', 'propertyStatus');
-      if (state.formData.product === 'Micro Finance') requiredFields.push('dateOfIncorporation', 'companyName', 'entityType');
 
       if (isValEmpty && requiredFields.includes(field)) {
         errors[field] = getEmptyErrorMessage(field as string);
@@ -424,40 +503,45 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
       errors.product = getEmptyErrorMessage('product');
     }
 
-    if (!formData.customerName.trim()) {
+    // Field Settings' per-product Required flag drives presence; format checks (regex/email shape)
+    // stay unconditional once a value IS present — mirrors the backend's exact split of concerns
+    // (LeadFieldConfigService.EnsureRequiredFieldsPresent vs. CreateLeadDto's format validators).
+    const { fieldConfig } = get();
+
+    if (isFieldRequired(fieldConfig, 'customerName') && !formData.customerName.trim()) {
       errors.customerName = getEmptyErrorMessage('customerName');
     }
 
-    if (!formData.icNumber.trim()) {
+    if (isFieldRequired(fieldConfig, 'icNumber') && !formData.icNumber.trim()) {
       errors.icNumber = getEmptyErrorMessage('icNumber');
-    } else if (!/^\d{6}-\d{2}-\d{4}$/.test(formData.icNumber.trim())) {
+    } else if (formData.icNumber.trim() && !/^\d{6}-\d{2}-\d{4}$/.test(formData.icNumber.trim())) {
       errors.icNumber = getIncorrectErrorMessage('icNumber');
     }
 
-    if (!formData.phoneNumber.trim()) {
+    if (isFieldRequired(fieldConfig, 'phoneNumber') && !formData.phoneNumber.trim()) {
       errors.phoneNumber = getEmptyErrorMessage('phoneNumber');
-    } else {
+    } else if (formData.phoneNumber.trim()) {
       const fullPhone = `${formData.phoneCountryCode}${formData.phoneNumber.trim().replace(/\s|-/g, '')}`;
       if (!/^\+60[1-9]\d{7,9}$/.test(fullPhone)) {
         errors.phoneNumber = getIncorrectErrorMessage('phoneNumber');
       }
     }
 
-    if (!formData.email.trim()) {
+    if (isFieldRequired(fieldConfig, 'email') && !formData.email.trim()) {
       errors.email = getEmptyErrorMessage('email');
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+    } else if (formData.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
       errors.email = getIncorrectErrorMessage('email');
     }
 
-    if (!formData.state) {
+    if (isFieldRequired(fieldConfig, 'state') && !formData.state) {
       errors.state = getEmptyErrorMessage('state');
     }
 
-    if (!formData.employerName.trim()) {
+    if (isFieldRequired(fieldConfig, 'employerName') && !formData.employerName.trim()) {
       errors.employerName = getEmptyErrorMessage('employerName');
     }
 
-    if (!formData.appliedAmount.trim()) {
+    if (isFieldRequired(fieldConfig, 'appliedAmount') && !formData.appliedAmount.trim()) {
       errors.appliedAmount = getEmptyErrorMessage('appliedAmount');
     }
 
@@ -465,32 +549,32 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
       errors.preferredSalesExecutive = getEmptyErrorMessage('preferredSalesExecutive');
     }
 
-    if (formData.product === 'Home Financing') {
-      if (!formData.propertyType) {
+    if (fieldConfig.some((f) => f.apiField === 'propertyType')) {
+      if (isFieldRequired(fieldConfig, 'propertyType') && !formData.propertyType) {
         errors.propertyType = getEmptyErrorMessage('propertyType');
       }
-      if (!formData.propertyStatus) {
+      if (isFieldRequired(fieldConfig, 'propertyStatus') && !formData.propertyStatus) {
         errors.propertyStatus = getEmptyErrorMessage('propertyStatus');
       }
     }
 
-    if (formData.product === 'Micro Finance') {
-      if (!formData.dateOfIncorporation) {
+    if (fieldConfig.some((f) => f.apiField === 'dateOfIncorporation')) {
+      if (isFieldRequired(fieldConfig, 'dateOfIncorporation') && !formData.dateOfIncorporation) {
         errors.dateOfIncorporation = getEmptyErrorMessage('dateOfIncorporation');
       }
-      if (!formData.companyName.trim()) {
+      if (isFieldRequired(fieldConfig, 'companyName') && !formData.companyName.trim()) {
         errors.companyName = getEmptyErrorMessage('companyName');
       }
-      if (!formData.entityType) {
+      if (isFieldRequired(fieldConfig, 'entityType') && !formData.entityType) {
         errors.entityType = getEmptyErrorMessage('entityType');
       }
     }
 
-    if (!formData.marketingConsent) {
+    if (isFieldRequired(fieldConfig, 'marketingConsent') && !formData.marketingConsent) {
       errors.marketingConsent = getEmptyErrorMessage('marketingConsent');
     }
 
-    if (!formData.agreedToPrivacyPolicy) {
+    if (isFieldRequired(fieldConfig, 'agreedToPrivacyPolicy') && !formData.agreedToPrivacyPolicy) {
       errors.agreedToPrivacyPolicy = getEmptyErrorMessage('agreedToPrivacyPolicy');
     }
 
@@ -909,6 +993,9 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
     if (lead?.id) {
       apiClient.logLeadView(lead.id);
     }
+    if (lead?.product) {
+      void get().fetchFieldConfigForProduct(lead.product);
+    }
   },
   closeDetailsDrawer: () => set({ selectedLead: null, isDetailsDrawerOpen: false }),
 
@@ -952,6 +1039,9 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
         agreedToPrivacyPolicy: true,
       },
     });
+    if (lead.product) {
+      void get().fetchFieldConfigForProduct(lead.product);
+    }
   },
 
   closeEditReasonDrawer: () => set({ isEditReasonOpen: false, editLeadTarget: null, editReason: '' }),
@@ -975,6 +1065,7 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
         newForm.dateOfIncorporation = '';
         newForm.companyName = '';
         newForm.entityType = '';
+        void get().fetchFieldConfigForProduct(value as string);
       }
       return { editFormData: newForm, editErrors: newErrors };
     });
@@ -984,38 +1075,41 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
     const { editFormData } = get();
     const errors: FormValidationErrors = {};
 
-    if (!editFormData.product) errors.product = getEmptyErrorMessage('product');
-    if (!editFormData.customerName.trim()) errors.customerName = getEmptyErrorMessage('customerName');
-    if (!editFormData.icNumber.trim()) errors.icNumber = getEmptyErrorMessage('icNumber');
-    else if (!/^\d{6}-\d{2}-\d{4}$/.test(editFormData.icNumber.trim())) errors.icNumber = getIncorrectErrorMessage('icNumber');
+    // Field Settings' per-product Required flag — see validateForm's identical comment.
+    const { fieldConfig } = get();
 
-    if (!editFormData.phoneNumber.trim()) errors.phoneNumber = getEmptyErrorMessage('phoneNumber');
-    else {
+    if (!editFormData.product) errors.product = getEmptyErrorMessage('product');
+    if (isFieldRequired(fieldConfig, 'customerName') && !editFormData.customerName.trim()) errors.customerName = getEmptyErrorMessage('customerName');
+    if (isFieldRequired(fieldConfig, 'icNumber') && !editFormData.icNumber.trim()) errors.icNumber = getEmptyErrorMessage('icNumber');
+    else if (editFormData.icNumber.trim() && !/^\d{6}-\d{2}-\d{4}$/.test(editFormData.icNumber.trim())) errors.icNumber = getIncorrectErrorMessage('icNumber');
+
+    if (isFieldRequired(fieldConfig, 'phoneNumber') && !editFormData.phoneNumber.trim()) errors.phoneNumber = getEmptyErrorMessage('phoneNumber');
+    else if (editFormData.phoneNumber.trim()) {
       const fullPhone = `${editFormData.phoneCountryCode}${editFormData.phoneNumber.trim().replace(/\s|-/g, '')}`;
       if (!/^\+60[1-9]\d{7,9}$/.test(fullPhone)) errors.phoneNumber = getIncorrectErrorMessage('phoneNumber');
     }
 
-    if (!editFormData.email.trim()) errors.email = getEmptyErrorMessage('email');
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editFormData.email.trim())) errors.email = getIncorrectErrorMessage('email');
+    if (isFieldRequired(fieldConfig, 'email') && !editFormData.email.trim()) errors.email = getEmptyErrorMessage('email');
+    else if (editFormData.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editFormData.email.trim())) errors.email = getIncorrectErrorMessage('email');
 
-    if (!editFormData.state) errors.state = getEmptyErrorMessage('state');
-    if (!editFormData.employerName.trim()) errors.employerName = getEmptyErrorMessage('employerName');
-    if (!editFormData.appliedAmount.trim()) errors.appliedAmount = getEmptyErrorMessage('appliedAmount');
+    if (isFieldRequired(fieldConfig, 'state') && !editFormData.state) errors.state = getEmptyErrorMessage('state');
+    if (isFieldRequired(fieldConfig, 'employerName') && !editFormData.employerName.trim()) errors.employerName = getEmptyErrorMessage('employerName');
+    if (isFieldRequired(fieldConfig, 'appliedAmount') && !editFormData.appliedAmount.trim()) errors.appliedAmount = getEmptyErrorMessage('appliedAmount');
 
     if (editFormData.hasPreferredSalesExecutive && !editFormData.preferredSalesExecutive.trim()) {
       errors.preferredSalesExecutive = getEmptyErrorMessage('preferredSalesExecutive');
     }
 
-    if (editFormData.product === 'Home Financing') {
-      if (!editFormData.propertyType) errors.propertyType = getEmptyErrorMessage('propertyType');
-      if (!editFormData.propertyStatus) errors.propertyStatus = getEmptyErrorMessage('propertyStatus');
-    } else if (editFormData.product === 'Micro Finance') {
-      if (!editFormData.dateOfIncorporation) errors.dateOfIncorporation = getEmptyErrorMessage('dateOfIncorporation');
-      if (!editFormData.companyName.trim()) errors.companyName = getEmptyErrorMessage('companyName');
-      if (!editFormData.entityType) errors.entityType = getEmptyErrorMessage('entityType');
+    if (fieldConfig.some((f) => f.apiField === 'propertyType')) {
+      if (isFieldRequired(fieldConfig, 'propertyType') && !editFormData.propertyType) errors.propertyType = getEmptyErrorMessage('propertyType');
+      if (isFieldRequired(fieldConfig, 'propertyStatus') && !editFormData.propertyStatus) errors.propertyStatus = getEmptyErrorMessage('propertyStatus');
+    } else if (fieldConfig.some((f) => f.apiField === 'dateOfIncorporation')) {
+      if (isFieldRequired(fieldConfig, 'dateOfIncorporation') && !editFormData.dateOfIncorporation) errors.dateOfIncorporation = getEmptyErrorMessage('dateOfIncorporation');
+      if (isFieldRequired(fieldConfig, 'companyName') && !editFormData.companyName.trim()) errors.companyName = getEmptyErrorMessage('companyName');
+      if (isFieldRequired(fieldConfig, 'entityType') && !editFormData.entityType) errors.entityType = getEmptyErrorMessage('entityType');
     }
 
-    if (!editFormData.marketingConsent) errors.marketingConsent = getEmptyErrorMessage('marketingConsent');
+    if (isFieldRequired(fieldConfig, 'marketingConsent') && !editFormData.marketingConsent) errors.marketingConsent = getEmptyErrorMessage('marketingConsent');
 
     set({ editErrors: errors });
     const isValid = Object.keys(errors).length === 0;

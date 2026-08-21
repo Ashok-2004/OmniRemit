@@ -22,6 +22,15 @@ function detectProductType(details: AnyProductFields | null): ProductDetailType 
   return 'loan'; // fallback: closest to the generic account-detail shape
 }
 
+/** Shared label/value cell for the `.drawer-grid` layout — used by this drawer and reused as-is by
+ * other drawers (e.g. Audit Log Details) that want the same card-based section structure. */
+export const Field = ({ label, children, span }: { label: string; children: ReactNode; span?: boolean }) => (
+  <div className="drawer-field" style={span ? { gridColumn: 'span 2' } : undefined}>
+    <span className="info-label">{label}</span>
+    <span className="info-value">{children}</span>
+  </div>
+);
+
 export default function ProductDetailsModal() {
   const { selectedProductDetails, modalOpen, loadingDetails, closeProductModal } = useProductStore();
   const { customerType, profile } = useCustomerStore();
@@ -227,13 +236,6 @@ export default function ProductDetailsModal() {
       </>
     );
   };
-
-  const Field = ({ label, children, span }: { label: string; children: ReactNode; span?: boolean }) => (
-    <div className="drawer-field" style={span ? { gridColumn: 'span 2' } : undefined}>
-      <span className="info-label">{label}</span>
-      <span className="info-value">{children}</span>
-    </div>
-  );
 
   const renderIndividualSections = () => {
     if (!d) return null;

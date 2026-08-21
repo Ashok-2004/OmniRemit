@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Layers,
   Building2,
@@ -15,6 +16,13 @@ import { FilterCriterion } from '../../types/lead';
 interface LeadFilterPopoverProps {
   isOpen: boolean;
   onClose: () => void;
+  /** The Filter button's wrapping element. Positioning is computed from its live
+   * getBoundingClientRect() rather than a CSS `position: absolute` parent, because the popover is
+   * portaled to document.body to escape the table card's `overflow: hidden` (see ViewLeadPage.tsx's
+   * "Main Table Container Card") — that ancestor clips the popover whenever the card's own height
+   * collapses below the panel's ~400-480px floor height, which happens exactly when the filtered
+   * list is empty. */
+  anchorRef: React.RefObject<HTMLElement | null>;
 }
 
 const TABS: { id: FilterCriterion; label: string; icon: React.ReactNode }[] = [
@@ -40,7 +48,7 @@ const DEFAULT_PRODUCTS = [
 
 const STATUSES = ['New', 'Contacted', 'In Progress', 'Qualified', 'Converted', 'Closed'];
 
-export const LeadFilterPopover: React.FC<LeadFilterPopoverProps> = ({ isOpen, onClose }) => {
+export const LeadFilterPopover: React.FC<LeadFilterPopoverProps> = ({ isOpen, onClose, anchorRef }) => {
   const {
     products,
     branches,
@@ -54,8 +62,32 @@ export const LeadFilterPopover: React.FC<LeadFilterPopoverProps> = ({ isOpen, on
   const [activeTab, setActiveTab] = useState<FilterCriterion>('product');
   const [searchQueries, setSearchQueries] = useState<Record<string, string>>({});
   const popoverRef = useRef<HTMLDivElement>(null);
+  // Viewport-relative coordinates for the portaled, position:'fixed' panel. Recomputed synchronously
+  // before paint whenever it opens (and on resize/scroll while open) so it always tracks the button
+  // it's anchored to, exactly like the old position:'absolute' layout did — just computed by hand
+  // instead of by the CSS box model, since a portal has no positioned ancestor to be absolute to.
+  const [coords, setCoords] = useState<{ top: number; right: number } | null>(null);
 
-  // Close when clicking outside
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+
+    const updatePosition = () => {
+      const rect = anchorRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setCoords({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
+    };
+
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [isOpen, anchorRef]);
+
+  // Close when clicking outside. popoverRef.current.contains(e.target) is unaffected by the portal —
+  // it checks real DOM containment, which doesn't care where in the tree the node was mounted.
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
@@ -70,7 +102,7 @@ export const LeadFilterPopover: React.FC<LeadFilterPopoverProps> = ({ isOpen, on
     };
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
+  if (!isOpen || !coords) return null;
 
   // Helper to get rule value by field
   const getRuleValue = (field: FilterCriterion): string => {
@@ -138,14 +170,17 @@ export const LeadFilterPopover: React.FC<LeadFilterPopoverProps> = ({ isOpen, on
     onClose();
   };
 
-  return (
+  return createPortal(
     <div
       ref={popoverRef}
       style={{
-        position: 'absolute',
-        top: 'calc(100% + 8px)',
-        right: 0,
-        zIndex: 1000,
+        position: 'fixed',
+        top: coords.top,
+        right: coords.right,
+        // Portaled into document.body's root stacking context, this now competes directly with
+        // modals/toasts (.toast-notification is 1000, .drawer-overlay is 200) instead of the table
+        // card's own stacking context it used to live inside — bumped above both.
+        zIndex: 1200,
         background: '#ffffff',
         borderRadius: '16px',
         boxShadow: '0 12px 32px -4px rgba(15, 23, 42, 0.18), 0 4px 12px rgba(0,0,0,0.06)',
@@ -595,6 +630,7 @@ export const LeadFilterPopover: React.FC<LeadFilterPopoverProps> = ({ isOpen, on
           Apply Filters
         </button>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };

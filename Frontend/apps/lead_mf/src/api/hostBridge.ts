@@ -74,6 +74,7 @@ export const LEAD_SUBMODULE_LEAD = 'remote.lead.lead';
 export const LEAD_SUBMODULE_DASHBOARD = 'remote.lead.dashboard';
 export const LEAD_SUBMODULE_AUDIT = 'remote.lead.auditlog';
 export const LEAD_SUBMODULE_MASTERDATA = 'remote.lead.masterdata';
+export const LEAD_SUBMODULE_FIELD_SETTINGS = 'remote.lead.fieldsettings';
 
 // Helper capability checks
 export const canViewDashboard = (): boolean =>
@@ -93,3 +94,6 @@ export const canDeleteLead = (): boolean =>
 
 export const canViewAuditLogs = (): boolean =>
   hasCapability(LEAD_SUBMODULE_AUDIT, 'View') || hasCapability(LEAD_FEATURE_KEY, 'View');
+
+export const canManageFieldSettings = (): boolean =>
+  hasCapability(LEAD_SUBMODULE_FIELD_SETTINGS, 'Manage') || hasCapability(LEAD_FEATURE_KEY, 'View');

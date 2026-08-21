@@ -17,7 +17,7 @@ export const LeadFormContainer: React.FC<LeadFormContainerProps> = ({
   mode = 'page',
   onSuccess,
 }) => {
-  const { formData, submitLead, isSubmitting } = useLeadStore();
+  const { formData, submitLead, isSubmitting, fieldConfig } = useLeadStore();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,8 +27,13 @@ export const LeadFormContainer: React.FC<LeadFormContainerProps> = ({
     }
   };
 
-  const isHomeFinancing = formData.product === 'Home Financing';
-  const isMicrofinance = formData.product === 'Micro Finance';
+  // Which product-specific section to show is now config-driven, not a hardcoded product-name
+  // check: a product's field config only ever contains propertyType/dateOfIncorporation rows when
+  // that product's catalog actually has them (see LeadFieldConfigService.BuildDefaultsFor), so their
+  // mere presence in the loaded config is exactly the signal that used to be `product === 'Home
+  // Financing'` / `'Micro Finance'` — the underlying rendered components are unchanged.
+  const showHomeFinancingFields = fieldConfig.some((f) => f.apiField === 'propertyType');
+  const showMicrofinanceFields = fieldConfig.some((f) => f.apiField === 'dateOfIncorporation');
 
   const formContent = (
     <form onSubmit={handleSubmit} noValidate>
@@ -42,8 +47,8 @@ export const LeadFormContainer: React.FC<LeadFormContainerProps> = ({
         <div style={{ animation: 'fadeInForm 0.25s ease-out' }}>
           <CustomerInformationSection />
           <PreferredSalesExecutiveSection />
-          {isHomeFinancing && <HomeFinancingFields />}
-          {isMicrofinance && <MicrofinanceFields />}
+          {showHomeFinancingFields && <HomeFinancingFields />}
+          {showMicrofinanceFields && <MicrofinanceFields />}
           <DeclarationConsentSection />
 
           {/* Submit Button — only in page mode */}

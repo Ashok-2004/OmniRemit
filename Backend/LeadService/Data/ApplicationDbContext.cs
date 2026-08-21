@@ -17,6 +17,7 @@ namespace LeadManagement.Api.Data
         public DbSet<PropertyTypeLookup> PropertyTypes { get; set; }
         public DbSet<PropertyStatusLookup> PropertyStatuses { get; set; }
         public DbSet<EntityTypeLookup> EntityTypes { get; set; }
+        public DbSet<LeadFieldConfig> LeadFieldConfigs { get; set; }
         public DbSet<Lead> Leads { get; set; }
         public DbSet<LeadHomeFinancingDetail> LeadHomeFinancingDetails { get; set; }
         public DbSet<LeadMicrofinanceDetail> LeadMicrofinanceDetails { get; set; }
@@ -45,6 +46,21 @@ namespace LeadManagement.Api.Data
 
             modelBuilder.Entity<AuditLog>()
                 .HasIndex(a => a.EntityId);
+
+            // One config row per (Product, ApiField) — same uniqueness guarantee Customer360Service's
+            // field_configs table has on (ProfileType, ApiField).
+            modelBuilder.Entity<LeadFieldConfig>()
+                .HasIndex(f => new { f.ProductId, f.ApiField })
+                .IsUnique();
+
+            // Restrict, not the default Cascade — Products aren't deletable via any current endpoint,
+            // so this never fires in practice, but matches this platform's established defensive-FK
+            // convention for config/audit-shaped rows.
+            modelBuilder.Entity<LeadFieldConfig>()
+                .HasOne(f => f.Product)
+                .WithMany()
+                .HasForeignKey(f => f.ProductId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             // Seed Master Data
             SeedMasterData(modelBuilder);

@@ -17,4 +17,8 @@ public class SelfOptions
     /// registered as in Setup → Applications. See ApprovalDtos.cs's doc comment for why this can't be
     /// derived in code.</summary>
     public string LeadModuleKey { get; set; } = string.Empty;
+
+    /// <summary>Same idea as <see cref="LeadModuleKey"/>, for the separate "FieldSettings"
+    /// [RequiresCapability] module — Field Settings gates independently of Lead itself.</summary>
+    public string FieldSettingsModuleKey { get; set; } = string.Empty;
 }

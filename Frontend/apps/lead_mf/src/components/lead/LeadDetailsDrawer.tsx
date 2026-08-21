@@ -1,6 +1,8 @@
-import React, { useEffect, useRef } from 'react';
-import { X, User, Package, Briefcase, UserCheck, FileText, CheckCircle2 } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { X, User, Package, Briefcase, UserCheck, FileText, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 import { useLeadStore } from '../../store/useLeadStore';
+import { isFieldVisible, getFieldLabel, type LeadFieldConfig } from '../../config/fieldControlRegistry';
+import { applyMaskingRule, hasRevealableValue } from '../../utils/fieldMasking';
 
 // Deterministic avatar helpers
 const AVATAR_COLORS = [
@@ -50,8 +52,43 @@ const getAvatarColor = (name: string): string => {
 };
 
 export const LeadDetailsDrawer: React.FC = () => {
-  const { selectedLead, isDetailsDrawerOpen, closeDetailsDrawer } = useLeadStore();
+  const { selectedLead, isDetailsDrawerOpen, closeDetailsDrawer, fieldConfig } = useLeadStore();
   const drawerRef = useRef<HTMLDivElement>(null);
+  const [revealed, setRevealed] = useState<Record<string, boolean>>({});
+
+  function toggleReveal(apiField: string) {
+    setRevealed((prev) => ({ ...prev, [apiField]: !prev[apiField] }));
+  }
+
+  /** Field-config-aware row: hidden entirely when Visible=false, masked-with-reveal when Sensitive. */
+  function Row({ apiField, label, raw, valueStyle }: { apiField: string; label: string; raw?: string | null; valueStyle?: React.CSSProperties }) {
+    if (!isFieldVisible(fieldConfig, apiField)) return null;
+    const entry = fieldConfig.find((f) => f.apiField === apiField) as LeadFieldConfig | undefined;
+    const formatted = formatVal(raw);
+    const canReveal = !!entry?.sensitive && hasRevealableValue(raw) && formatted !== '—';
+    const displayValue = canReveal && !revealed[apiField]
+      ? applyMaskingRule(formatted, entry!.maskingRule, entry!.visibleCharCount)
+      : formatted;
+
+    return (
+      <div className="lead-details-row">
+        <div className="lead-details-label">{getFieldLabel(fieldConfig, apiField, label)}</div>
+        <div className="lead-details-value" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', ...valueStyle }}>
+          <span>{displayValue}</span>
+          {canReveal && (
+            <button
+              type="button"
+              onClick={() => toggleReveal(apiField)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex', padding: 0 }}
+              aria-label={revealed[apiField] ? 'Hide value' : 'Reveal value'}
+            >
+              {revealed[apiField] ? <EyeOff size={13} /> : <Eye size={13} />}
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   // Lock body scroll when drawer is open
   useEffect(() => {
@@ -77,8 +114,12 @@ export const LeadDetailsDrawer: React.FC = () => {
   const avatarColor = getAvatarColor(selectedLead.name);
   const statusStyle = STATUS_STYLES[selectedLead.status] || STATUS_STYLES['New'];
 
-  const isHomeFinancing = selectedLead.product === 'Home Financing' || !!selectedLead.propertyType || !!selectedLead.propertyStatus;
-  const isMicrofinance = selectedLead.product === 'Micro Finance' || !!selectedLead.companyName || !!selectedLead.entityType || !!selectedLead.dateOfIncorporation;
+  // Config-driven, not a hardcoded product-name check — a lead's product only ever has
+  // propertyType/dateOfIncorporation rows in its config when that product's catalog actually has
+  // them (see LeadFieldConfigService.BuildDefaultsFor). Falls back to "does the lead itself carry a
+  // value" so a lead viewed before its config finished loading doesn't briefly hide real data.
+  const isHomeFinancing = fieldConfig.some((f) => f.apiField === 'propertyType') || !!selectedLead.propertyType || !!selectedLead.propertyStatus;
+  const isMicrofinance = fieldConfig.some((f) => f.apiField === 'dateOfIncorporation') || !!selectedLead.companyName || !!selectedLead.entityType || !!selectedLead.dateOfIncorporation;
 
   return (
     <div className="drawer-overlay" onClick={handleOverlayClick}>
@@ -138,24 +179,10 @@ export const LeadDetailsDrawer: React.FC = () => {
               <span>Contact Information</span>
             </div>
             <div className="lead-details-card-body">
-              <div className="lead-details-row">
-                <div className="lead-details-label">Full Name</div>
-                <div className="lead-details-value">{formatVal(selectedLead.name)}</div>
-              </div>
-              <div className="lead-details-row">
-                <div className="lead-details-label">IC Number</div>
-                <div className="lead-details-value" style={{ fontFamily: "'SF Mono', 'Fira Code', monospace" }}>
-                  {formatVal(selectedLead.icNumber)}
-                </div>
-              </div>
-              <div className="lead-details-row">
-                <div className="lead-details-label">Phone</div>
-                <div className="lead-details-value">{formatVal(selectedLead.phone)}</div>
-              </div>
-              <div className="lead-details-row">
-                <div className="lead-details-label">Email</div>
-                <div className="lead-details-value">{formatVal(selectedLead.email)}</div>
-              </div>
+              <Row apiField="customerName" label="Full Name" raw={selectedLead.name} />
+              <Row apiField="icNumber" label="IC Number" raw={selectedLead.icNumber} valueStyle={{ fontFamily: "'SF Mono', 'Fira Code', monospace" }} />
+              <Row apiField="phoneNumber" label="Phone" raw={selectedLead.phone} />
+              <Row apiField="email" label="Email" raw={selectedLead.email} />
             </div>
           </div>
 
@@ -166,24 +193,17 @@ export const LeadDetailsDrawer: React.FC = () => {
               <span>Employment & Financing Application</span>
             </div>
             <div className="lead-details-card-body">
-              <div className="lead-details-row">
-                <div className="lead-details-label">Employer Name</div>
-                <div className="lead-details-value">{formatVal(selectedLead.employerName)}</div>
-              </div>
-              <div className="lead-details-row">
-                <div className="lead-details-label">Applied Amount</div>
-                <div className="lead-details-value" style={{ fontWeight: 600, color: '#2563eb' }}>
-                  {selectedLead.appliedAmount ? `RM ${selectedLead.appliedAmount}` : '—'}
+              <Row apiField="employerName" label="Employer Name" raw={selectedLead.employerName} />
+              {isFieldVisible(fieldConfig, 'appliedAmount') && (
+                <div className="lead-details-row">
+                  <div className="lead-details-label">{getFieldLabel(fieldConfig, 'appliedAmount', 'Applied Amount')}</div>
+                  <div className="lead-details-value" style={{ fontWeight: 600, color: '#2563eb' }}>
+                    {selectedLead.appliedAmount ? `RM ${selectedLead.appliedAmount}` : '—'}
+                  </div>
                 </div>
-              </div>
-              <div className="lead-details-row">
-                <div className="lead-details-label">State</div>
-                <div className="lead-details-value">{formatVal(selectedLead.state)}</div>
-              </div>
-              <div className="lead-details-row">
-                <div className="lead-details-label">Servicing Branch</div>
-                <div className="lead-details-value">{formatVal(selectedLead.branch)}</div>
-              </div>
+              )}
+              <Row apiField="state" label="State" raw={selectedLead.state} />
+              <Row apiField="branch" label="Servicing Branch" raw={selectedLead.branch} />
             </div>
           </div>
 
@@ -194,10 +214,7 @@ export const LeadDetailsDrawer: React.FC = () => {
               <span>Sales Executive Assignment</span>
             </div>
             <div className="lead-details-card-body">
-              <div className="lead-details-row">
-                <div className="lead-details-label">Preferred Sales Executive</div>
-                <div className="lead-details-value">{formatVal(selectedLead.preferredSalesExecutive)}</div>
-              </div>
+              <Row apiField="preferredSalesExecutive" label="Preferred Sales Executive" raw={selectedLead.preferredSalesExecutive} />
             </div>
           </div>
 
@@ -215,31 +232,16 @@ export const LeadDetailsDrawer: React.FC = () => {
 
               {isHomeFinancing && (
                 <>
-                  <div className="lead-details-row">
-                    <div className="lead-details-label">Property Type</div>
-                    <div className="lead-details-value">{formatVal(selectedLead.propertyType)}</div>
-                  </div>
-                  <div className="lead-details-row">
-                    <div className="lead-details-label">Property Status</div>
-                    <div className="lead-details-value">{formatVal(selectedLead.propertyStatus)}</div>
-                  </div>
+                  <Row apiField="propertyType" label="Property Type" raw={selectedLead.propertyType} />
+                  <Row apiField="propertyStatus" label="Property Status" raw={selectedLead.propertyStatus} />
                 </>
               )}
 
               {isMicrofinance && (
                 <>
-                  <div className="lead-details-row">
-                    <div className="lead-details-label">Company Name</div>
-                    <div className="lead-details-value">{formatVal(selectedLead.companyName)}</div>
-                  </div>
-                  <div className="lead-details-row">
-                    <div className="lead-details-label">Entity Type</div>
-                    <div className="lead-details-value">{formatVal(selectedLead.entityType)}</div>
-                  </div>
-                  <div className="lead-details-row">
-                    <div className="lead-details-label">Date of Incorporation</div>
-                    <div className="lead-details-value">{formatVal(selectedLead.dateOfIncorporation)}</div>
-                  </div>
+                  <Row apiField="companyName" label="Company Name" raw={selectedLead.companyName} />
+                  <Row apiField="entityType" label="Entity Type" raw={selectedLead.entityType} />
+                  <Row apiField="dateOfIncorporation" label="Date of Incorporation" raw={selectedLead.dateOfIncorporation} />
                 </>
               )}
             </div>
@@ -252,17 +254,21 @@ export const LeadDetailsDrawer: React.FC = () => {
               <span>Declaration & Consent</span>
             </div>
             <div className="lead-details-card-body">
-              <div className="lead-details-row">
-                <div className="lead-details-label">Marketing Consent</div>
-                <div className="lead-details-value">{formatConsent(selectedLead.marketingConsent)}</div>
-              </div>
-              <div className="lead-details-row">
-                <div className="lead-details-label">Privacy Policy Agreement</div>
-                <div className="lead-details-value" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#16a34a', fontWeight: 600 }}>
-                  <CheckCircle2 size={14} />
-                  <span>Agreed & Accepted</span>
+              {isFieldVisible(fieldConfig, 'marketingConsent') && (
+                <div className="lead-details-row">
+                  <div className="lead-details-label">{getFieldLabel(fieldConfig, 'marketingConsent', 'Marketing Consent')}</div>
+                  <div className="lead-details-value">{formatConsent(selectedLead.marketingConsent)}</div>
                 </div>
-              </div>
+              )}
+              {isFieldVisible(fieldConfig, 'agreedToPrivacyPolicy') && (
+                <div className="lead-details-row">
+                  <div className="lead-details-label">{getFieldLabel(fieldConfig, 'agreedToPrivacyPolicy', 'Privacy Policy Agreement')}</div>
+                  <div className="lead-details-value" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#16a34a', fontWeight: 600 }}>
+                    <CheckCircle2 size={14} />
+                    <span>Agreed & Accepted</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

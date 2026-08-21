@@ -47,7 +47,7 @@ export interface DropdownOption {
   description?: string;
 }
 
-export type NavigationPage = 'dashboard' | 'create-lead' | 'view-lead' | 'audit-logs';
+export type NavigationPage = 'dashboard' | 'create-lead' | 'view-lead' | 'audit-logs' | 'field-settings';
 
 export type LeadStatus = 'New' | 'Contacted' | 'In Progress' | 'Qualified' | 'Converted' | 'Closed' | string;
 

@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Search, RefreshCw, Download, Eye, X, ShieldCheck } from 'lucide-react';
+import { Search, RefreshCw, Download, Eye, X, ShieldCheck, Clock, User, Target, FileText } from 'lucide-react';
 import { api, ApiError } from '../services/api';
 import type { AuditLog } from '../types/api';
 import { getFriendlyErrorMessage } from '../utils/errorMessages';
+import { Field } from '../components/ProductDetailsModal';
 
 const getActionBadge = (action?: string) => {
   const a = (action || '').toLowerCase();
@@ -445,48 +446,49 @@ export default function AuditLogs() {
               </button>
             </div>
             <div className="drawer-body">
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', fontSize: '13.5px' }}>
-                <div>
-                  <span style={{ fontSize: '11.5px', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '2px' }}>
-                    Timestamp
-                  </span>
-                  <strong style={{ color: '#0f172a' }}>{selectedLog.timestamp}</strong>
+              <div className="drawer-section">
+                <div className="drawer-section-title">
+                  <Clock size={16} />
+                  <span>Audit Information</span>
                 </div>
-                <div>
-                  <span style={{ fontSize: '11.5px', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '2px' }}>
-                    Officer / User
-                  </span>
-                  <strong style={{ color: '#0f172a' }}>{selectedLog.user}</strong>
+                <div className="drawer-grid">
+                  <Field label="Timestamp">{selectedLog.timestamp}</Field>
+                  <Field label="Action">{selectedLog.action}</Field>
+                  <Field label="Status">
+                    <span className={`status-badge ${(selectedLog.status || '').toLowerCase() === 'success' ? 'status-active' : 'status-validated'}`}>
+                      {selectedLog.status}
+                    </span>
+                  </Field>
                 </div>
-                <div>
-                  <span style={{ fontSize: '11.5px', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '2px' }}>
-                    Action
-                  </span>
-                  <strong style={{ color: '#2563eb' }}>{selectedLog.action}</strong>
+              </div>
+
+              <div className="drawer-section">
+                <div className="drawer-section-title">
+                  <User size={16} />
+                  <span>User Information</span>
                 </div>
-                <div>
-                  <span style={{ fontSize: '11.5px', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '2px' }}>
-                    Status
-                  </span>
-                  <strong style={{ color: (selectedLog.status || '').toLowerCase() === 'success' ? '#16a34a' : '#dc2626' }}>
-                    {selectedLog.status}
-                  </strong>
+                <div className="drawer-grid">
+                  <Field label="Officer / User" span>{selectedLog.user}</Field>
                 </div>
-                <div style={{ gridColumn: 'span 2' }}>
-                  <span style={{ fontSize: '11.5px', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '2px' }}>
-                    Customer
-                  </span>
-                  <div style={{ color: '#0f172a', fontWeight: 600 }}>
-                    {selectedLog.customerName} ({selectedLog.customerId})
-                  </div>
+              </div>
+
+              <div className="drawer-section">
+                <div className="drawer-section-title">
+                  <Target size={16} />
+                  <span>Target Information</span>
                 </div>
-                <div style={{ gridColumn: 'span 2' }}>
-                  <span style={{ fontSize: '11.5px', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '2px' }}>
-                    Description
-                  </span>
-                  <div style={{ color: '#334155', background: '#f8fafc', padding: '10px 14px', borderRadius: '8px', border: '1px solid #eaecf0', marginTop: '4px' }}>
-                    {selectedLog.description}
-                  </div>
+                <div className="drawer-grid">
+                  <Field label="Customer" span>{selectedLog.customerName} ({selectedLog.customerId})</Field>
+                </div>
+              </div>
+
+              <div className="drawer-section">
+                <div className="drawer-section-title">
+                  <FileText size={16} />
+                  <span>Description</span>
+                </div>
+                <div className="drawer-grid">
+                  <Field label="" span>{selectedLog.description}</Field>
                 </div>
               </div>
             </div>

@@ -5,6 +5,7 @@ import {
   UserPlus,
   Users,
   ShieldCheck,
+  Settings,
 } from 'lucide-react';
 import { useLeadStore } from '../../store/useLeadStore';
 import {
@@ -12,6 +13,7 @@ import {
   canViewLeads,
   canCreateLead,
   canViewAuditLogs,
+  canManageFieldSettings,
 } from '../../api/hostBridge';
 import type { NavigationPage } from '../../types/lead';
 
@@ -33,6 +35,7 @@ export const HostSidebarLeadNav: React.FC = () => {
   const userCanViewLeads = canViewLeads();
   const userCanCreateLead = canCreateLead();
   const userCanViewAuditLogs = canViewAuditLogs();
+  const userCanManageFieldSettings = canManageFieldSettings();
 
   const navItems: SubNavItem[] = [
     {
@@ -58,6 +61,12 @@ export const HostSidebarLeadNav: React.FC = () => {
       label: 'Audit Logs',
       icon: <ShieldCheck size={15} />,
       visible: userCanViewAuditLogs,
+    },
+    {
+      id: 'field-settings',
+      label: 'Field Settings',
+      icon: <Settings size={15} />,
+      visible: userCanManageFieldSettings,
     },
   ];
 

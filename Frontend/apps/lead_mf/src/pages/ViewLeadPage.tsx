@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Eye,
   Edit3,
@@ -19,6 +19,19 @@ import { EditLeadDrawer } from '../components/lead/EditLeadDrawer';
 import { DeleteLeadDrawer } from '../components/lead/DeleteLeadDrawer';
 import { LeadFilterPopover } from '../components/lead/LeadFilterPopover';
 import { canEditLead, canDeleteLead, canCreateLead } from '../api/hostBridge';
+import { isFieldVisible } from '../config/fieldControlRegistry';
+import { applyMaskingRule, formatFieldValue } from '../utils/fieldMasking';
+
+/** Renders '-' for genuinely empty values, else the masked/raw value per the common field config —
+ * the View Leads table only ever reflects the common-field subset (see commonFieldConfig's own doc
+ * comment in useLeadStore), so product-specific fields never appear here regardless of config. */
+function renderMaskedCell(config: ReturnType<typeof useLeadStore.getState>['commonFieldConfig'], apiField: string, raw: unknown) {
+  const formatted = formatFieldValue(raw);
+  if (formatted === '-') return formatted;
+  const entry = config.find((f) => f.apiField === apiField);
+  if (!entry?.sensitive) return formatted;
+  return applyMaskingRule(formatted, entry.maskingRule, entry.visibleCharCount);
+}
 
 const AVATAR_COLORS = [
   { bg: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe' },
@@ -76,9 +89,12 @@ export const ViewLeadPage: React.FC = () => {
     openDetailsDrawer,
     openEditWorkflow,
     openDeleteWorkflow,
+    commonFieldConfig,
+    fetchCommonFieldConfig,
   } = useLeadStore();
 
   const [showFilters, setShowFilters] = useState(false);
+  const filterAnchorRef = useRef<HTMLDivElement>(null);
   const [localSearch, setLocalSearch] = useState(searchQuery);
 
   useEffect(() => {
@@ -86,7 +102,10 @@ export const ViewLeadPage: React.FC = () => {
     if (products.length === 0 || states.length === 0) {
       fetchMasterData();
     }
-  }, [fetchLeads, fetchMasterData, products.length, states.length]);
+    if (commonFieldConfig.length === 0) {
+      void fetchCommonFieldConfig();
+    }
+  }, [fetchLeads, fetchMasterData, fetchCommonFieldConfig, products.length, states.length, commonFieldConfig.length]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -352,7 +371,7 @@ export const ViewLeadPage: React.FC = () => {
           {/* Right Controls: Filter + Refresh */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             {/* Filter Popover Button */}
-            <div style={{ position: 'relative' }}>
+            <div style={{ position: 'relative' }} ref={filterAnchorRef}>
               <button
                 type="button"
                 onClick={() => setShowFilters(!showFilters)}
@@ -378,7 +397,7 @@ export const ViewLeadPage: React.FC = () => {
                 <span>{activeFilterCount > 0 ? `Filters (${activeFilterCount})` : 'Filter'}</span>
               </button>
 
-              <LeadFilterPopover isOpen={showFilters} onClose={() => setShowFilters(false)} />
+              <LeadFilterPopover isOpen={showFilters} onClose={() => setShowFilters(false)} anchorRef={filterAnchorRef} />
             </div>
 
             {/* Refresh Button */}
@@ -524,18 +543,22 @@ export const ViewLeadPage: React.FC = () => {
                         </div>
                       </td>
 
-                      {/* IC & Phone */}
+                      {/* IC & Phone — masked per Field Settings when the field is marked Sensitive */}
                       <td style={{ padding: '13px 18px' }}>
-                        <div style={{ color: '#0f172a', fontWeight: 500, fontSize: '13px', fontFamily: "'SF Mono', 'Fira Code', monospace" }}>
-                          {lead.icNumber}
-                        </div>
-                        <div style={{ color: '#64748b', fontSize: '12px', marginTop: '1px' }}>{lead.phone}</div>
+                        {isFieldVisible(commonFieldConfig, 'icNumber') && (
+                          <div style={{ color: '#0f172a', fontWeight: 500, fontSize: '13px', fontFamily: "'SF Mono', 'Fira Code', monospace" }}>
+                            {renderMaskedCell(commonFieldConfig, 'icNumber', lead.icNumber)}
+                          </div>
+                        )}
+                        {isFieldVisible(commonFieldConfig, 'phoneNumber') && (
+                          <div style={{ color: '#64748b', fontSize: '12px', marginTop: '1px' }}>{lead.phone}</div>
+                        )}
                       </td>
 
                       {/* Product & Applied Amount */}
                       <td style={{ padding: '13px 18px' }}>
                         <div style={{ fontWeight: 600, color: '#0f172a' }}>{lead.product}</div>
-                        {lead.appliedAmount ? (
+                        {isFieldVisible(commonFieldConfig, 'appliedAmount') && lead.appliedAmount ? (
                           <div style={{ fontSize: '12px', color: '#16a34a', fontWeight: 600, marginTop: '1px' }}>
                             RM {Number(lead.appliedAmount).toLocaleString()}
                           </div>
@@ -544,8 +567,12 @@ export const ViewLeadPage: React.FC = () => {
 
                       {/* Branch & State */}
                       <td style={{ padding: '13px 18px' }}>
-                        <div style={{ color: '#0f172a', fontWeight: 500 }}>{lead.branch || 'Not Assigned'}</div>
-                        <div style={{ color: '#64748b', fontSize: '12px', marginTop: '1px' }}>{lead.state}</div>
+                        {isFieldVisible(commonFieldConfig, 'branch') && (
+                          <div style={{ color: '#0f172a', fontWeight: 500 }}>{lead.branch || 'Not Assigned'}</div>
+                        )}
+                        {isFieldVisible(commonFieldConfig, 'state') && (
+                          <div style={{ color: '#64748b', fontSize: '12px', marginTop: '1px' }}>{lead.state}</div>
+                        )}
                       </td>
 
                       {/* Status */}

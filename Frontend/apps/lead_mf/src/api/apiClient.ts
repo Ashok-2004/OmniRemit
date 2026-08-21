@@ -1,4 +1,5 @@
 import { getAccessToken, ensureFreshAccessToken, isRunningInHost } from './hostBridge';
+import type { LeadFieldConfig } from '../config/fieldControlRegistry';
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:5046/api/lead-service';
 
@@ -334,6 +335,40 @@ export const apiClient = {
     } catch (err) {
       console.error('Failed to log view audit:', err);
     }
+  },
+
+  // Field Settings — Lead Management's own implementation, separate from Customer 360's.
+  // getProducts() above deliberately returns {value:Name, label:Name} with no id (every existing
+  // consumer matches by name) — Field Settings needs the real Guid to call
+  // GET/PUT /api/lead-field-config/{productId}, hence this separate endpoint.
+  getProductsWithId: async (): Promise<{ id: string; name: string }[]> => {
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/products/full`);
+      if (!res.ok) return [];
+      const json: ApiResponse<{ id: string; name: string }[]> = await res.json();
+      return json.success ? json.data : [];
+    } catch {
+      return [];
+    }
+  },
+
+  getFieldConfig: async (productId: string): Promise<LeadFieldConfig[]> => {
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/lead-field-config/${productId}`);
+      if (!res.ok) return [];
+      const json: ApiResponse<LeadFieldConfig[]> = await res.json();
+      return json.success ? json.data : [];
+    } catch {
+      return [];
+    }
+  },
+
+  updateFieldConfig: async (productId: string, fields: LeadFieldConfig[]): Promise<ApiResponse<LeadFieldConfig[] | ApprovalPendingDto>> => {
+    const res = await fetchWithAuth(`${API_BASE_URL}/api/lead-field-config/${productId}`, {
+      method: 'PUT',
+      body: JSON.stringify(fields),
+    });
+    return await res.json();
   },
 
   getAuditLogs: async (params: {

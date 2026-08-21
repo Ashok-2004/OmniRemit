@@ -9,6 +9,15 @@ namespace LeadManagement.Api.Models.Dtos
         public string? Description { get; set; }
     }
 
+    /// <summary>The real Product row (Id + Name) — unlike DropdownOptionDto's Products shape (Value=Name,
+    /// Label=Name, no id), needed by Field Settings since LeadFieldConfig is keyed by the actual
+    /// Product Guid, not by name.</summary>
+    public class ProductWithIdDto
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+    }
+
     public class ReferenceDataDto
     {
         public List<DropdownOptionDto> PropertyTypes { get; set; } = new();
@@ -18,35 +27,38 @@ namespace LeadManagement.Api.Models.Dtos
 
     public class CreateLeadDto
     {
+        // Product selection is a structural requirement (the field config below is KEYED by product,
+        // so there's no such thing as "no product"), not a catalog field an admin can make optional —
+        // this is the one field on this DTO that keeps a static [Required].
         [Required(ErrorMessage = "Product selection is required.")]
         public string Product { get; set; } = string.Empty;
 
-        [Required(ErrorMessage = "Customer Name is required.")]
+        // Every other field below is governed by LeadFieldConfig's per-product Required flag
+        // (LeadFieldConfigService's required-field check, run in the service layer) instead of a
+        // static DataAnnotation — a blanket [Required] here would reject an empty value at model
+        // binding before that config-driven check ever ran, making "Required: false" for a given
+        // product silently ineffective. Format validators (regex/email shape) stay: they no-op on a
+        // null/empty value by ASP.NET Core convention, so they don't fight the config-driven presence
+        // check — they only ever apply once a value IS present.
         public string CustomerName { get; set; } = string.Empty;
 
-        [Required(ErrorMessage = "IC Number is required.")]
         [RegularExpression(@"^\d{6}-\d{2}-\d{4}$", ErrorMessage = "Please enter IC Number in format YYMMDD-PB-XXXX (e.g. 880512-14-5678).")]
         public string IcNumber { get; set; } = string.Empty;
 
         public string PhoneCountryCode { get; set; } = "+60";
 
-        [Required(ErrorMessage = "Phone number is required.")]
         [RegularExpression(@"^\+60\s?[1-9]\d{1,2}-?\d{3,4}\s?\d{3,4}$|^\+60[1-9]\d{7,9}$|^[1-9]\d{7,9}$", ErrorMessage = "Please enter a valid Malaysian phone number.")]
         public string PhoneNumber { get; set; } = string.Empty;
 
-        [Required(ErrorMessage = "Email address is required.")]
         [EmailAddress(ErrorMessage = "Please enter a valid email address.")]
         public string Email { get; set; } = string.Empty;
 
-        [Required(ErrorMessage = "State is required.")]
         public string State { get; set; } = string.Empty;
 
         public string PreferredBranch { get; set; } = string.Empty;
 
-        [Required(ErrorMessage = "Employer Name is required.")]
         public string EmployerName { get; set; } = string.Empty;
 
-        [Required(ErrorMessage = "Applied Amount is required.")]
         public string AppliedAmount { get; set; } = string.Empty;
 
         public bool HasPreferredSalesExecutive { get; set; } = false;
@@ -61,10 +73,8 @@ namespace LeadManagement.Api.Models.Dtos
         public string EntityType { get; set; } = string.Empty;
 
         // Consent
-        [Required(ErrorMessage = "Consent selection is required.")]
         public string MarketingConsent { get; set; } = string.Empty;
 
-        [Range(typeof(bool), "true", "true", ErrorMessage = "You must agree to the Privacy Policy before proceeding.")]
         public bool AgreedToPrivacyPolicy { get; set; }
     }
 

@@ -23,6 +23,7 @@ export const EditLeadDrawer: React.FC = () => {
     setIsConfirmingEdit,
     isSubmitting,
     products,
+    fieldConfig,
   } = useLeadStore();
 
   // Compute diffs between original lead target and current editFormData
@@ -146,10 +147,10 @@ export const EditLeadDrawer: React.FC = () => {
                 <PreferredSalesExecutiveSection isEdit={true} />
               </div>
 
-              {/* Product Specific Fields */}
+              {/* Product Specific Fields — config-driven, see LeadFormContainer's identical comment */}
               <div style={{ marginTop: '20px' }}>
-                {editFormData.product === 'Home Financing' && <HomeFinancingFields isEdit={true} />}
-                {editFormData.product === 'Micro Finance' && <MicrofinanceFields isEdit={true} />}
+                {fieldConfig.some((f) => f.apiField === 'propertyType') && <HomeFinancingFields isEdit={true} />}
+                {fieldConfig.some((f) => f.apiField === 'dateOfIncorporation') && <MicrofinanceFields isEdit={true} />}
               </div>
 
               {/* Declaration & Consent */}
