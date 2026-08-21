@@ -21,7 +21,13 @@ Env.TraversePath().Load();
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers(options => options.Filters.Add<AppExceptionFilter>());
+builder.Services.AddControllers(options =>
+{
+    options.Filters.Add<AppExceptionFilter>();
+    // Global, so every current and future AuthService endpoint is closed by default to a user who
+    // has not yet replaced their temporary password. See MustChangePasswordFilter's own remarks.
+    options.Filters.Add<MustChangePasswordFilter>();
+});
 builder.Services.AddOpenApi();
 // Lets UserAppService/RoleAppService (in-process audit writers) read the real caller's IP/User-Agent
 // off the current request without every mutation method threading HttpContext through as a param.
@@ -32,6 +38,7 @@ builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptio
 builder.Services.Configure<AuthCookieOptions>(builder.Configuration.GetSection(AuthCookieOptions.SectionName));
 builder.Services.Configure<InternalApiOptions>(builder.Configuration.GetSection(InternalApiOptions.SectionName));
 builder.Services.Configure<GoogleAuthOptions>(builder.Configuration.GetSection(GoogleAuthOptions.SectionName));
+builder.Services.Configure<SecretProtectionOptions>(builder.Configuration.GetSection(SecretProtectionOptions.SectionName));
 
 var connectionString = builder.Configuration.GetConnectionString("AuthDb");
 var isDbConfigured = !string.IsNullOrWhiteSpace(connectionString);
@@ -44,6 +51,7 @@ builder.Services.AddDbContext<AuthDbContext>(options =>
     options.UseNpgsql(isDbConfigured ? connectionString : "Host=unconfigured;Database=unconfigured;Username=unconfigured;Password=unconfigured"));
 
 builder.Services.AddScoped<PasswordHasher>();
+builder.Services.AddScoped<SecretProtector>();
 builder.Services.AddScoped<JwtTokenService>();
 builder.Services.AddScoped<RefreshTokenService>();
 builder.Services.AddScoped<PermissionClaimsBuilder>();
@@ -276,6 +284,17 @@ if (string.IsNullOrWhiteSpace(configuredPublicKeyPem))
         "Jwt__SigningKeyPublic/Private are not set — an ephemeral key pair was generated for this " +
         "process only, so no previously issued token (and no token from another instance) will validate. " +
         "Set real values in Backend/AuthService/.env before relying on auth.");
+}
+
+using (var scope = app.Services.CreateScope())
+{
+    if (!scope.ServiceProvider.GetRequiredService<SecretProtector>().IsConfigured)
+    {
+        app.Logger.LogWarning(
+            "Security__TempPasswordKey is not set — approving a gated Create-User request will be " +
+            "refused, because the generated temporary password could not be stored for the maker to " +
+            "collect. Set it in Backend/AuthService/.env (openssl rand -base64 32).");
+    }
 }
 
 if (app.Environment.IsDevelopment())

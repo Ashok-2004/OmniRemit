@@ -46,7 +46,7 @@ namespace LeadManagement.Api.Controllers
 
             try
             {
-                var outcome = await _leadService.CreateLeadAsync(dto, CurrentUserId());
+                var outcome = await _leadService.CreateLeadAsync(dto, CurrentUserId(), bypassApproval: IsSuperAdmin());
 
                 if (outcome.Pending is not null)
                 {
@@ -162,7 +162,7 @@ namespace LeadManagement.Api.Controllers
 
             try
             {
-                var outcome = await _leadService.UpdateLeadAsync(id, dto, CurrentUserId());
+                var outcome = await _leadService.UpdateLeadAsync(id, dto, CurrentUserId(), bypassApproval: IsSuperAdmin());
 
                 if (outcome.Pending is not null)
                 {
@@ -230,7 +230,7 @@ namespace LeadManagement.Api.Controllers
                 // lead itself is gone from the DB by the time PushAuditLogAsync runs below.
                 var leadName = (await _leadService.GetLeadByIdAsync(id))?.Name;
 
-                var pending = await _leadService.DeleteLeadAsync(id, dto, CurrentUserId());
+                var pending = await _leadService.DeleteLeadAsync(id, dto, CurrentUserId(), bypassApproval: IsSuperAdmin());
                 if (pending is not null)
                 {
                     return StatusCode(202, new ApiResponseDto<ApprovalPendingDto>
@@ -294,5 +294,13 @@ namespace LeadManagement.Api.Controllers
         private string? CurrentUserName() =>
             User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Name)?.Value
             ?? User.FindFirst("name")?.Value;
+
+        /// <summary>
+        /// Super Admin bypass predicate for the Maker-Checker gate. Deliberately the strict
+        /// single-claim check — the exact claim AuthService issues — not this service's wider
+        /// [RequiresCapability] admin test, so the population that skips assignment is identical
+        /// across every service that has one of these helpers.
+        /// </summary>
+        private bool IsSuperAdmin() => User.FindFirst(JwtClaimTypes.Administrator)?.Value == "true";
     }
 }

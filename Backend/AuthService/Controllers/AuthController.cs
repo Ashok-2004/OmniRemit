@@ -83,6 +83,7 @@ public class AuthController(
     [HttpPost("refresh")]
     [EnableRateLimiting(RateLimitPolicies.Authentication)]
     [AllowAnonymous]
+    [AllowWhenPasswordChangeRequired]
     public async Task<ActionResult<RefreshResponse>> Refresh(CancellationToken ct)
     {
         var rawToken = Request.Cookies[_cookieOptions.RefreshCookieName];
@@ -111,6 +112,7 @@ public class AuthController(
 
     [HttpPost("logout")]
     [AllowAnonymous]
+    [AllowWhenPasswordChangeRequired]
     public async Task<IActionResult> Logout(CancellationToken ct)
     {
         var rawToken = Request.Cookies[_cookieOptions.RefreshCookieName];
@@ -133,6 +135,7 @@ public class AuthController(
     /// </summary>
     [HttpGet("password-policy")]
     [Authorize]
+    [AllowWhenPasswordChangeRequired]
     public ActionResult<PasswordPolicyDto> PasswordPolicy() =>
         Ok(new PasswordPolicyDto(
             _passwordPolicy.MinimumLength,
@@ -151,6 +154,7 @@ public class AuthController(
     [HttpPost("change-password")]
     [Authorize]
     [EnableRateLimiting(RateLimitPolicies.Sensitive)]
+    [AllowWhenPasswordChangeRequired]
     public async Task<ActionResult<ChangePasswordResponse>> ChangePassword(
         [FromBody] ChangePasswordRequest request, CancellationToken ct)
     {
@@ -185,6 +189,7 @@ public class AuthController(
 
     [HttpGet("me")]
     [Authorize]
+    [AllowWhenPasswordChangeRequired]
     public async Task<ActionResult<CurrentUserDto>> Me(CancellationToken ct)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");

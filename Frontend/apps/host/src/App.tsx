@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, usePa
 import { AppShell } from './layout/AppShell/AppShell'
 import { RequireAuth } from './features/auth/components/RequireAuth'
 import { RequireCapability } from './features/auth/components/RequireCapability'
+import { RequirePasswordChange } from './features/auth/components/RequirePasswordChange'
 import { useSilentRefresh } from './features/auth/hooks/useSilentRefresh'
 import { useAuthStore } from './features/auth/store/authStore'
 import { useModuleRegistryStore } from './shared/stores/moduleRegistryStore'
@@ -130,6 +131,14 @@ function LoginRoute() {
   )
 }
 
+/** Super Admins never create approval requests (every gated mutation of theirs applies
+ * immediately), so this page can only ever be empty for them. The sidebar link is hidden; this
+ * makes the URL itself resolve somewhere useful instead of to a dead screen. */
+function MyRequestsRoute() {
+  const isAdministrator = useAuthStore((s) => Boolean(s.user?.isAdministrator))
+  return isAdministrator ? <Navigate to="/" replace /> : <MyRequestsPage />
+}
+
 function AuthenticatedShell() {
   const user = useAuthStore((s) => s.user)
   const accessToken = useAuthStore((s) => s.accessToken)
@@ -206,6 +215,7 @@ function AuthenticatedShell() {
       settingsAccess={settingsAccess}
       canAccessAuditLogs={canAccessAuditLogs}
       canAccessApprovals={canAccessApprovals}
+      isAdministrator={isAdministrator}
       onLogout={() => {
         void logout().then(() => navigate('/login', { replace: true }))
       }}
@@ -229,7 +239,9 @@ function AppRoutes() {
       <Route
         element={
           <RequireAuth>
-            <AuthenticatedShell />
+            <RequirePasswordChange>
+              <AuthenticatedShell />
+            </RequirePasswordChange>
           </RequireAuth>
         }
       >
@@ -258,7 +270,7 @@ function AppRoutes() {
         {/* No capability gate — every authenticated user tracks their own submitted requests
             regardless of whether they hold Approval Center access; the backend scopes this to the
             caller's own id server-side (see GET /api/approvals/mine), so there is nothing to leak. */}
-        <Route path="my-requests" element={<MyRequestsPage />} />
+        <Route path="my-requests" element={<MyRequestsRoute />} />
 
         {/*
           Settings has no pages of its own — it IS the gear drawer, rendered globally by AppShell.

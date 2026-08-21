@@ -3,9 +3,10 @@ import { useAuthStore } from '../../auth/store/authStore'
 import { useSettingsDrawerStore } from '../../../shared/stores/settingsDrawerStore'
 import { Badge, type BadgeTone } from '../../../shared/components/Badge/Badge'
 import { SkeletonBlock } from '../../../shared/components/Skeleton'
-import { approvalsApi, type ApprovalStatus } from '../api/approvalsApi'
+import { approvalsApi, type ApprovalStatus, type RevealTempPasswordResponse } from '../api/approvalsApi'
 import { useApprovalRequests } from '../hooks/useApprovalRequests'
 import { Icon } from '../../../shared/components/Icon/Icon'
+import { ApiError } from '../../../shared/api/httpClient'
 import styles from './MyRequestsPage.module.css'
 
 const DEFAULT_PAGE_SIZE = 10
@@ -63,6 +64,37 @@ export function MyRequestsPage() {
     setPage(1)
   }, [statusFilter])
 
+  // Instant feedback: the fetched row still says hasTempPassword until the refetch lands, so the
+  // button is hidden from this set immediately on success rather than flickering back.
+  const [collectedIds, setCollectedIds] = useState<Set<string>>(new Set())
+  const [revealing, setRevealing] = useState<string | null>(null) // request id in flight
+  const [revealed, setRevealed] = useState<RevealTempPasswordResponse | null>(null) // modal payload
+  const [revealError, setRevealError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  async function handleReveal(id: string) {
+    if (!accessToken) return
+    setRevealing(id)
+    setRevealError(null)
+    try {
+      const result = await approvalsApi.revealTempPassword(accessToken, id)
+      setCollectedIds((prev) => new Set(prev).add(id))
+      setRevealed(result)
+    } catch (err) {
+      // 410 (already collected) lands here too — mark it collected so the dead button disappears.
+      setCollectedIds((prev) => new Set(prev).add(id))
+      setRevealError(err instanceof ApiError ? err.message : 'Could not retrieve the temporary password.')
+    } finally {
+      setRevealing(null)
+    }
+  }
+
+  function closeRevealModal() {
+    setRevealed(null)
+    setCopied(false)
+    setRefreshKey((k) => k + 1) // re-sync with server truth after the optimistic hide
+  }
+
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
   return (
@@ -94,6 +126,7 @@ export function MyRequestsPage() {
       </div>
 
       {error && <div className={styles.errorBanner}>{error}</div>}
+      {revealError && <div className={styles.errorBanner}>{revealError}</div>}
 
       <div className={styles.tableContainer}>
         <table className={styles.table}>
@@ -105,17 +138,18 @@ export function MyRequestsPage() {
               <th>ENTITY</th>
               <th>CHECKER</th>
               <th>STATUS</th>
+              <th>PASSWORD</th>
               <th>REJECTION REASON</th>
             </tr>
           </thead>
           <tbody>
             {items === null ? (
               Array.from({ length: pageSize }).map((_, i) => (
-                <tr key={i}><td colSpan={7}><SkeletonBlock height={20} radius="4px" /></td></tr>
+                <tr key={i}><td colSpan={8}><SkeletonBlock height={20} radius="4px" /></td></tr>
               ))
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={7} className={styles.emptyCell}>
+                <td colSpan={8} className={styles.emptyCell}>
                   {statusFilter === 'all' ? "You haven't submitted any requests yet." : `No ${statusFilter.toLowerCase()} requests.`}
                 </td>
               </tr>
@@ -128,6 +162,21 @@ export function MyRequestsPage() {
                   <td>{r.entityLabel ?? <span className={styles.mutedText}>—</span>}</td>
                   <td>{r.checkerName ?? <span className={styles.mutedText}>Unassigned</span>}</td>
                   <td><Badge tone={STATUS_TONES[r.status]} dot>{r.status}</Badge></td>
+                  <td>
+                    {r.hasTempPassword && !collectedIds.has(r.id) ? (
+                      <button
+                        type="button"
+                        className={styles.revealBtn}
+                        disabled={revealing === r.id}
+                        onClick={() => handleReveal(r.id)}
+                      >
+                        <Icon.Lock width={13} height={13} />
+                        <span>{revealing === r.id ? 'Retrieving…' : 'Get password'}</span>
+                      </button>
+                    ) : (
+                      <span className={styles.mutedText}>—</span>
+                    )}
+                  </td>
                   <td className={styles.reasonCell}>
                     {r.rejectionReason ?? <span className={styles.mutedText}>—</span>}
                   </td>
@@ -147,6 +196,39 @@ export function MyRequestsPage() {
           <button type="button" className={styles.pageBtn} disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
             Next &gt;
           </button>
+        </div>
+      )}
+
+      {revealed && (
+        <div className={styles.modalBackdrop} onClick={closeRevealModal}>
+          <div className={styles.modalCard} role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalIconWrap}>
+              <Icon.ShieldCheck width={34} height={34} />
+            </div>
+            <h3 className={styles.modalTitle}>Temporary Password</h3>
+            <p className={styles.modalText}>
+              Share this securely with <strong>{revealed.userName}</strong> ({revealed.userEmail}). They will be
+              required to choose their own password the first time they sign in.
+            </p>
+            <div className={styles.tempPassBox}>
+              <code className={styles.tempPassValue}>{revealed.temporaryPassword}</code>
+              <button
+                type="button"
+                className={styles.copyBtn}
+                onClick={() => { void navigator.clipboard.writeText(revealed.temporaryPassword).then(() => setCopied(true)) }}
+              >
+                <Icon.Copy width={13} height={13} />
+                <span>{copied ? 'Copied' : 'Copy'}</span>
+              </button>
+            </div>
+            <p className={styles.modalWarning} role="alert">
+              <Icon.AlertCircle width={15} height={15} />
+              <span>This is the only time it will be shown. Once you close this, it cannot be retrieved again — the account would have to be re-created.</span>
+            </p>
+            <button type="button" className={styles.modalDoneBtn} onClick={closeRevealModal}>
+              I&apos;ve saved it — close
+            </button>
+          </div>
         </div>
       )}
     </div>

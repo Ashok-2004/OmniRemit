@@ -20,6 +20,11 @@ public class JwtTokenService(IOptions<JwtOptions> options)
     public const string AdministratorClaimType = "administrator";
     public const string PermissionsClaimType = "perms";
     public const string RoleNameClaimType = "role";
+    /// <summary>Set from the LIVE User.MustChangePassword column on every token issuance. Both
+    /// LoginAsync and RefreshAsync pass a freshly-read User entity (RefreshTokenService.RotateAsync
+    /// loads it via Include, it never copies the previous token's claims), so this can never go
+    /// stale: the first refresh after ChangePasswordAsync clears the flag issues a token without it.</summary>
+    public const string MustChangePasswordClaimType = "mustChangePassword";
 
     private readonly JwtOptions _options = options.Value;
 
@@ -45,6 +50,7 @@ public class JwtTokenService(IOptions<JwtOptions> options)
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
             new(AdministratorClaimType, permissions.IsAdministrator ? "true" : "false"),
             new(PermissionsClaimType, JsonSerializer.Serialize(permissions.Permissions)),
+            new(MustChangePasswordClaimType, user.MustChangePassword ? "true" : "false"),
         };
 
         if (user.RoleId is not null)

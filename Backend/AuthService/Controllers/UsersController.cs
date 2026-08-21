@@ -31,7 +31,7 @@ public class UsersController(UserAppService users) : ControllerBase
     [RequirePermission(Feature, "Create")]
     public async Task<IActionResult> Create([FromBody] CreateUserWithOverridesRequest request, CancellationToken ct)
     {
-        var result = await users.CreateAsync(request.User, request.Overrides, CurrentUserId(), ct);
+        var result = await users.CreateAsync(request.User, request.Overrides, CurrentUserId(), ct, bypassApproval: IsSuperAdmin());
         if (result.Applied is not null)
         {
             return CreatedAtAction(nameof(Get), new { id = result.Applied.User.Id }, result.Applied);
@@ -44,7 +44,7 @@ public class UsersController(UserAppService users) : ControllerBase
     [RequirePermission(Feature, "Edit")]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateUserWithOverridesRequest request, CancellationToken ct)
     {
-        var result = await users.UpdateAsync(id, request.User, request.Overrides, CurrentUserId(), ct);
+        var result = await users.UpdateAsync(id, request.User, request.Overrides, CurrentUserId(), ct, bypassApproval: IsSuperAdmin());
         return result.Applied is not null ? Ok(result.Applied) : Accepted(result.Pending);
     }
 
@@ -52,7 +52,7 @@ public class UsersController(UserAppService users) : ControllerBase
     [RequirePermission(Feature, "Disable")]
     public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] UpdateUserStatusRequest request, CancellationToken ct)
     {
-        var result = await users.UpdateStatusAsync(id, request.IsActive, CurrentUserId(), ct);
+        var result = await users.UpdateStatusAsync(id, request.IsActive, CurrentUserId(), ct, bypassApproval: IsSuperAdmin());
         return result.Applied is not null ? Ok(result.Applied) : Accepted(result.Pending);
     }
 
@@ -60,7 +60,7 @@ public class UsersController(UserAppService users) : ControllerBase
     [RequirePermission(Feature, "Delete")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
-        var pending = await users.DeleteAsync(id, CurrentUserId(), ct);
+        var pending = await users.DeleteAsync(id, CurrentUserId(), ct, bypassApproval: IsSuperAdmin());
         return pending is null ? NoContent() : Accepted(pending);
     }
 
@@ -74,7 +74,7 @@ public class UsersController(UserAppService users) : ControllerBase
     public async Task<IActionResult> ReplaceOverrides(
         Guid id, [FromBody] UpdateUserPermissionOverridesRequest request, CancellationToken ct)
     {
-        var result = await users.ReplacePermissionOverridesAsync(id, request.Overrides, CurrentUserId(), ct);
+        var result = await users.ReplacePermissionOverridesAsync(id, request.Overrides, CurrentUserId(), ct, bypassApproval: IsSuperAdmin());
         return result.Applied is not null ? Ok(result.Applied) : Accepted(result.Pending);
     }
 
@@ -83,4 +83,11 @@ public class UsersController(UserAppService users) : ControllerBase
         var sub = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
         return Guid.TryParse(sub, out var id) ? id : null;
     }
+
+    /// <summary>
+    /// Super Admin bypass predicate for the Maker-Checker gate. Deliberately the strict single-claim
+    /// check — the exact claim AuthService issues — not a wider admin test, so the population that
+    /// skips assignment is identical across every service that has one of these helpers.
+    /// </summary>
+    private bool IsSuperAdmin() => User.FindFirst(JwtTokenService.AdministratorClaimType)?.Value == "true";
 }

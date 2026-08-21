@@ -523,6 +523,12 @@ export function ApprovalCenterPage() {
               <th>MAKER</th>
               <th>CHECKER</th>
               <th>STATUS</th>
+              {/* Processed sorts by decision time, not request time (see the fetcher above) — this
+                  column makes that sort key visible on screen instead of silently differing from
+                  what REQUESTED shows. Present in every tab (not just Processed) so the table
+                  doesn't gain or lose a column when switching tabs, and Pending rows honestly show
+                  "—" rather than nothing having decided them yet. */}
+              <th>DECIDED</th>
               <th></th>
             </tr>
           </thead>
@@ -530,12 +536,12 @@ export function ApprovalCenterPage() {
             {items === null ? (
               Array.from({ length: pageSize }).map((_, i) => (
                 <tr key={i}>
-                  <td colSpan={8}><SkeletonBlock height={20} radius="4px" /></td>
+                  <td colSpan={9}><SkeletonBlock height={20} radius="4px" /></td>
                 </tr>
               ))
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={8} className={styles.emptyCell}>No approval requests found matching the selected filters.</td>
+                <td colSpan={9} className={styles.emptyCell}>No approval requests found matching the selected filters.</td>
               </tr>
             ) : (
               items.map((r) => (
@@ -553,6 +559,9 @@ export function ApprovalCenterPage() {
                   <td>{r.makerName ?? <span className={styles.mutedText}>Unknown</span>}</td>
                   <td>{r.checkerName ?? <span className={styles.mutedText}>Unassigned</span>}</td>
                   <td><Badge tone={STATUS_TONES[r.status]} dot>{r.status}</Badge></td>
+                  <td className={styles.timeCell}>
+                    {r.decidedAt ? formatTimestamp(r.decidedAt) : <span className={styles.mutedText}>—</span>}
+                  </td>
                   <td>
                     <button type="button" className={styles.viewDetailBtn} onClick={() => setViewingId(r.id)}>
                       View

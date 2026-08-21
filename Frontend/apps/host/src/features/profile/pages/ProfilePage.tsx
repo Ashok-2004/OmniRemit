@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../auth/store/authStore'
 import { usersApi } from '../../settings-users/api/usersApi'
 import { isApprovalPending } from '../../approvals/api/approvalsApi'
-import { authServiceClient } from '../../../shared/api/authServiceClient'
+import { ChangePasswordForm } from '../components/ChangePasswordForm'
 import { Button } from '../../../shared/components/Button/Button'
 import { Input } from '../../../shared/components/Input/Input'
 import { Icon } from '../../../shared/components/Icon/Icon'
@@ -51,16 +51,6 @@ export function ProfilePage() {
   const [savingProfile, setSavingProfile] = useState(false)
   const [profileError, setProfileError] = useState<string | null>(null)
 
-  // Password Form state
-  const [currentPassword, setCurrentPassword] = useState('')
-  const [newPassword, setNewPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [showCurrentPw, setShowCurrentPw] = useState(false)
-  const [showNewPw, setShowNewPw] = useState(false)
-  const [showConfirmPw, setShowConfirmPw] = useState(false)
-  const [savingPassword, setSavingPassword] = useState(false)
-  const [passwordError, setPasswordError] = useState<string | null>(null)
-
   // Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null)
 
@@ -75,16 +65,12 @@ export function ProfilePage() {
     setEmail(user?.email || '')
     setPhoneNumber(user?.phoneNumber || '')
     setProfileError(null)
-    setPasswordError(null)
-    setCurrentPassword('')
-    setNewPassword('')
-    setConfirmPassword('')
     setActiveTab(tab)
     setDrawerOpen(true)
   }
 
   function closeDrawer() {
-    if (savingProfile || savingPassword) return
+    if (savingProfile) return
     setDrawerOpen(false)
   }
 
@@ -133,44 +119,6 @@ export function ProfilePage() {
       setProfileError(err instanceof Error ? err.message : 'Failed to update profile.')
     } finally {
       setSavingProfile(false)
-    }
-  }
-
-  async function handleUpdatePassword(e: FormEvent) {
-    e.preventDefault()
-    if (!currentPassword) {
-      setPasswordError('Current password is required.')
-      return
-    }
-    if (!newPassword) {
-      setPasswordError('New password is required.')
-      return
-    }
-    if (newPassword !== confirmPassword) {
-      setPasswordError('New password and confirmation do not match.')
-      return
-    }
-
-    if (!accessToken) return
-
-    setSavingPassword(true)
-    setPasswordError(null)
-
-    try {
-      await authServiceClient.changePassword(accessToken, {
-        currentPassword,
-        newPassword,
-      })
-
-      setCurrentPassword('')
-      setNewPassword('')
-      setConfirmPassword('')
-      setDrawerOpen(false)
-      triggerToast('Account password updated successfully.')
-    } catch (err: unknown) {
-      setPasswordError(err instanceof Error ? err.message : 'Failed to update password. Please check your current password.')
-    } finally {
-      setSavingPassword(false)
     }
   }
 
@@ -545,97 +493,10 @@ export function ProfilePage() {
                   </div>
                 </form>
               ) : (
-                <form onSubmit={handleUpdatePassword} className={styles.formStack}>
-                  {passwordError && (
-                    <div className={styles.formError} role="alert">
-                      <Icon.AlertCircle width={16} height={16} />
-                      <span>{passwordError}</span>
-                    </div>
-                  )}
-
-                  <Input
-                    label="Current Password"
-                    type={showCurrentPw ? 'text' : 'password'}
-                    placeholder="Enter your current password"
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    required
-                    disabled={savingPassword}
-                    leading={<Icon.Lock width={16} height={16} />}
-                    trailing={
-                      <button
-                        type="button"
-                        className={styles.eyeToggle}
-                        onClick={() => setShowCurrentPw(!showCurrentPw)}
-                        tabIndex={-1}
-                      >
-                        {showCurrentPw ? <Icon.EyeOff width={16} height={16} /> : <Icon.Eye width={16} height={16} />}
-                      </button>
-                    }
-                  />
-
-                  <Input
-                    label="New Password"
-                    type={showNewPw ? 'text' : 'password'}
-                    placeholder="Enter a new password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    required
-                    disabled={savingPassword}
-                    leading={<Icon.Lock width={16} height={16} />}
-                    helperText="Your organisation's password policy is applied when you save."
-                    trailing={
-                      <button
-                        type="button"
-                        className={styles.eyeToggle}
-                        onClick={() => setShowNewPw(!showNewPw)}
-                        tabIndex={-1}
-                      >
-                        {showNewPw ? <Icon.EyeOff width={16} height={16} /> : <Icon.Eye width={16} height={16} />}
-                      </button>
-                    }
-                  />
-
-                  <Input
-                    label="Confirm New Password"
-                    type={showConfirmPw ? 'text' : 'password'}
-                    placeholder="Re-type new password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    required
-                    disabled={savingPassword}
-                    leading={<Icon.Lock width={16} height={16} />}
-                    trailing={
-                      <button
-                        type="button"
-                        className={styles.eyeToggle}
-                        onClick={() => setShowConfirmPw(!showConfirmPw)}
-                        tabIndex={-1}
-                      >
-                        {showConfirmPw ? <Icon.EyeOff width={16} height={16} /> : <Icon.Eye width={16} height={16} />}
-                      </button>
-                    }
-                  />
-
-                  <div className={styles.drawerFooter}>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      disabled={savingPassword}
-                      onClick={closeDrawer}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      variant="primary"
-                      loading={savingPassword}
-                      leadingIcon={<Icon.CheckCircle width={16} height={16} />}
-                    >
-                      Update Password
-                    </Button>
-                  </div>
-                </form>
+                <ChangePasswordForm
+                  onSuccess={() => { setDrawerOpen(false); triggerToast('Account password updated successfully.') }}
+                  onCancel={closeDrawer}
+                />
               )}
             </div>
           </div>

@@ -3,6 +3,7 @@ using AuthService.Application.DTOs;
 using AuthService.Application.Exceptions;
 using AuthService.Domain.Entities;
 using AuthService.Infrastructure;
+using AuthService.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 
 namespace AuthService.Application.Services;
@@ -17,7 +18,7 @@ namespace AuthService.Application.Services;
 /// </summary>
 public class ApprovalAppService(
     AuthDbContext db, AuditLogAppService auditLog, UserAppService userAppService, RoleAppService roleAppService,
-    RemoteApprovalCallbackClient callbackClient)
+    RemoteApprovalCallbackClient callbackClient, SecretProtector secretProtector)
 {
     private const string ServiceName = "AuthService";
 
@@ -64,10 +65,21 @@ public class ApprovalAppService(
         return new ApprovalSummaryDto(pendingTotal, approvedToday, rejectedToday, assignedToMePending);
     }
 
-    public async Task<ApprovalRequestDetailDto> ApproveAsync(Guid id, Guid checkerUserId, CancellationToken ct = default)
+    public async Task<ApprovalRequestDetailDto> ApproveAsync(Guid id, Guid checkerUserId, bool isAdministrator = false, CancellationToken ct = default)
     {
         var request = await db.ApprovalRequests.FirstOrDefaultAsync(r => r.Id == id, ct) ?? throw NotFound(id);
-        EnsureDecidable(request, checkerUserId);
+        EnsureDecidable(request, checkerUserId, isAdministrator);
+
+        // Refuse BEFORE the replay, not after. Approving a Create-User generates a temporary
+        // password that exists only in memory; if it cannot be encrypted for the maker to collect,
+        // the account would be created with a password nobody could ever learn. Failing up front
+        // leaves the request Pending and nothing applied.
+        if (request is { Module: ApprovalModuleKeys.Users, Action: ApprovalActionKeys.Create } && !secretProtector.IsConfigured)
+        {
+            throw new ConflictAppException(
+                "This server cannot store the temporary password a new account requires " +
+                "(Security__TempPasswordKey is not configured). Ask an administrator to configure it, then approve again.");
+        }
 
         // Replay the original mutation through the SAME validated method a direct call would have
         // used — re-running its own conflict/existence checks for free, so "the email was taken by
@@ -79,10 +91,18 @@ public class ApprovalAppService(
         // If replay throws (e.g. NotFoundAppException because the target was deleted while this sat
         // pending), that exception is left to propagate: the request stays Pending, nothing here marks
         // it decided, and the error surfaces to the checker's click.
-        await ReplayAsync(request, ct);
+        //
+        // The only thing a replay can produce that is otherwise unrecoverable afterwards is a
+        // Create-User's temporary password (everything else is readable back from the DB, or is a
+        // password hash which is one-way by design) — see ReplayAsync's own doc comment.
+        var issuedTempPassword = await ReplayAsync(request, ct);
 
         request.Status = ApprovalStatus.Approved;
         request.DecidedAt = DateTimeOffset.UtcNow;
+        if (issuedTempPassword is not null)
+        {
+            request.TempPasswordCiphertext = secretProtector.Protect(issuedTempPassword);
+        }
         await db.SaveChangesAsync(ct);
 
         var checkerName = await db.Users.AsNoTracking().Where(u => u.Id == checkerUserId).Select(u => u.Name).FirstOrDefaultAsync(ct);
@@ -91,13 +111,24 @@ public class ApprovalAppService(
             $"Approved {request.Action} on {request.Module}" + (request.EntityLabel is not null ? $" ({request.EntityLabel})" : "") + $" — requested by {request.MakerName}.",
             entityLabel: request.EntityLabel, ct: ct);
 
+        if (issuedTempPassword is not null)
+        {
+            // Names WHO the password is for and WHO must collect it — never the password itself.
+            // The audit log is readable by anyone holding host.system.audit-logs:View, a far wider
+            // audience than the single maker the secret is meant for.
+            await auditLog.WriteAsync(
+                ServiceName, checkerUserId, checkerName, "user.temp_password_issued", "ApprovalRequest", request.Id.ToString(),
+                $"A one-time temporary password was issued for {request.EntityLabel ?? "the new account"} and is waiting for {request.MakerName} to collect from My Requests.",
+                entityLabel: request.EntityLabel, ct: ct);
+        }
+
         return ToDetailDto(request);
     }
 
-    public async Task<ApprovalRequestDetailDto> RejectAsync(Guid id, Guid checkerUserId, string reason, CancellationToken ct = default)
+    public async Task<ApprovalRequestDetailDto> RejectAsync(Guid id, Guid checkerUserId, string reason, bool isAdministrator = false, CancellationToken ct = default)
     {
         var request = await db.ApprovalRequests.FirstOrDefaultAsync(r => r.Id == id, ct) ?? throw NotFound(id);
-        EnsureDecidable(request, checkerUserId);
+        EnsureDecidable(request, checkerUserId, isAdministrator);
 
         request.Status = ApprovalStatus.Rejected;
         request.DecidedAt = DateTimeOffset.UtcNow;
@@ -113,11 +144,87 @@ public class ApprovalAppService(
         return ToDetailDto(request);
     }
 
+    /// <summary>
+    /// Hands the maker — and only the maker — the one-time temporary password produced when their
+    /// Create-User request was approved, then destroys it.
+    ///
+    /// Ownership is enforced HERE, server-side, from the caller's own token-derived id; there is no
+    /// permission attribute on the endpoint. Same shape as GET /api/approvals/mine: every user must
+    /// be able to collect the credential for an account they themselves created, whether or not they
+    /// hold Approval Center access, and makerId is never client-supplied.
+    ///
+    /// The secret is destroyed and COMMITTED before this method returns — deliberately before the
+    /// response is written. A crash between destroy and respond loses the password (recoverable only
+    /// by an administrator re-creating the account, but exposes nothing and cannot be replayed); the
+    /// reverse order would let a crash between respond and destroy leave the secret retrievable a
+    /// second time, defeating the entire one-time property. A credential that must be re-issued is an
+    /// operational annoyance; a credential that can be served twice is a security defect.
+    /// </summary>
+    public async Task<RevealTempPasswordResponse> RevealTempPasswordAsync(Guid id, Guid callerUserId, CancellationToken ct = default)
+    {
+        var request = await db.ApprovalRequests.FirstOrDefaultAsync(r => r.Id == id, ct) ?? throw NotFound(id);
+
+        if (request.MakerId != callerUserId)
+        {
+            throw new ForbiddenAppException("Only the person who submitted this request can view its temporary password.");
+        }
+
+        if (request.TempPasswordCiphertext is null)
+        {
+            throw request.TempPasswordRevealedAt is not null
+                ? new GoneAppException("This temporary password has already been viewed once and is no longer available.")
+                : new NotFoundAppException("This request has no temporary password to view.");
+        }
+
+        var plaintext = secretProtector.Unprotect(request.TempPasswordCiphertext);
+
+        // Unrecoverable ciphertext (key rotated, column tampered with). Clear it anyway — leaving an
+        // undecryptable value behind would make this row answer 404 "no password" forever while the
+        // list still advertised one.
+        if (plaintext is null)
+        {
+            request.TempPasswordCiphertext = null;
+            request.TempPasswordRevealedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync(ct);
+            throw new GoneAppException("This temporary password can no longer be decrypted on this server and must be re-issued by an administrator.");
+        }
+
+        request.TempPasswordCiphertext = null;
+        request.TempPasswordRevealedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        var makerName = await db.Users.AsNoTracking().Where(u => u.Id == callerUserId).Select(u => u.Name).FirstOrDefaultAsync(ct);
+        await auditLog.WriteAsync(
+            ServiceName, callerUserId, makerName, "user.temp_password_revealed", "ApprovalRequest", request.Id.ToString(),
+            $"Collected the one-time temporary password for {request.EntityLabel ?? "a new account"}. It is no longer retrievable.",
+            entityLabel: request.EntityLabel, ct: ct);
+
+        // EntityId is null on a Create request, so the snapshot's email is the only link back to the
+        // account actually created by the replay.
+        var snapshot = JsonSerializer.Deserialize<UserSnapshotDto>(request.NewDataJson)!;
+        var account = await db.Users.AsNoTracking()
+            .Where(u => u.Email == snapshot.Email)
+            .Select(u => new { u.Name, u.Email })
+            .FirstOrDefaultAsync(ct);
+
+        return new RevealTempPasswordResponse(plaintext, account?.Name ?? snapshot.Name, account?.Email ?? snapshot.Email);
+    }
+
     /// <summary>Server-side enforcement of both confirmed rules, defense in depth even though the maker
     /// is already excluded from checker auto-selection: the request must still be Pending, and the
     /// caller must be THIS request's specific assigned checker — not just any checker of the module,
-    /// and never the maker.</summary>
-    private static void EnsureDecidable(ApprovalRequest request, Guid checkerUserId)
+    /// and never the maker.
+    ///
+    /// A Super Admin (the "administrator" claim — the same identity that already bypasses every
+    /// permission check and, as of the Maker-Checker bypass, the gate itself) is exempt from the
+    /// assigned-checker rule ONLY. They are the platform's escalation path: a request whose assigned
+    /// checker has left or is unavailable must not become permanently undecidable.
+    ///
+    /// The other two rules still apply to them: already-decided is a correctness rule, not an
+    /// authority rule, and maker != checker is the entire point of Maker-Checker — it is defense in
+    /// depth here rather than a live path, since a Super Admin whose own mutations bypass the gate
+    /// entirely can no longer become a maker at all.</summary>
+    private static void EnsureDecidable(ApprovalRequest request, Guid checkerUserId, bool isAdministrator)
     {
         if (request.Status != ApprovalStatus.Pending)
         {
@@ -129,13 +236,20 @@ public class ApprovalAppService(
             throw new ForbiddenAppException("You cannot approve or reject your own request.");
         }
 
-        if (request.CheckerId != checkerUserId)
+        if (!isAdministrator && request.CheckerId != checkerUserId)
         {
             throw new ForbiddenAppException("Only the assigned checker can act on this request.");
         }
     }
 
-    private async Task ReplayAsync(ApprovalRequest request, CancellationToken ct)
+    /// <summary>
+    /// Replays the approved mutation and returns the ONE piece of state that only exists inside the
+    /// replay and cannot be recovered afterwards: the temporary password generated for a newly
+    /// created Local user. Every other case returns null — nothing else a replay produces is
+    /// unrecoverable (the created/updated entity is readable from the database afterwards; a
+    /// password hash is not reversible).
+    /// </summary>
+    private async Task<string?> ReplayAsync(ApprovalRequest request, CancellationToken ct)
     {
         switch (request.Module, request.Action)
         {
@@ -147,8 +261,11 @@ public class ApprovalAppService(
                 var createUser = new CreateUserRequest(
                     createSnapshot.Name, createSnapshot.Email, createSnapshot.PhoneNumber ?? "",
                     createSnapshot.RoleId, createSnapshot.IsActive, createSnapshot.AuthProvider ?? "Local");
-                await userAppService.CreateAsync(createUser, createSnapshot.Overrides, request.MakerId, ct, bypassApproval: true);
-                break;
+                var createResult = await userAppService.CreateAsync(createUser, createSnapshot.Overrides, request.MakerId, ct, bypassApproval: true);
+                // Applied is always non-null here — bypassApproval:true means CreateAsync cannot take
+                // the gated branch. The password itself is null for a Google account, which has no
+                // local password.
+                return createResult.Applied?.TemporaryPassword;
 
             case (ApprovalModuleKeys.Users, ApprovalActionKeys.Update):
                 // Two possible origins for the same (Module, Action) pair, told apart by EntityType: a
@@ -220,6 +337,8 @@ public class ApprovalAppService(
                     ct);
                 break;
         }
+
+        return null;
     }
 
     private IQueryable<ApprovalRequest> BuildFilteredQuery(
@@ -239,7 +358,8 @@ public class ApprovalAppService(
 
     private static ApprovalRequestListItemDto ToListItemDto(ApprovalRequest r) => new(
         r.Id, r.Module, r.Action, r.EntityType, r.EntityLabel, r.Status,
-        r.MakerId, r.MakerName, r.CheckerId, r.CheckerName, r.RequestedAt, r.DecidedAt, r.RejectionReason);
+        r.MakerId, r.MakerName, r.CheckerId, r.CheckerName, r.RequestedAt, r.DecidedAt, r.RejectionReason,
+        r.TempPasswordCiphertext is not null);
 
     private static ApprovalRequestDetailDto ToDetailDto(ApprovalRequest r) => new(
         r.Id, r.Module, r.Action, r.EntityType, r.EntityId, r.EntityLabel, r.OldDataJson, r.NewDataJson,

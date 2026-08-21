@@ -31,7 +31,7 @@ public class RemoteAppsController(RemoteAppAppService remoteApps) : ControllerBa
     [RequirePermission(Feature, "Register")]
     public async Task<IActionResult> Create([FromBody] CreateRemoteAppRequest request, CancellationToken ct)
     {
-        var result = await remoteApps.CreateAsync(request, CurrentUserId(), CurrentUserName(), ct);
+        var result = await remoteApps.CreateAsync(request, CurrentUserId(), CurrentUserName(), ct, bypassApproval: IsSuperAdmin());
         if (result.Applied is not null)
         {
             return CreatedAtAction(nameof(Get), new { id = result.Applied.Id }, result.Applied);
@@ -44,7 +44,7 @@ public class RemoteAppsController(RemoteAppAppService remoteApps) : ControllerBa
     [RequirePermission(Feature, "Edit")]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateRemoteAppRequest request, CancellationToken ct)
     {
-        var result = await remoteApps.UpdateAsync(id, request, CurrentUserId(), CurrentUserName(), ct);
+        var result = await remoteApps.UpdateAsync(id, request, CurrentUserId(), CurrentUserName(), ct, bypassApproval: IsSuperAdmin());
         return result.Applied is not null ? Ok(result.Applied) : Accepted(result.Pending);
     }
 
@@ -52,7 +52,7 @@ public class RemoteAppsController(RemoteAppAppService remoteApps) : ControllerBa
     [RequirePermission(Feature, "Disable")]
     public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] UpdateRemoteAppStatusRequest request, CancellationToken ct)
     {
-        var result = await remoteApps.UpdateStatusAsync(id, request.Status, request.MaintenanceMessage, CurrentUserId(), CurrentUserName(), ct);
+        var result = await remoteApps.UpdateStatusAsync(id, request.Status, request.MaintenanceMessage, CurrentUserId(), CurrentUserName(), ct, bypassApproval: IsSuperAdmin());
         return result.Applied is not null ? Ok(result.Applied) : Accepted(result.Pending);
     }
 
@@ -60,7 +60,7 @@ public class RemoteAppsController(RemoteAppAppService remoteApps) : ControllerBa
     [RequirePermission(Feature, "Delete")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
-        var pending = await remoteApps.DeleteAsync(id, CurrentUserId(), CurrentUserName(), ct);
+        var pending = await remoteApps.DeleteAsync(id, CurrentUserId(), CurrentUserName(), ct, bypassApproval: IsSuperAdmin());
         return pending is null ? NoContent() : Accepted(pending);
     }
 
@@ -116,4 +116,11 @@ public class RemoteAppsController(RemoteAppAppService remoteApps) : ControllerBa
 
     private string? CurrentUserName() =>
         User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Name)?.Value;
+
+    /// <summary>
+    /// Super Admin bypass predicate for the Maker-Checker gate. Deliberately the strict single-claim
+    /// check — the exact claim AuthService issues — not a wider admin test, so the population that
+    /// skips assignment is identical across every service that has one of these helpers.
+    /// </summary>
+    private bool IsSuperAdmin() => User.FindFirst(JwtClaimTypes.Administrator)?.Value == "true";
 }

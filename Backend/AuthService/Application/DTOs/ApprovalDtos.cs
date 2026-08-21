@@ -37,7 +37,11 @@ public static class ApprovalStatus
 public record ApprovalRequestListItemDto(
     Guid Id, string Module, string Action, string? EntityType, string? EntityLabel,
     string Status, Guid MakerId, string? MakerName, Guid CheckerId, string? CheckerName,
-    DateTimeOffset RequestedAt, DateTimeOffset? DecidedAt, string? RejectionReason);
+    DateTimeOffset RequestedAt, DateTimeOffset? DecidedAt, string? RejectionReason,
+    /// <summary>True only for the maker's own approved Create-User requests whose one-time
+    /// password has not been collected yet. Carries no secret — just "there is something to
+    /// collect" — so it is safe on the same DTO the Approval Center's checker-facing list uses.</summary>
+    bool HasTempPassword);
 
 public record ApprovalRequestDetailDto(
     Guid Id, string Module, string Action, string? EntityType, string? EntityId, string? EntityLabel,
@@ -94,3 +98,11 @@ public record ApplyApprovedMutationRequest(
 public record SubmitInternalApprovalRequest(
     string Module, string Action, string? EntityType, string? EntityId, string? EntityLabel,
     string? OldDataJson, string NewDataJson, Guid MakerId, string SourceService, string CallbackUrl, string? CorrelationId);
+
+/// <summary>
+/// The one and only time this value is ever transmitted. Returned by POST
+/// /api/approvals/{id}/reveal-temp-password to the request's MAKER, after which the stored
+/// ciphertext no longer exists. Includes the account identity so the maker can tell which login
+/// it belongs to without a second lookup.
+/// </summary>
+public record RevealTempPasswordResponse(string TemporaryPassword, string UserName, string UserEmail);

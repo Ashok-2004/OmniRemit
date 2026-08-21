@@ -72,7 +72,7 @@ public class ApprovalsController(ApprovalAppService approvals) : ControllerBase
     {
         var currentUserId = CurrentUserId();
         if (currentUserId is null) return Unauthorized();
-        return Ok(await approvals.ApproveAsync(id, currentUserId.Value, ct));
+        return Ok(await approvals.ApproveAsync(id, currentUserId.Value, IsSuperAdmin(), ct));
     }
 
     [HttpPost("{id:guid}/reject")]
@@ -81,7 +81,21 @@ public class ApprovalsController(ApprovalAppService approvals) : ControllerBase
     {
         var currentUserId = CurrentUserId();
         if (currentUserId is null) return Unauthorized();
-        return Ok(await approvals.RejectAsync(id, currentUserId.Value, request.Reason, ct));
+        return Ok(await approvals.RejectAsync(id, currentUserId.Value, request.Reason, IsSuperAdmin(), ct));
+    }
+
+    /// <summary>
+    /// One-time collection of the temporary password created when THIS maker's Create-User request
+    /// was approved. Deliberately un-permissioned for the same reason as GET mine above: every user
+    /// must be able to collect a credential for an account they themselves created. Ownership is
+    /// enforced server-side against the caller's own token id — see RevealTempPasswordAsync.
+    /// </summary>
+    [HttpPost("{id:guid}/reveal-temp-password")]
+    public async Task<ActionResult<RevealTempPasswordResponse>> RevealTempPassword(Guid id, CancellationToken ct)
+    {
+        var currentUserId = CurrentUserId();
+        if (currentUserId is null) return Unauthorized();
+        return Ok(await approvals.RevealTempPasswordAsync(id, currentUserId.Value, ct));
     }
 
     private Guid? CurrentUserId()
@@ -89,4 +103,11 @@ public class ApprovalsController(ApprovalAppService approvals) : ControllerBase
         var sub = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
         return Guid.TryParse(sub, out var id) ? id : null;
     }
+
+    /// <summary>
+    /// Super Admin bypass predicate for the Maker-Checker gate. Deliberately the strict single-claim
+    /// check — the exact claim AuthService issues — not a wider admin test, so the population that
+    /// skips assignment is identical across every service that has one of these helpers.
+    /// </summary>
+    private bool IsSuperAdmin() => User.FindFirst(JwtTokenService.AdministratorClaimType)?.Value == "true";
 }

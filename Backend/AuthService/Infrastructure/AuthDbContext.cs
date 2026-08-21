@@ -186,6 +186,9 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             entity.Property(a => a.RejectionReason).HasMaxLength(1000);
             entity.Property(a => a.SourceService).HasMaxLength(100);
             entity.Property(a => a.CallbackUrl).HasMaxLength(500);
+            // 512 comfortably covers base64(12 + 16 + 14 bytes); sized generously so a longer
+            // generated password in future does not need a second migration.
+            entity.Property(a => a.TempPasswordCiphertext).HasMaxLength(512);
 
             // Approval Center's default view: pending, newest first.
             entity.HasIndex(a => new { a.Status, a.RequestedAt }).IsDescending(false, true);

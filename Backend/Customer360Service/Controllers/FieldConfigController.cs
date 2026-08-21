@@ -60,7 +60,7 @@ namespace backend.Controllers
                 return BadRequest(new { status = 400, message = "At least one field is required." });
             }
 
-            var outcome = await _service.ReplaceAsync(parsed, fields, CurrentUserId(), CurrentUserName());
+            var outcome = await _service.ReplaceAsync(parsed, fields, CurrentUserId(), CurrentUserName(), bypassApproval: IsSuperAdmin());
             if (outcome.Pending is not null)
             {
                 // Gated: nothing was changed. 202 Accepted — the request is understood and queued, not applied.
@@ -82,5 +82,13 @@ namespace backend.Controllers
         }
 
         private string? CurrentUserName() => User.FindFirst(JwtClaimTypes.Name)?.Value;
+
+        /// <summary>
+        /// Super Admin bypass predicate for the Maker-Checker gate. Deliberately the strict
+        /// single-claim check — the exact claim AuthService issues — not this service's wider
+        /// [RequiresCapability] admin test, so the population that skips assignment is identical
+        /// across every service that has one of these helpers.
+        /// </summary>
+        private bool IsSuperAdmin() => User.FindFirst(JwtClaimTypes.Administrator)?.Value == "true";
     }
 }
