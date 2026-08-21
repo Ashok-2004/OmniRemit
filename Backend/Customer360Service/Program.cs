@@ -9,6 +9,7 @@ using backend.Data;
 using backend.Controllers;
 using backend.Infrastructure;
 using backend.Middleware;
+using backend.Options;
 
 // Load Backend/Customer360Service/.env (git-ignored) before configuration is read — matches
 // AuthService/ModuleRegistry/LeadService's Program.cs exactly. Replaces the previous hand-rolled
@@ -48,6 +49,18 @@ builder.Services.AddSingleton<CrmProxyService>();
 // in-memory List + local file.
 builder.Services.AddScoped<AuditRepository>();
 builder.Services.AddScoped<FieldConfigService>();
+
+// Phase 2 Maker-Checker: this service's first-ever connection to AuthService's internal surface.
+// AuthService (outbound: central audit push + gating check/submit), Internal (inbound: guards this
+// service's own internal/approvals/apply endpoint), Self (this service's own callback base URL + the
+// live module key it was registered under).
+builder.Services.Configure<AuthIntegrationOptions>(builder.Configuration.GetSection(AuthIntegrationOptions.SectionName));
+builder.Services.Configure<InternalApiOptions>(builder.Configuration.GetSection(InternalApiOptions.SectionName));
+builder.Services.Configure<SelfOptions>(builder.Configuration.GetSection(SelfOptions.SectionName));
+builder.Services.AddHttpContextAccessor();
+// Explicit timeout: a gating check now sits in the hot path of every Field Settings mutation, so an
+// unbounded default (100s) would hang the request instead of just delaying a best-effort audit push.
+builder.Services.AddHttpClient<AuthServiceClient>(client => client.Timeout = TimeSpan.FromSeconds(10));
 
 // ---------------------------------------------------------------------------
 // CORS Policy

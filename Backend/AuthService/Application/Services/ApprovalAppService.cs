@@ -16,7 +16,8 @@ namespace AuthService.Application.Services;
 /// there is no dependency cycle.
 /// </summary>
 public class ApprovalAppService(
-    AuthDbContext db, AuditLogAppService auditLog, UserAppService userAppService, RoleAppService roleAppService)
+    AuthDbContext db, AuditLogAppService auditLog, UserAppService userAppService, RoleAppService roleAppService,
+    RemoteApprovalCallbackClient callbackClient)
 {
     private const string ServiceName = "AuthService";
 
@@ -138,14 +139,39 @@ public class ApprovalAppService(
     {
         switch (request.Module, request.Action)
         {
+            // NewDataJson is always the flat UserSnapshotDto shape — never a live CreateUserRequest/
+            // UpdateUserRequest directly — so it's the same shape ApprovalCenterPage's diff view reads
+            // for the "Requested Change" pane. Reconstruct the real request type's fields from it here.
             case (ApprovalModuleKeys.Users, ApprovalActionKeys.Create):
-                var createUser = JsonSerializer.Deserialize<CreateUserRequest>(request.NewDataJson)!;
-                await userAppService.CreateAsync(createUser, request.MakerId, ct, bypassApproval: true);
+                var createSnapshot = JsonSerializer.Deserialize<UserSnapshotDto>(request.NewDataJson)!;
+                var createUser = new CreateUserRequest(
+                    createSnapshot.Name, createSnapshot.Email, createSnapshot.PhoneNumber ?? "",
+                    createSnapshot.RoleId, createSnapshot.IsActive, createSnapshot.AuthProvider ?? "Local");
+                await userAppService.CreateAsync(createUser, createSnapshot.Overrides, request.MakerId, ct, bypassApproval: true);
                 break;
 
             case (ApprovalModuleKeys.Users, ApprovalActionKeys.Update):
-                var updateUser = JsonSerializer.Deserialize<UpdateUserRequest>(request.NewDataJson)!;
-                await userAppService.UpdateAsync(Guid.Parse(request.EntityId!), updateUser, request.MakerId, ct, bypassApproval: true);
+                // Two possible origins for the same (Module, Action) pair, told apart by EntityType: a
+                // bundled core-field-plus-overrides edit from UserFormLayer ("User"), or a submission
+                // from the standalone permission-overrides endpoint ("UserPermissionOverrides") — see
+                // ReplacePermissionOverridesAsync's own doc comment. Both store the same flat
+                // UserSnapshotDto shape; the overrides-only origin just has identical core fields on
+                // both the old and new side.
+                if (request.EntityType == "UserPermissionOverrides")
+                {
+                    var overridesSnapshot = JsonSerializer.Deserialize<UserSnapshotDto>(request.NewDataJson)!;
+                    // Overrides is always non-null here — ReplacePermissionOverridesAsync's own
+                    // parameter is required, never omitted, so this snapshot always carries a real list.
+                    await userAppService.ApplyOverridesAsync(Guid.Parse(request.EntityId!), overridesSnapshot.Overrides ?? [], request.MakerId, ct);
+                }
+                else
+                {
+                    var updateSnapshot = JsonSerializer.Deserialize<UserSnapshotDto>(request.NewDataJson)!;
+                    var updateUser = new UpdateUserRequest(
+                        updateSnapshot.Name, updateSnapshot.Email, updateSnapshot.PhoneNumber ?? "",
+                        updateSnapshot.RoleId, updateSnapshot.IsActive);
+                    await userAppService.UpdateAsync(Guid.Parse(request.EntityId!), updateUser, updateSnapshot.Overrides, request.MakerId, ct, bypassApproval: true);
+                }
                 break;
 
             case (ApprovalModuleKeys.Users, ApprovalActionKeys.Enable):
@@ -174,12 +200,25 @@ public class ApprovalAppService(
                 await roleAppService.DeleteAsync(Guid.Parse(request.EntityId!), request.MakerId, ct, bypassApproval: true);
                 break;
 
-            // Phase 2: requests from a remote service (request.SourceService != "AuthService") get
-            // replayed by POSTing to request.CallbackUrl (X-Internal-Api-Key protected, mirroring
-            // InternalAuditLogsController's pattern) instead of a case here — this switch only ever
-            // needs to grow for modules AuthService itself owns.
+            // Every module AuthService doesn't own in-process (i.e. every remote-registered module —
+            // this switch only ever grows for modules AuthService itself replays) is replayed generically
+            // by POSTing to request.CallbackUrl, the ORIGIN service's own internal/approvals/apply
+            // endpoint, X-Internal-Api-Key protected exactly like InternalApprovalsController's inbound
+            // side. A non-2xx (or a missing CallbackUrl, which should never happen for a real remote
+            // submission) throws here, same as an in-process replay failure: the request stays Pending.
             default:
-                throw new InvalidOperationException($"No replay handler for {request.Module}/{request.Action}.");
+                if (string.IsNullOrWhiteSpace(request.CallbackUrl))
+                {
+                    throw new InvalidOperationException($"No replay handler for {request.Module}/{request.Action}.");
+                }
+
+                await callbackClient.ApplyAsync(
+                    request.CallbackUrl,
+                    new ApplyApprovedMutationRequest(
+                        request.Module, request.Action, request.EntityType, request.EntityId, request.NewDataJson,
+                        request.MakerId, request.MakerName, request.CorrelationId),
+                    ct);
+                break;
         }
     }
 

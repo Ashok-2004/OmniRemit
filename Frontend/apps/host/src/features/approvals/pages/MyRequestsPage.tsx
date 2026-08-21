@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useAuthStore } from '../../auth/store/authStore'
+import { useSettingsDrawerStore } from '../../../shared/stores/settingsDrawerStore'
 import { Badge, type BadgeTone } from '../../../shared/components/Badge/Badge'
 import { SkeletonBlock } from '../../../shared/components/Skeleton'
-import { ApiError } from '../../../shared/api/httpClient'
-import { approvalsApi, type ApprovalRequestListItemDto, type ApprovalStatus } from '../api/approvalsApi'
+import { approvalsApi, type ApprovalStatus } from '../api/approvalsApi'
+import { useApprovalRequests } from '../hooks/useApprovalRequests'
 import { Icon } from '../../../shared/components/Icon/Icon'
 import styles from './MyRequestsPage.module.css'
 
@@ -48,35 +49,15 @@ export function MyRequestsPage() {
   const [statusFilter, setStatusFilter] = useState<ApprovalStatus | 'all'>('all')
   const [page, setPage] = useState(1)
   const [pageSize] = useState(DEFAULT_PAGE_SIZE)
-  const [items, setItems] = useState<ApprovalRequestListItemDto[] | null>(null)
-  const [total, setTotal] = useState(0)
-  const [error, setError] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
+  const mutationCount = useSettingsDrawerStore((s) => s.mutationCount)
 
-  useEffect(() => {
-    if (!accessToken) return
-    let cancelled = false
-    setItems(null)
-    setError(null)
-
-    approvalsApi
-      .listMine(accessToken, { page, pageSize, status: statusFilter === 'all' ? undefined : statusFilter })
-      .then((res) => {
-        if (cancelled) return
-        setItems(res.items)
-        setTotal(res.total)
-      })
-      .catch((err) => {
-        if (cancelled) return
-        setError(err instanceof ApiError ? err.message : 'Could not load your requests.')
-        setItems([])
-        setTotal(0)
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [accessToken, page, pageSize, statusFilter, refreshKey])
+  const fetcher = useCallback(
+    (token: string) =>
+      approvalsApi.listMine(token, { page, pageSize, status: statusFilter === 'all' ? undefined : statusFilter }),
+    [page, pageSize, statusFilter],
+  )
+  const { items, total, error } = useApprovalRequests(accessToken, fetcher, [page, pageSize, statusFilter, refreshKey, mutationCount])
 
   useEffect(() => {
     setPage(1)

@@ -60,13 +60,27 @@ namespace backend.Controllers
                 return BadRequest(new { status = 400, message = "At least one field is required." });
             }
 
-            var updated = await _service.ReplaceAsync(parsed, fields);
-            return Ok(new { status = 200, data = updated });
+            var outcome = await _service.ReplaceAsync(parsed, fields, CurrentUserId(), CurrentUserName());
+            if (outcome.Pending is not null)
+            {
+                // Gated: nothing was changed. 202 Accepted — the request is understood and queued, not applied.
+                return StatusCode(202, new { status = 202, data = outcome.Pending });
+            }
+
+            return Ok(new { status = 200, data = outcome.Applied });
         }
 
         private static bool TryParseProfileType(string raw, out ProfileType profileType)
         {
             return Enum.TryParse(raw, ignoreCase: true, out profileType);
         }
+
+        private Guid? CurrentUserId()
+        {
+            var sub = User.FindFirst(JwtClaimTypes.Subject)?.Value;
+            return Guid.TryParse(sub, out var id) ? id : null;
+        }
+
+        private string? CurrentUserName() => User.FindFirst(JwtClaimTypes.Name)?.Value;
     }
 }

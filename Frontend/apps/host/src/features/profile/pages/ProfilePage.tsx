@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../auth/store/authStore'
 import { usersApi } from '../../settings-users/api/usersApi'
+import { isApprovalPending } from '../../approvals/api/approvalsApi'
 import { authServiceClient } from '../../../shared/api/authServiceClient'
 import { Button } from '../../../shared/components/Button/Button'
 import { Input } from '../../../shared/components/Input/Input'
@@ -105,7 +106,7 @@ export function ProfilePage() {
     setProfileError(null)
 
     try {
-      await usersApi.update(accessToken, user.id, {
+      const result = await usersApi.update(accessToken, user.id, {
         name: name.trim(),
         email: isSuperAdmin ? email.trim() : user.email,
         phoneNumber: phoneNumber.trim() || null,
@@ -114,6 +115,16 @@ export function ProfilePage() {
         // keeps this a no-op — omitting it would let the server default deactivate the account.
         isActive: user.isActive,
       })
+
+      if (isApprovalPending(result)) {
+        // Nothing was actually changed yet — the "Users" module has a checker assigned, so this edit
+        // is queued instead of applied. No refreshSession(): there's nothing stale to pull yet, and
+        // doing so here would silently overwrite the drawer's now-closed form with the OLD profile,
+        // which could read as "my edit was discarded" rather than "it's pending".
+        setDrawerOpen(false)
+        triggerToast(result.message)
+        return
+      }
 
       await refreshSession()
       setDrawerOpen(false)

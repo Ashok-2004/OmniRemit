@@ -15,6 +15,7 @@ import type {
   AuditLog,
   FieldConfig,
   FieldConfigProfileType,
+  ApprovalPendingDto,
 } from '../types/api';
 import { getAccessToken, ensureFreshAccessToken, getCurrentUser, isRunningInHost } from '../api/hostBridge';
 
@@ -117,10 +118,13 @@ export const api = {
   getFieldConfig: (profileType: FieldConfigProfileType): Promise<ApiEnvelope<FieldConfig[]>> =>
     request(`/v1/field-config/${profileType.toLowerCase()}`),
 
+  // Resolves the real full field list (status 200, applied as it always has) or an ApprovalPendingDto
+  // (status 202) if the "fieldsettings" module has a checker assigned — callers must check
+  // isApprovalPending(res.data) before treating it as the real thing.
   updateFieldConfig: (
     profileType: FieldConfigProfileType,
     fields: FieldConfig[]
-  ): Promise<ApiEnvelope<FieldConfig[]>> =>
+  ): Promise<ApiEnvelope<FieldConfig[] | ApprovalPendingDto>> =>
     request(`/v1/field-config/${profileType.toLowerCase()}`, {
       method: 'PUT',
       body: JSON.stringify(fields),

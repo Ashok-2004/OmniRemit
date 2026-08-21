@@ -107,3 +107,40 @@ public record UpdateUserRequest(
 public record UpdateUserStatusRequest(bool IsActive);
 
 public record UpdateUserPermissionOverridesRequest(IReadOnlyList<PermissionOverrideDto> Overrides);
+
+/// <summary>
+/// The real PUT /api/users/{id} wire shape ONLY — how the frontend submits a core-field edit bundled
+/// with the "Extra Permissions" grid in one call, so a checker reviews and approves both together
+/// (previously two separate calls, and the second was silently skipped whenever the first was gated —
+/// the overrides were discarded with no error, no audit trail, and no way to know). This is never what
+/// gets stored in an ApprovalRequest's NewDataJson — see UserSnapshotDto for that flat, display-ready
+/// shape; UpdateAsync converts between the two.
+/// </summary>
+public record UpdateUserWithOverridesRequest(
+    UpdateUserRequest User,
+    IReadOnlyList<PermissionOverrideDto>? Overrides = null);
+
+/// <summary>Same bundling as <see cref="UpdateUserWithOverridesRequest"/>, for account creation — a
+/// brand-new user has no id yet to attach overrides to via a follow-up call, so they must travel with
+/// the create request itself and get applied once the account (and its id) actually exists.</summary>
+public record CreateUserWithOverridesRequest(
+    CreateUserRequest User,
+    IReadOnlyList<PermissionOverrideDto>? Overrides = null);
+
+/// <summary>
+/// The ONE flat shape used for BOTH OldDataJson and NewDataJson on every gated Users mutation
+/// (Create/Update/Delete) — never nested, never nested-and-different-from-the-old-side, so
+/// ApprovalCenterPage's diff view can render Before/Requested Change with identical field names and a
+/// generic RoleId→RoleName lookup instead of unpacking a "User: {...}" wrapper object. Never
+/// deserialized back into a live CreateUserRequest/UpdateUserRequest directly — ApprovalAppService.
+/// ReplayAsync reconstructs the real request type's fields from this on replay. RoleName is always
+/// resolved server-side, never trusted from a client-supplied value. AuthProvider is null except on a
+/// Create snapshot (Update/Delete never change it).
+/// </summary>
+/// Overrides is nullable, distinct from an empty array: null means this mutation never touched
+/// overrides at all (replay must leave existing overrides alone); an empty array means the request
+/// explicitly asks for zero overrides (replay must wipe them). Collapsing this to "?? []" when building
+/// either snapshot silently turns every "didn't touch overrides" edit into a full wipe once it replays.
+public record UserSnapshotDto(
+    string Name, string Email, string? PhoneNumber, Guid? RoleId, string? RoleName, bool IsActive,
+    IReadOnlyList<PermissionOverrideDto>? Overrides, string? AuthProvider = null);

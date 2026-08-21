@@ -372,25 +372,29 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
     try {
       const token = await ensureFreshAccessToken()
       if (isEdit && userId) {
-        const result = await usersApi.update(token, userId, {
-          name,
-          email,
-          phoneNumber: phoneNumber || null,
-          roleId: roleId || null,
-          // The toggle's value now actually reaches the server; it was previously dropped here.
-          isActive,
-        })
+        // Core fields and Extra Permissions travel in ONE call now — a checker reviews and approves
+        // both together, and approval actually applies both (previously the overrides half was a
+        // separate follow-up call that got silently skipped whenever this one was gated).
+        const result = await usersApi.update(
+          token,
+          userId,
+          {
+            name,
+            email,
+            phoneNumber: phoneNumber || null,
+            roleId: roleId || null,
+            // The toggle's value now actually reaches the server; it was previously dropped here.
+            isActive,
+          },
+          computedOverrides,
+        )
 
         if (isApprovalPending(result)) {
-          // Nothing was actually changed yet — the extra-permissions part of this same submission is
-          // held with it rather than applied separately, so replaceOverrides is deliberately skipped
-          // here; it runs once this same edit is approved and replayed.
           toast.success(result.message)
           useSettingsDrawerStore.getState().resetToRoot('users')
           return
         }
 
-        await usersApi.replaceOverrides(token, userId, computedOverrides)
         // The acting admin may have just changed their own role or permissions, and the list behind
         // the drawer is now stale — without these the drawer closed onto old rows and only a full page
         // reload would show the change.
@@ -399,23 +403,24 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
         toast.success(`User '${name}' updated successfully.`)
         useSettingsDrawerStore.getState().resetToRoot('users')
       } else {
-        const res = await usersApi.create(token, {
-          name,
-          email,
-          phoneNumber: phoneNumber || null,
-          roleId: roleId || null,
-          isActive,
-        })
+        const res = await usersApi.create(
+          token,
+          {
+            name,
+            email,
+            phoneNumber: phoneNumber || null,
+            roleId: roleId || null,
+            isActive,
+          },
+          computedOverrides,
+        )
 
         if (isApprovalPending(res)) {
-          // No account exists yet — nothing to attach permission overrides to, and nothing to list.
+          // No account exists yet — nothing to list, but the overrides travelled with this same
+          // request and will apply once it's approved and replayed.
           toast.success(res.message)
           setPendingApproval(res)
           return
-        }
-
-        if (computedOverrides.length > 0) {
-          await usersApi.replaceOverrides(token, res.user.id, computedOverrides)
         }
 
         notifyMutation()

@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useAuthStore } from '../../features/auth/store/authStore'
 import { permissionsApi, type PermissionFeatureDto } from '../../shared/api/permissionsApi'
 import { rolesApi, type RolePermissionGrantDto, type RoleUserDto } from '../../features/settings-roles/api/rolesApi'
-import { isApprovalPending } from '../../features/approvals/api/approvalsApi'
+import { isApprovalPending, type ApprovalPendingDto } from '../../features/approvals/api/approvalsApi'
 import { remoteAppsApi, type RemoteAppDto } from '../../features/settings-applications/api/remoteAppsApi'
 import { useSettingsDrawerStore } from '../../shared/stores/settingsDrawerStore'
 import { Icon } from '../../shared/components/Icon/Icon'
@@ -39,6 +39,7 @@ export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [pendingApproval, setPendingApproval] = useState<ApprovalPendingDto | null>(null)
 
   // Form State
   const [name, setName] = useState('')
@@ -294,8 +295,19 @@ export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
         // Nothing was actually created/changed — the "Roles" module has a checker assigned, so this
         // submission is queued instead of applied. No refreshSession/notifyMutation: there is nothing
         // stale to refresh yet.
+        if (isEdit) {
+          // Mirrors UserFormLayer's own update path: the drawer just closes back to the list — there's
+          // an existing role row to return to, so a dedicated interstitial screen adds nothing.
+          toast.success(result.message)
+          useSettingsDrawerStore.getState().resetToRoot('roles')
+          return
+        }
+
+        // No role exists yet — nothing to attach anything to, and nothing to list. Mirrors
+        // UserFormLayer's own create path: a dedicated "Submitted for Approval" screen instead of an
+        // immediate close.
         toast.success(result.message)
-        useSettingsDrawerStore.getState().resetToRoot('roles')
+        setPendingApproval(result)
         return
       }
 
@@ -317,6 +329,49 @@ export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
       (u) => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q),
     )
   }, [assignedUsers, userSearch])
+
+  if (pendingApproval) {
+    return (
+      <div className={styles.layer}>
+        <div className={styles.header}>
+          <div className={styles.headerTitleWrap}>
+            <div className={styles.headerIconBox}>
+              <Icon.ShieldCheck width={20} height={20} />
+            </div>
+            <div>
+              <h2 className={styles.title}>Create System Role</h2>
+              <p className={styles.subtitle}>Define role scope, host permissions, and application access</p>
+            </div>
+          </div>
+          <button type="button" className={styles.closeBtn} onClick={popLayer} aria-label="Close Role Editor">
+            <Icon.X width={20} height={20} />
+          </button>
+        </div>
+        <div className={styles.successArea}>
+          <div className={styles.successCard}>
+            <div className={styles.successIconWrap}>
+              <Icon.ShieldCheck width={42} height={42} />
+            </div>
+            <h3 className={styles.successTitle}>Request Submitted for Approval</h3>
+            <p className={styles.successText}>
+              Creating <strong>{name}</strong> requires approval before the role exists.
+              {pendingApproval.checkerName && pendingApproval.checkerName !== 'Unassigned'
+                ? ` It's been assigned to ${pendingApproval.checkerName}.`
+                : ''}{' '}
+              Track its status any time from My Requests.
+            </p>
+            <button
+              type="button"
+              className={styles.doneBtn}
+              onClick={() => useSettingsDrawerStore.getState().resetToRoot('roles')}
+            >
+              Done &amp; Return to Roles List
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   if (loading) {
     return (

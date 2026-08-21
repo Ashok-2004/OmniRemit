@@ -466,3 +466,21 @@ export interface FieldConfig {
   maskingRule: MaskingRule;
   visibleCharCount: number;
 }
+
+/**
+ * Returned in `data` (HTTP 202) instead of the real field-config list whenever the PUT was gated by
+ * Maker-Checker approval and could not be applied directly — the "fieldsettings" module has a checker
+ * assigned. Mirrors AuthService's own ApprovalPendingDto shape; Module Federation isolation means this
+ * can't be imported from the host, so it's a local structural copy.
+ */
+export interface ApprovalPendingDto {
+  approvalRequestId: string;
+  module: string;
+  action: string;
+  checkerName: string;
+  message: string;
+}
+
+export function isApprovalPending(value: unknown): value is ApprovalPendingDto {
+  return typeof value === 'object' && value !== null && 'approvalRequestId' in value;
+}

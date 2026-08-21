@@ -65,7 +65,8 @@ public class UserAppService(
     }
 
     public async Task<MutationResult<CreateUserResponse>> CreateAsync(
-        CreateUserRequest request, Guid? actingUserId, CancellationToken ct = default, bool bypassApproval = false)
+        CreateUserRequest request, IReadOnlyList<PermissionOverrideDto>? overrides, Guid? actingUserId,
+        CancellationToken ct = default, bool bypassApproval = false)
     {
         var email = request.Email.Trim().ToLowerInvariant();
         if (await db.Users.AnyAsync(u => u.Email == email, ct))
@@ -94,9 +95,15 @@ public class UserAppService(
          */
         if (!bypassApproval && actingUserId is not null && await gating.IsGatedAsync(ApprovalModuleKeys.Users, ct))
         {
+            var newRoleName = request.RoleId is null
+                ? null
+                : await db.Roles.AsNoTracking().Where(r => r.Id == request.RoleId).Select(r => r.Name).FirstOrDefaultAsync(ct);
+            var newSnapshot = new UserSnapshotDto(
+                request.Name.Trim(), email, request.PhoneNumber?.Trim(), request.RoleId, newRoleName,
+                request.IsActive, overrides, request.AuthProvider);
             var pending = await gating.SubmitAsync(
                 ApprovalModuleKeys.Users, ApprovalActionKeys.Create, "User", null, request.Name.Trim(),
-                null, JsonSerializer.Serialize(request), actingUserId.Value, ct);
+                null, JsonSerializer.Serialize(newSnapshot), actingUserId.Value, ct);
             return MutationResult<CreateUserResponse>.PendingApproval(pending);
         }
 
@@ -134,16 +141,26 @@ public class UserAppService(
         db.Users.Add(user);
         await db.SaveChangesAsync(ct);
 
+        // Bundled from the same submission that created this account — see
+        // CreateUserWithOverridesRequest's doc comment for why this can't be a separate follow-up call
+        // the way it used to be.
+        if (overrides is { Count: > 0 })
+        {
+            await ApplyOverridesAsync(user.Id, overrides, actingUserId, ct);
+        }
+
         var saved = await FindWithRoleAsync(user.Id, ct) ?? throw NotFound(user.Id);
+        var savedOverrides = await LoadOverridesAsync(user.Id, ct);
 
         var actorName = await ResolveActorNameAsync(actingUserId, ct);
         await auditLog.WriteAsync(ServiceName, actingUserId, actorName, "user.created", "User", user.Id.ToString(), $"Created {user.Email}", SourceIp, userAgent: UserAgent, entityLabel: user.Name, ct: ct);
 
-        return MutationResult<CreateUserResponse>.Ok(new CreateUserResponse(ToDetailDto(saved, []), tempPassword));
+        return MutationResult<CreateUserResponse>.Ok(new CreateUserResponse(ToDetailDto(saved, savedOverrides), tempPassword));
     }
 
     public async Task<MutationResult<UserDetailDto>> UpdateAsync(
-        Guid id, UpdateUserRequest request, Guid? actingUserId, CancellationToken ct = default, bool bypassApproval = false)
+        Guid id, UpdateUserRequest request, IReadOnlyList<PermissionOverrideDto>? overrides, Guid? actingUserId,
+        CancellationToken ct = default, bool bypassApproval = false)
     {
         var user = await FindWithRoleAsync(id, ct) ?? throw NotFound(id);
 
@@ -160,14 +177,19 @@ public class UserAppService(
 
         if (!bypassApproval && actingUserId is not null && await gating.IsGatedAsync(ApprovalModuleKeys.Users, ct))
         {
-            var oldSnapshot = JsonSerializer.Serialize(new
-            {
-                user.Name, user.Email, user.PhoneNumber, user.RoleId,
-                IsActive = user.Status == UserStatus.Active,
-            });
+            var existingOverrides = await LoadOverridesAsync(id, ct);
+            var oldSnapshot = new UserSnapshotDto(
+                user.Name, user.Email, user.PhoneNumber, user.RoleId, user.Role?.Name,
+                user.Status == UserStatus.Active, existingOverrides);
+            var newRoleName = request.RoleId is null
+                ? null
+                : await db.Roles.AsNoTracking().Where(r => r.Id == request.RoleId).Select(r => r.Name).FirstOrDefaultAsync(ct);
+            var newSnapshot = new UserSnapshotDto(
+                request.Name.Trim(), email, request.PhoneNumber?.Trim(), request.RoleId, newRoleName,
+                request.IsActive, overrides);
             var pending = await gating.SubmitAsync(
                 ApprovalModuleKeys.Users, ApprovalActionKeys.Update, "User", id.ToString(), user.Name,
-                oldSnapshot, JsonSerializer.Serialize(request), actingUserId.Value, ct);
+                JsonSerializer.Serialize(oldSnapshot), JsonSerializer.Serialize(newSnapshot), actingUserId.Value, ct);
             return MutationResult<UserDetailDto>.PendingApproval(pending);
         }
 
@@ -197,6 +219,14 @@ public class UserAppService(
 
         await db.SaveChangesAsync(ct);
 
+        // Bundled from the same submission as the core-field edit — see UpdateUserWithOverridesRequest's
+        // doc comment. Applied AFTER the core fields commit, same ordering the ungated path always used
+        // when this was two separate calls.
+        if (overrides is not null)
+        {
+            await ApplyOverridesAsync(id, overrides, actingUserId, ct);
+        }
+
         var actorName = await ResolveActorNameAsync(actingUserId, ct);
         await auditLog.WriteAsync(ServiceName, actingUserId, actorName, "user.updated", "User", user.Id.ToString(), $"Updated {user.Email}", SourceIp, userAgent: UserAgent, entityLabel: user.Name, ct: ct);
 
@@ -209,8 +239,8 @@ public class UserAppService(
                 $"{user.Email} was {(request.IsActive ? "activated" : "deactivated")}.", SourceIp, userAgent: UserAgent, entityLabel: user.Name, ct: ct);
         }
 
-        var overrides = await LoadOverridesAsync(id, ct);
-        return MutationResult<UserDetailDto>.Ok(ToDetailDto(user, overrides));
+        var savedOverrides = await LoadOverridesAsync(id, ct);
+        return MutationResult<UserDetailDto>.Ok(ToDetailDto(user, savedOverrides));
     }
 
     public async Task<MutationResult<UserDetailDto>> UpdateStatusAsync(
@@ -243,14 +273,17 @@ public class UserAppService(
     public async Task<ApprovalPendingDto?> DeleteAsync(
         Guid id, Guid? actingUserId, CancellationToken ct = default, bool bypassApproval = false)
     {
-        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == id, ct) ?? throw NotFound(id);
+        var user = await FindWithRoleAsync(id, ct) ?? throw NotFound(id);
 
         if (!bypassApproval && actingUserId is not null && await gating.IsGatedAsync(ApprovalModuleKeys.Users, ct))
         {
-            var oldSnapshot = JsonSerializer.Serialize(new { user.Name, user.Email, user.PhoneNumber, user.RoleId });
+            var existingOverrides = await LoadOverridesAsync(id, ct);
+            var oldSnapshot = new UserSnapshotDto(
+                user.Name, user.Email, user.PhoneNumber, user.RoleId, user.Role?.Name,
+                user.Status == UserStatus.Active, existingOverrides);
             return await gating.SubmitAsync(
                 ApprovalModuleKeys.Users, ApprovalActionKeys.Delete, "User", id.ToString(), user.Name,
-                oldSnapshot, "{}", actingUserId.Value, ct);
+                JsonSerializer.Serialize(oldSnapshot), "{}", actingUserId.Value, ct);
         }
 
         user.IsDeleted = true;
@@ -280,7 +313,43 @@ public class UserAppService(
         return await LoadOverridesAsync(userId, ct);
     }
 
-    public async Task<IReadOnlyList<PermissionOverrideDto>> ReplacePermissionOverridesAsync(
+    /// <summary>
+    /// The gated, controller-facing entry point for the standalone permission-overrides endpoint.
+    /// Previously this was a completely open side door around Users gating — a caller who skipped the
+    /// bundled Update flow (e.g. a direct API call) applied permission changes immediately regardless of
+    /// whether the Users module had a checker assigned. Now it's gated exactly like every other Users
+    /// mutation, replaying through the same ApplyOverridesAsync a bundled Update's replay uses.
+    /// </summary>
+    public async Task<MutationResult<IReadOnlyList<PermissionOverrideDto>>> ReplacePermissionOverridesAsync(
+        Guid userId, IReadOnlyList<PermissionOverrideDto> overrides, Guid? actingUserId, CancellationToken ct = default, bool bypassApproval = false)
+    {
+        var user = await FindWithRoleAsync(userId, ct) ?? throw NotFound(userId);
+
+        if (!bypassApproval && actingUserId is not null && await gating.IsGatedAsync(ApprovalModuleKeys.Users, ct))
+        {
+            var existingOverrides = await LoadOverridesAsync(userId, ct);
+            // Core fields are identical on both sides here — only Overrides differs — so the diff view
+            // naturally shows "no field changes, only permission changes" with zero special-casing.
+            // EntityType "UserPermissionOverrides" (not "User") is how ApprovalAppService.ReplayAsync
+            // tells this origin apart from a bundled Update within the same (Users, Update) case.
+            var oldSnapshot = new UserSnapshotDto(
+                user.Name, user.Email, user.PhoneNumber, user.RoleId, user.Role?.Name,
+                user.Status == UserStatus.Active, existingOverrides);
+            var newSnapshot = oldSnapshot with { Overrides = overrides };
+            var pending = await gating.SubmitAsync(
+                ApprovalModuleKeys.Users, ApprovalActionKeys.Update, "UserPermissionOverrides", userId.ToString(), user.Name,
+                JsonSerializer.Serialize(oldSnapshot), JsonSerializer.Serialize(newSnapshot), actingUserId.Value, ct);
+            return MutationResult<IReadOnlyList<PermissionOverrideDto>>.PendingApproval(pending);
+        }
+
+        var applied = await ApplyOverridesAsync(userId, overrides, actingUserId, ct);
+        return MutationResult<IReadOnlyList<PermissionOverrideDto>>.Ok(applied);
+    }
+
+    /// <summary>The actual override-diff-and-save logic, used by the direct/replay paths of both the
+    /// bundled Update flow and the standalone permission-overrides endpoint. No gating here — callers
+    /// are responsible for deciding whether this specific invocation should have been gated.</summary>
+    internal async Task<IReadOnlyList<PermissionOverrideDto>> ApplyOverridesAsync(
         Guid userId, IReadOnlyList<PermissionOverrideDto> overrides, Guid? actingUserId, CancellationToken ct = default)
     {
         if (!await db.Users.AnyAsync(u => u.Id == userId, ct))

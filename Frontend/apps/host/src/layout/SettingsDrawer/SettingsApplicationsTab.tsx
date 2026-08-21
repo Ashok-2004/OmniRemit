@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuthStore } from '../../features/auth/store/authStore'
 import { remoteAppsApi, type RemoteAppDto, type RemoteAppStatus } from '../../features/settings-applications/api/remoteAppsApi'
+import { isApprovalPending } from '../../features/approvals/api/approvalsApi'
 import { useSettingsDrawerStore } from '../../shared/stores/settingsDrawerStore'
 import { useDebouncedValue } from '../../shared/hooks/useDebouncedValue'
 import { useModuleRegistryStore } from '../../shared/stores/moduleRegistryStore'
@@ -91,8 +92,13 @@ export function SettingsApplicationsTab() {
     const deletedName = pendingDelete.displayName
     setDeleting(true)
     try {
-      await remoteAppsApi.remove(accessToken, pendingDelete.id)
+      const result = await remoteAppsApi.remove(accessToken, pendingDelete.id)
       setPendingDelete(null)
+      if (isApprovalPending(result)) {
+        // Nothing was actually removed — no sidebar refresh needed, nothing changed yet.
+        toast.success(result.message)
+        return
+      }
       toast.success(`Application '${deletedName}' removed successfully.`)
       // The sidebar lists registered apps, so it has to be refreshed or the removed app lingers
       // there until the next full page load.
@@ -137,13 +143,18 @@ export function SettingsApplicationsTab() {
     const appName = statusTargetApp.displayName
     setUpdatingStatus(true)
     try {
-      await remoteAppsApi.updateStatus(
+      const result = await remoteAppsApi.updateStatus(
         accessToken,
         statusTargetApp.id,
         newStatus,
         newStatus === 'Maintenance' ? maintenanceMessage || 'Application is temporarily down for maintenance.' : null
       )
       setStatusTargetApp(null)
+      if (isApprovalPending(result)) {
+        // Nothing actually changed yet — no sidebar refresh needed.
+        toast.success(result.message)
+        return
+      }
       toast.success(`Application '${appName}' status updated to ${newStatus}.`)
       // The sidebar has to be refreshed too: an app moved to Maintenance must stop being navigable
       // immediately, without waiting for a page reload.

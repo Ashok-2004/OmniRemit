@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { LeadFormData, FormValidationErrors, NavigationPage, LeadRecord, DropdownOption, AuditRecord } from '../types/lead';
 import {
   apiClient,
+  isApprovalPending,
   KpiSummary,
   TimeSeriesPoint,
   ProductDistribution,
@@ -521,6 +522,17 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
       set({ isSubmitting: false });
 
       if (response.success) {
+        if (isApprovalPending(response.data)) {
+          // Nothing was actually created — the "Lead" module has a checker assigned, so this
+          // submission is queued instead of applied. No list/dashboard refresh: nothing changed yet.
+          get().showToast({
+            type: 'info',
+            title: 'Submitted for Approval',
+            message: response.data.message || 'This lead requires approval before it is created.',
+          });
+          get().resetForm();
+          return true;
+        }
         get().showToast({
           type: 'success',
           title: 'Success',
@@ -1034,18 +1046,31 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
       set({ isSubmitting: false });
 
       if (res.success) {
-        get().showToast({
-          type: 'success',
-          title: 'Success',
-          message: 'Changes saved successfully',
-        });
-        set({
+        const closeState = {
           isEditLeadOpen: false,
           isEditReasonOpen: false,
           isConfirmingEdit: false,
           editLeadTarget: null,
           editReason: '',
+        };
+
+        if (isApprovalPending(res.data)) {
+          // Nothing was actually changed yet — no list/dashboard refresh.
+          get().showToast({
+            type: 'info',
+            title: 'Submitted for Approval',
+            message: res.data.message || 'This change requires approval before it is applied.',
+          });
+          set(closeState);
+          return true;
+        }
+
+        get().showToast({
+          type: 'success',
+          title: 'Success',
+          message: 'Changes saved successfully',
         });
+        set(closeState);
         get().fetchLeads();
         get().fetchDashboardData();
         return true;
@@ -1104,17 +1129,30 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
       set({ isSubmitting: false });
 
       if (res.success) {
+        const closeState = {
+          isDeleteConfirmOpen: false,
+          isDeleteReasonOpen: false,
+          deleteLeadTarget: null,
+          deleteReason: '',
+        };
+
+        if (isApprovalPending(res.data)) {
+          // Nothing was actually deleted yet — no list/dashboard refresh.
+          get().showToast({
+            type: 'info',
+            title: 'Submitted for Approval',
+            message: res.data.message || 'This deletion requires approval before it is applied.',
+          });
+          set(closeState);
+          return true;
+        }
+
         get().showToast({
           type: 'success',
           title: 'Deleted',
           message: 'This lead has been deleted',
         });
-        set({
-          isDeleteConfirmOpen: false,
-          isDeleteReasonOpen: false,
-          deleteLeadTarget: null,
-          deleteReason: '',
-        });
+        set(closeState);
         get().fetchLeads();
         get().fetchDashboardData();
         return true;

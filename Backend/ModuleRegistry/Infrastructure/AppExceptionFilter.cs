@@ -13,6 +13,7 @@ public class AppExceptionFilter : IExceptionFilter
             NotFoundAppException ex => (StatusCodes.Status404NotFound, ex.Message),
             ConflictAppException ex => (StatusCodes.Status409Conflict, ex.Message),
             ValidationAppException ex => (StatusCodes.Status400BadRequest, ex.Message),
+            ApprovalServiceUnavailableAppException ex => (StatusCodes.Status503ServiceUnavailable, ex.Message),
             _ => (0, string.Empty),
         };
 

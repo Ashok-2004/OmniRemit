@@ -107,11 +107,22 @@ export const usersApi = {
   // Every mutation below returns the real result on the ungated path (identical to before Maker-Checker
   // existed) or an ApprovalPendingDto (202) if the "Users" module has a checker assigned — callers must
   // branch with isApprovalPending() before treating the result as the real thing.
-  create: (accessToken: string, body: CreateUserRequest) =>
-    apiFetch<CreateUserResponse | ApprovalPendingDto>(`${base}/api/users`, { method: 'POST', accessToken, body }),
+  //
+  // create/update bundle the Extra Permissions grid into the SAME call as the core fields — this used
+  // to be two separate requests (core fields, then a follow-up replaceOverrides call), and the
+  // follow-up was silently skipped whenever the first was gated, discarding whatever permission
+  // changes were part of that same edit with no error and no audit trail. Bundling means a checker
+  // reviews and approves both together, and approval actually applies both.
+  // overrides is genuinely optional (undefined, not defaulted to []) — omitting it means "leave
+  // existing overrides untouched" (see ProfilePage's self-service edit, which never touches
+  // permissions), while passing [] explicitly means "the admin wants zero overrides". The backend
+  // tells these apart the same way: a JSON body with no "overrides" key binds to null server-side and
+  // is skipped; an explicit empty array is applied.
+  create: (accessToken: string, user: CreateUserRequest, overrides?: PermissionOverrideDto[]) =>
+    apiFetch<CreateUserResponse | ApprovalPendingDto>(`${base}/api/users`, { method: 'POST', accessToken, body: { user, overrides } }),
 
-  update: (accessToken: string, id: string, body: UpdateUserRequest) =>
-    apiFetch<UserDetailDto | ApprovalPendingDto>(`${base}/api/users/${id}`, { method: 'PUT', accessToken, body }),
+  update: (accessToken: string, id: string, user: UpdateUserRequest, overrides?: PermissionOverrideDto[]) =>
+    apiFetch<UserDetailDto | ApprovalPendingDto>(`${base}/api/users/${id}`, { method: 'PUT', accessToken, body: { user, overrides } }),
 
   updateStatus: (accessToken: string, id: string, isActive: boolean) =>
     apiFetch<UserDetailDto | ApprovalPendingDto>(`${base}/api/users/${id}/status`, { method: 'PATCH', accessToken, body: { isActive } }),
@@ -123,8 +134,11 @@ export const usersApi = {
   getOverrides: (accessToken: string, id: string) =>
     apiFetch<PermissionOverrideDto[]>(`${base}/api/users/${id}/permission-overrides`, { accessToken }),
 
+  /** Now also gated (previously an open side door around Users gating regardless of the bundled
+   * update flow above) — most callers should prefer bundling overrides into update()/create() instead
+   * of calling this directly, since that gives a checker one coherent request to review. */
   replaceOverrides: (accessToken: string, id: string, overrides: PermissionOverrideDto[]) =>
-    apiFetch<PermissionOverrideDto[]>(`${base}/api/users/${id}/permission-overrides`, {
+    apiFetch<PermissionOverrideDto[] | ApprovalPendingDto>(`${base}/api/users/${id}/permission-overrides`, {
       method: 'PUT',
       accessToken,
       body: { overrides },

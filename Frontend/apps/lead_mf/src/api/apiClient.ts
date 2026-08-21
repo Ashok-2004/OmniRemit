@@ -9,6 +9,25 @@ export interface ApiResponse<T> {
   errors?: Record<string, string> | null;
 }
 
+/**
+ * Returned in `data` (with `success: true`, HTTP 202) instead of the real record whenever a mutation
+ * was gated by Maker-Checker approval and could not be applied directly — the "Lead" module has a
+ * checker assigned. Mirrors AuthService's own ApprovalPendingDto shape; Module Federation isolation
+ * means this can't be imported from the host, so it's a local structural copy — `isApprovalPending`
+ * checks by shape (`approvalRequestId` present), not by class.
+ */
+export interface ApprovalPendingDto {
+  approvalRequestId: string;
+  module: string;
+  action: string;
+  checkerName: string;
+  message: string;
+}
+
+export function isApprovalPending(value: unknown): value is ApprovalPendingDto {
+  return typeof value === 'object' && value !== null && 'approvalRequestId' in value;
+}
+
 export interface DropdownOption {
   value: string;
   label: string;
@@ -282,7 +301,10 @@ export const apiClient = {
     }
   },
 
-  createLead: async (formData: any): Promise<ApiResponse<LeadRecord>> => {
+  // Resolves the real LeadRecord (200/201, applied as it always has) or an ApprovalPendingDto (202,
+  // still success:true) if the "Lead" module has a checker assigned — callers must check
+  // isApprovalPending(response.data) before treating it as the real thing.
+  createLead: async (formData: any): Promise<ApiResponse<LeadRecord | ApprovalPendingDto>> => {
     const res = await fetchWithAuth(`${API_BASE_URL}/api/leads`, {
       method: 'POST',
       body: JSON.stringify(formData),
@@ -290,7 +312,7 @@ export const apiClient = {
     return await res.json();
   },
 
-  updateLead: async (id: string, updateData: any): Promise<ApiResponse<LeadRecord>> => {
+  updateLead: async (id: string, updateData: any): Promise<ApiResponse<LeadRecord | ApprovalPendingDto>> => {
     const res = await fetchWithAuth(`${API_BASE_URL}/api/leads/${id}`, {
       method: 'PUT',
       body: JSON.stringify(updateData),
@@ -298,7 +320,7 @@ export const apiClient = {
     return await res.json();
   },
 
-  deleteLead: async (id: string, deleteReason: string): Promise<ApiResponse<boolean>> => {
+  deleteLead: async (id: string, deleteReason: string): Promise<ApiResponse<boolean | ApprovalPendingDto>> => {
     const res = await fetchWithAuth(`${API_BASE_URL}/api/leads/${id}`, {
       method: 'DELETE',
       body: JSON.stringify({ deleteReason }),

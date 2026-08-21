@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using backend.Infrastructure;
 using backend.Models;
+using backend.Options;
 
 namespace backend.Data
 {
@@ -17,10 +19,37 @@ namespace backend.Data
     public class FieldConfigService
     {
         private readonly Customer360DbContext _db;
+        private readonly AuthServiceClient _authServiceClient;
+        private readonly SelfOptions _selfOptions;
 
-        public FieldConfigService(Customer360DbContext db)
+        public FieldConfigService(Customer360DbContext db, AuthServiceClient authServiceClient, IOptions<SelfOptions> selfOptions)
         {
             _db = db;
+            _authServiceClient = authServiceClient;
+            _selfOptions = selfOptions.Value;
+        }
+
+        /// <summary>Checks gating and, if gated, submits — the same "after validation, before mutation"
+        /// surgical insert AuthService's own UserAppService/RoleAppService use. Returns null when the
+        /// caller should proceed to mutate directly.</summary>
+        private async Task<ApprovalPendingDto?> TrySubmitForApprovalAsync(
+            ProfileType profileType, string? oldDataJson, object requestBody, Guid? actingUserId, bool bypassApproval)
+        {
+            if (bypassApproval || actingUserId is null)
+            {
+                return null;
+            }
+
+            if (!await _authServiceClient.IsGatedAsync(_selfOptions.FieldSettingsModuleKey))
+            {
+                return null;
+            }
+
+            var callbackUrl = $"{_selfOptions.PublicBaseUrl.TrimEnd('/')}/internal/approvals/apply";
+            return await _authServiceClient.SubmitApprovalAsync(
+                _selfOptions.FieldSettingsModuleKey, "Update", "FieldConfig", profileType.ToString(), $"{profileType} Field Settings",
+                oldDataJson, System.Text.Json.JsonSerializer.Serialize(requestBody), actingUserId.Value,
+                callbackUrl, Guid.NewGuid().ToString());
         }
 
         public async Task<List<FieldConfig>> GetByProfileTypeAsync(ProfileType profileType)
@@ -37,11 +66,19 @@ namespace backend.Data
         /// (updates fields it already knows by ApiField, adds any new ones sent, and DOES NOT delete
         /// anything not present since a field the CRM stops sending is still legitimate to keep
         /// configured for if it comes back).</summary>
-        public async Task<List<FieldConfig>> ReplaceAsync(ProfileType profileType, List<FieldConfig> incoming)
+        public async Task<MutationResult<List<FieldConfig>>> ReplaceAsync(
+            ProfileType profileType, List<FieldConfig> incoming, Guid? actingUserId, string? actorName = null, bool bypassApproval = false)
         {
             var existing = await _db.FieldConfigs
                 .Where(f => f.ProfileType == profileType)
                 .ToDictionaryAsync(f => f.ApiField, StringComparer.OrdinalIgnoreCase);
+
+            var oldSnapshot = System.Text.Json.JsonSerializer.Serialize(existing.Values.ToList());
+            var pending = await TrySubmitForApprovalAsync(profileType, oldSnapshot, incoming, actingUserId, bypassApproval);
+            if (pending is not null)
+            {
+                return MutationResult<List<FieldConfig>>.PendingApproval(pending);
+            }
 
             foreach (var field in incoming)
             {
@@ -73,7 +110,16 @@ namespace backend.Data
             }
 
             await _db.SaveChangesAsync();
-            return await GetByProfileTypeAsync(profileType);
+            var result = await GetByProfileTypeAsync(profileType);
+
+            // First central audit entry this mutation has ever produced — FieldConfig previously had
+            // no audit trail at all (local or central). Best-effort, matching PushAuditLogAsync's own
+            // contract; a transient AuthService outage here must not fail an already-saved change.
+            await _authServiceClient.PushAuditLogAsync(
+                "fieldconfig.updated", "FieldConfig", profileType.ToString(),
+                $"Updated {profileType} field settings ({result.Count} fields).", actingUserId, actorName, profileType.ToString());
+
+            return MutationResult<List<FieldConfig>>.Ok(result);
         }
 
         public async Task EnsureSeededAsync()

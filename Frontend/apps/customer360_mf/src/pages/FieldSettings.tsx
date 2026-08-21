@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Settings, Eye, EyeOff, Save, RefreshCw, GripVertical, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { api } from '../services/api';
+import { isApprovalPending } from '../types/api';
 import type { FieldConfig, FieldConfigProfileType, MaskingRule } from '../types/api';
 
 const MASKING_RULE_LABELS: Record<MaskingRule, string> = {
@@ -24,6 +25,7 @@ export default function FieldSettings() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
 
   const loadFields = async (type: FieldConfigProfileType) => {
     setLoading(true);
@@ -52,9 +54,20 @@ export default function FieldSettings() {
     setSaving(true);
     setError(null);
     setSavedMessage(null);
+    setPendingMessage(null);
     try {
       const res = await api.updateFieldConfig(profileType, fields);
-      setFields((res.data || []).slice().sort((a, b) => a.displayOrder - b.displayOrder));
+
+      if (isApprovalPending(res.data)) {
+        // Nothing was actually changed — the "fieldsettings" module has a checker assigned, so this
+        // submission is queued instead of applied. Leave `fields` as the admin's edited (unsaved)
+        // values rather than re-fetching, since nothing on the server changed yet.
+        setPendingMessage(res.data.message || 'These changes require approval before they take effect.');
+        setTimeout(() => setPendingMessage(null), 5000);
+        return;
+      }
+
+      setFields((res.data as FieldConfig[]).slice().sort((a, b) => a.displayOrder - b.displayOrder));
       setSavedMessage('Field settings saved.');
       setTimeout(() => setSavedMessage(null), 3000);
     } catch (err) {
@@ -136,6 +149,11 @@ export default function FieldSettings() {
         {savedMessage && (
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#16a34a', fontSize: '13px', fontWeight: 600 }}>
             <CheckCircle2 size={15} /> {savedMessage}
+          </span>
+        )}
+        {pendingMessage && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#b45309', fontSize: '13px', fontWeight: 600 }}>
+            <AlertCircle size={15} /> {pendingMessage}
           </span>
         )}
         {error && (

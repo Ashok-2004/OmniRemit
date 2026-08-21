@@ -1,13 +1,16 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using LeadManagement.Api.Data;
+using LeadManagement.Api.Infrastructure;
 using LeadManagement.Api.Models.Dtos;
 using LeadManagement.Api.Models.Entities;
+using LeadManagement.Api.Options;
 
 namespace LeadManagement.Api.Services
 {
     public interface ILeadService
     {
-        Task<LeadRecordDto> CreateLeadAsync(CreateLeadDto dto);
+        Task<MutationResult<LeadRecordDto>> CreateLeadAsync(CreateLeadDto dto, Guid? actingUserId, bool bypassApproval = false);
         Task<PagedResultDto<LeadRecordDto>> GetLeadsAsync(
             int page,
             int pageSize,
@@ -26,8 +29,9 @@ namespace LeadManagement.Api.Services
             string? status = null,
             string? leadSource = null);
         Task<LeadRecordDto?> GetLeadByIdAsync(string id);
-        Task<LeadRecordDto> UpdateLeadAsync(string id, UpdateLeadDto dto);
-        Task<bool> DeleteLeadAsync(string id, DeleteLeadDto dto);
+        Task<MutationResult<LeadRecordDto>> UpdateLeadAsync(string id, UpdateLeadDto dto, Guid? actingUserId, bool bypassApproval = false);
+        /// <summary>Null once actually deleted; an ApprovalPendingDto if the delete was gated instead. Throws KeyNotFoundException if the lead doesn't exist.</summary>
+        Task<ApprovalPendingDto?> DeleteLeadAsync(string id, DeleteLeadDto dto, Guid? actingUserId, bool bypassApproval = false);
         Task LogLeadViewAsync(string id);
     }
 
@@ -35,14 +39,41 @@ namespace LeadManagement.Api.Services
     {
         private readonly ApplicationDbContext _db;
         private readonly IAuditLogService _auditLogService;
+        private readonly AuthServiceClient _authServiceClient;
+        private readonly SelfOptions _selfOptions;
 
-        public LeadService(ApplicationDbContext db, IAuditLogService auditLogService)
+        public LeadService(ApplicationDbContext db, IAuditLogService auditLogService, AuthServiceClient authServiceClient, IOptions<SelfOptions> selfOptions)
         {
             _db = db;
             _auditLogService = auditLogService;
+            _authServiceClient = authServiceClient;
+            _selfOptions = selfOptions.Value;
         }
 
-        public async Task<LeadRecordDto> CreateLeadAsync(CreateLeadDto dto)
+        /// <summary>Checks gating and, if gated, submits — the same "after validation, before mutation"
+        /// surgical insert AuthService's own UserAppService/RoleAppService use. Returns null when the
+        /// caller should proceed to mutate directly.</summary>
+        private async Task<ApprovalPendingDto?> TrySubmitForApprovalAsync(
+            string action, string? entityId, string entityLabel, string? oldDataJson, object requestBody, Guid? actingUserId, bool bypassApproval)
+        {
+            if (bypassApproval || actingUserId is null)
+            {
+                return null;
+            }
+
+            if (!await _authServiceClient.IsGatedAsync(_selfOptions.LeadModuleKey))
+            {
+                return null;
+            }
+
+            var callbackUrl = $"{_selfOptions.PublicBaseUrl.TrimEnd('/')}/internal/approvals/apply";
+            return await _authServiceClient.SubmitApprovalAsync(
+                _selfOptions.LeadModuleKey, action, "Lead", entityId, entityLabel,
+                oldDataJson, System.Text.Json.JsonSerializer.Serialize(requestBody), actingUserId.Value,
+                callbackUrl, Guid.NewGuid().ToString());
+        }
+
+        public async Task<MutationResult<LeadRecordDto>> CreateLeadAsync(CreateLeadDto dto, Guid? actingUserId, bool bypassApproval = false)
         {
             // Resolve foreign keys
             var product = await _db.Products.FirstOrDefaultAsync(p => p.Name.ToLower() == dto.Product.Trim().ToLower())
@@ -61,6 +92,12 @@ namespace LeadManagement.Api.Services
             if (dto.HasPreferredSalesExecutive && !string.IsNullOrWhiteSpace(dto.PreferredSalesExecutive))
             {
                 salesExec = await _db.SalesExecutives.FirstOrDefaultAsync(se => se.Name.ToLower() == dto.PreferredSalesExecutive.Trim().ToLower());
+            }
+
+            var pending = await TrySubmitForApprovalAsync("Create", null, dto.CustomerName.Trim(), null, dto, actingUserId, bypassApproval);
+            if (pending is not null)
+            {
+                return MutationResult<LeadRecordDto>.PendingApproval(pending);
             }
 
             decimal.TryParse(dto.AppliedAmount.Replace(",", "").Trim(), out var parsedAmount);
@@ -148,7 +185,7 @@ namespace LeadManagement.Api.Services
                 newValues: System.Text.Json.JsonSerializer.Serialize(result)
             );
 
-            return result;
+            return MutationResult<LeadRecordDto>.Ok(result);
         }
 
         public async Task<PagedResultDto<LeadRecordDto>> GetLeadsAsync(
@@ -396,7 +433,7 @@ namespace LeadManagement.Api.Services
             };
         }
 
-        public async Task<LeadRecordDto> UpdateLeadAsync(string id, UpdateLeadDto dto)
+        public async Task<MutationResult<LeadRecordDto>> UpdateLeadAsync(string id, UpdateLeadDto dto, Guid? actingUserId, bool bypassApproval = false)
         {
             if (!Guid.TryParse(id, out var guid))
                 throw new KeyNotFoundException($"Lead with ID '{id}' was not found.");
@@ -433,6 +470,13 @@ namespace LeadManagement.Api.Services
             if (dto.HasPreferredSalesExecutive && !string.IsNullOrWhiteSpace(dto.PreferredSalesExecutive))
             {
                 salesExec = await _db.SalesExecutives.FirstOrDefaultAsync(se => se.Name.ToLower() == dto.PreferredSalesExecutive.Trim().ToLower());
+            }
+
+            var oldSnapshot = System.Text.Json.JsonSerializer.Serialize(previousDto);
+            var pending = await TrySubmitForApprovalAsync("Update", id, lead.CustomerName, oldSnapshot, dto, actingUserId, bypassApproval);
+            if (pending is not null)
+            {
+                return MutationResult<LeadRecordDto>.PendingApproval(pending);
             }
 
             decimal.TryParse(dto.AppliedAmount.Replace(",", "").Trim(), out var parsedAmount);
@@ -533,12 +577,13 @@ namespace LeadManagement.Api.Services
                 newValues: newJson
             );
 
-            return newDto!;
+            return MutationResult<LeadRecordDto>.Ok(newDto!);
         }
 
-        public async Task<bool> DeleteLeadAsync(string id, DeleteLeadDto dto)
+        public async Task<ApprovalPendingDto?> DeleteLeadAsync(string id, DeleteLeadDto dto, Guid? actingUserId, bool bypassApproval = false)
         {
-            if (!Guid.TryParse(id, out var guid)) return false;
+            if (!Guid.TryParse(id, out var guid))
+                throw new KeyNotFoundException($"Lead with ID '{id}' was not found.");
 
             var lead = await _db.Leads
                 .Include(l => l.HomeFinancingDetail)
@@ -546,9 +591,16 @@ namespace LeadManagement.Api.Services
                 .Include(l => l.ConsentDetail)
                 .FirstOrDefaultAsync(l => l.Id == guid);
 
-            if (lead == null) return false;
+            if (lead == null)
+                throw new KeyNotFoundException($"Lead with ID '{id}' was not found.");
 
             var leadDto = await GetLeadByIdAsync(id);
+
+            var pending = await TrySubmitForApprovalAsync("Delete", id, lead.CustomerName, null, dto, actingUserId, bypassApproval);
+            if (pending is not null)
+            {
+                return pending;
+            }
 
             await _auditLogService.LogAsync(
                 actionType: "Delete",
@@ -562,7 +614,7 @@ namespace LeadManagement.Api.Services
             _db.Leads.Remove(lead);
             await _db.SaveChangesAsync();
 
-            return true;
+            return null;
         }
 
         public async Task LogLeadViewAsync(string id)

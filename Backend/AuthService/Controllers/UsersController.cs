@@ -29,9 +29,9 @@ public class UsersController(UserAppService users) : ControllerBase
 
     [HttpPost]
     [RequirePermission(Feature, "Create")]
-    public async Task<IActionResult> Create([FromBody] CreateUserRequest request, CancellationToken ct)
+    public async Task<IActionResult> Create([FromBody] CreateUserWithOverridesRequest request, CancellationToken ct)
     {
-        var result = await users.CreateAsync(request, CurrentUserId(), ct);
+        var result = await users.CreateAsync(request.User, request.Overrides, CurrentUserId(), ct);
         if (result.Applied is not null)
         {
             return CreatedAtAction(nameof(Get), new { id = result.Applied.User.Id }, result.Applied);
@@ -42,9 +42,9 @@ public class UsersController(UserAppService users) : ControllerBase
 
     [HttpPut("{id:guid}")]
     [RequirePermission(Feature, "Edit")]
-    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateUserRequest request, CancellationToken ct)
+    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateUserWithOverridesRequest request, CancellationToken ct)
     {
-        var result = await users.UpdateAsync(id, request, CurrentUserId(), ct);
+        var result = await users.UpdateAsync(id, request.User, request.Overrides, CurrentUserId(), ct);
         return result.Applied is not null ? Ok(result.Applied) : Accepted(result.Pending);
     }
 
@@ -71,9 +71,12 @@ public class UsersController(UserAppService users) : ControllerBase
 
     [HttpPut("{id:guid}/permission-overrides")]
     [RequirePermission(Feature, "Edit")]
-    public async Task<ActionResult<IReadOnlyList<PermissionOverrideDto>>> ReplaceOverrides(
+    public async Task<IActionResult> ReplaceOverrides(
         Guid id, [FromBody] UpdateUserPermissionOverridesRequest request, CancellationToken ct)
-        => Ok(await users.ReplacePermissionOverridesAsync(id, request.Overrides, CurrentUserId(), ct));
+    {
+        var result = await users.ReplacePermissionOverridesAsync(id, request.Overrides, CurrentUserId(), ct);
+        return result.Applied is not null ? Ok(result.Applied) : Accepted(result.Pending);
+    }
 
     private Guid? CurrentUserId()
     {

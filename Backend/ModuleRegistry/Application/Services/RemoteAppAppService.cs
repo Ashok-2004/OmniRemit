@@ -1,11 +1,14 @@
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using ModuleRegistry.Application.DTOs;
 using ModuleRegistry.Application.Exceptions;
 using ModuleRegistry.Domain;
 using ModuleRegistry.Domain.Entities;
 using ModuleRegistry.Domain.Enums;
 using ModuleRegistry.Infrastructure;
+using ModuleRegistry.Options;
 
 namespace ModuleRegistry.Application.Services;
 
@@ -13,10 +16,40 @@ public partial class RemoteAppAppService(
     ModuleRegistryDbContext db,
     AuthServiceClient authServiceClient,
     RemoteManifestClient manifestClient,
-    ILogger<RemoteAppAppService> logger)
+    ILogger<RemoteAppAppService> logger,
+    IOptions<SelfOptions> selfOptions)
 {
     [GeneratedRegex("^[a-z0-9][a-z0-9-]{1,49}$")]
     private static partial Regex KeyPattern();
+
+    // Must match AuthService.Infrastructure.Seed.AuthDbSeeder.HostFeatureKeys.SettingsApplications —
+    // the two services don't share a code package, kept in sync by hand exactly like RemoteAppsController's
+    // own copy of this same string.
+    private const string ApprovalModule = "host.settings.applications";
+
+    /// <summary>Checks gating and, if gated, submits — the same "after validation, before mutation"
+    /// surgical insert Phase 1 used in UserAppService/RoleAppService. Returns null when the caller
+    /// should proceed to mutate directly (bypassing, no actor, or the module isn't gated).</summary>
+    private async Task<ApprovalPendingDto?> TrySubmitForApprovalAsync(
+        string action, string? entityId, string entityLabel, string? oldDataJson, object requestBody,
+        Guid? actingUserId, bool bypassApproval, CancellationToken ct)
+    {
+        if (bypassApproval || actingUserId is null)
+        {
+            return null;
+        }
+
+        if (!await authServiceClient.IsGatedAsync(ApprovalModule, ct))
+        {
+            return null;
+        }
+
+        var callbackUrl = $"{selfOptions.Value.PublicBaseUrl.TrimEnd('/')}/internal/approvals/apply";
+        return await authServiceClient.SubmitApprovalAsync(
+            ApprovalModule, action, "RemoteApp", entityId, entityLabel,
+            oldDataJson, JsonSerializer.Serialize(requestBody), actingUserId.Value,
+            callbackUrl, Guid.NewGuid().ToString(), ct);
+    }
 
     public async Task<PagedResult<RemoteAppDto>> ListAsync(int page, int pageSize, string? search, CancellationToken ct = default)
     {
@@ -44,7 +77,8 @@ public partial class RemoteAppAppService(
         return ToDto(app);
     }
 
-    public async Task<RemoteAppDto> CreateAsync(CreateRemoteAppRequest request, Guid? actingUserId, string? actorName, CancellationToken ct = default)
+    public async Task<MutationResult<RemoteAppDto>> CreateAsync(
+        CreateRemoteAppRequest request, Guid? actingUserId, string? actorName, CancellationToken ct = default, bool bypassApproval = false)
     {
         var key = request.Key.Trim().ToLowerInvariant();
         if (!KeyPattern().IsMatch(key))
@@ -93,9 +127,17 @@ public partial class RemoteAppAppService(
             }
         }
 
+        var displayName = request.DisplayName.Trim();
+
+        var pending = await TrySubmitForApprovalAsync(
+            "Create", null, displayName, oldDataJson: null, request, actingUserId, bypassApproval, ct);
+        if (pending is not null)
+        {
+            return MutationResult<RemoteAppDto>.PendingApproval(pending);
+        }
+
         var now = DateTimeOffset.UtcNow;
         var featureKey = ToFeatureKey(key);
-        var displayName = request.DisplayName.Trim();
         var sourceUrl = request.PermissionsSourceUrl?.Trim();
 
         var app = new RemoteApp
@@ -132,10 +174,11 @@ public partial class RemoteAppAppService(
         await authServiceClient.UpsertAsync(featureKey, displayName, request.SidebarOrder, ToCapabilityTuples(app), ct);
         await authServiceClient.PushAuditLogAsync("remoteapp.created", "RemoteApp", app.Id.ToString(), $"Registered remote app '{displayName}' ({key}).", actingUserId, actorName, displayName, ct);
 
-        return ToDto(app);
+        return MutationResult<RemoteAppDto>.Ok(ToDto(app));
     }
 
-    public async Task<RemoteAppDto> UpdateAsync(Guid id, UpdateRemoteAppRequest request, Guid? actingUserId, string? actorName, CancellationToken ct = default)
+    public async Task<MutationResult<RemoteAppDto>> UpdateAsync(
+        Guid id, UpdateRemoteAppRequest request, Guid? actingUserId, string? actorName, CancellationToken ct = default, bool bypassApproval = false)
     {
         var app = await db.RemoteApps.Include(a => a.Capabilities).FirstOrDefaultAsync(a => a.Id == id, ct) ?? throw NotFound(id);
 
@@ -147,6 +190,14 @@ public partial class RemoteAppAppService(
         if (!string.IsNullOrWhiteSpace(request.PermissionsSourceUrl) && !Uri.TryCreate(request.PermissionsSourceUrl, UriKind.Absolute, out _))
         {
             throw new ValidationAppException("PermissionsSourceUrl must be a valid absolute URL.");
+        }
+
+        var oldSnapshot = JsonSerializer.Serialize(new { app.DisplayName, app.IconKey, app.ManifestUrl, app.PermissionsSourceUrl, app.SidebarOrder });
+        var pending = await TrySubmitForApprovalAsync(
+            "Update", id.ToString(), app.DisplayName, oldSnapshot, request, actingUserId, bypassApproval, ct);
+        if (pending is not null)
+        {
+            return MutationResult<RemoteAppDto>.PendingApproval(pending);
         }
 
         var newSourceUrl = request.PermissionsSourceUrl?.Trim();
@@ -182,16 +233,26 @@ public partial class RemoteAppAppService(
 
         await authServiceClient.PushAuditLogAsync("remoteapp.updated", "RemoteApp", app.Id.ToString(), $"Updated remote app '{app.DisplayName}' ({app.Key}).", actingUserId, actorName, app.DisplayName, ct);
 
-        return ToDto(app);
+        return MutationResult<RemoteAppDto>.Ok(ToDto(app));
     }
 
-    public async Task<RemoteAppDto> UpdateStatusAsync(Guid id, string status, string? maintenanceMessage, Guid? actingUserId, string? actorName, CancellationToken ct = default)
+    public async Task<MutationResult<RemoteAppDto>> UpdateStatusAsync(
+        Guid id, string status, string? maintenanceMessage, Guid? actingUserId, string? actorName, CancellationToken ct = default, bool bypassApproval = false)
     {
         var app = await db.RemoteApps.Include(a => a.Capabilities).FirstOrDefaultAsync(a => a.Id == id, ct) ?? throw NotFound(id);
 
         if (!Enum.TryParse<RemoteAppStatus>(status, out var parsedStatus))
         {
             throw new ValidationAppException($"Unknown status '{status}'. Expected Active, Maintenance, or Disabled.");
+        }
+
+        var oldSnapshot = JsonSerializer.Serialize(new { Status = app.Status.ToString(), app.MaintenanceMessage });
+        var pending = await TrySubmitForApprovalAsync(
+            parsedStatus == RemoteAppStatus.Disabled ? "Disable" : "Enable", id.ToString(), app.DisplayName, oldSnapshot,
+            new { Status = status, MaintenanceMessage = maintenanceMessage }, actingUserId, bypassApproval, ct);
+        if (pending is not null)
+        {
+            return MutationResult<RemoteAppDto>.PendingApproval(pending);
         }
 
         var wasDisabled = app.Status == RemoteAppStatus.Disabled;
@@ -221,14 +282,22 @@ public partial class RemoteAppAppService(
             "remoteapp.status_changed", "RemoteApp", app.Id.ToString(),
             $"Set '{app.DisplayName}' ({app.Key}) status to {parsedStatus}.", actingUserId, actorName, app.DisplayName, ct);
 
-        return ToDto(app);
+        return MutationResult<RemoteAppDto>.Ok(ToDto(app));
     }
 
-    public async Task DeleteAsync(Guid id, Guid? actingUserId, string? actorName, CancellationToken ct = default)
+    /// <summary>Returns null once actually deleted; an ApprovalPendingDto if the delete was gated instead.</summary>
+    public async Task<ApprovalPendingDto?> DeleteAsync(Guid id, Guid? actingUserId, string? actorName, CancellationToken ct = default, bool bypassApproval = false)
     {
         var app = await db.RemoteApps.FirstOrDefaultAsync(a => a.Id == id, ct) ?? throw NotFound(id);
         var displayName = app.DisplayName;
         var key = app.Key;
+
+        var pending = await TrySubmitForApprovalAsync(
+            "Delete", id.ToString(), displayName, oldDataJson: null, new { }, actingUserId, bypassApproval, ct);
+        if (pending is not null)
+        {
+            return pending;
+        }
 
         db.RemoteApps.Remove(app);
         await db.SaveChangesAsync(ct);
@@ -254,6 +323,7 @@ public partial class RemoteAppAppService(
         }
 
         await authServiceClient.PushAuditLogAsync("remoteapp.deleted", "RemoteApp", id.ToString(), $"Removed remote app '{displayName}' ({key}).", actingUserId, actorName, displayName, ct);
+        return null;
     }
 
     /// <summary>

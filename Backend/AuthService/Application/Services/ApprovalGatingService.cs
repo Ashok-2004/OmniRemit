@@ -28,9 +28,18 @@ public class ApprovalGatingService(AuthDbContext db, AuditLogAppService auditLog
     public Task<bool> IsGatedAsync(string module, CancellationToken ct = default) =>
         db.CheckerAssignments.AnyAsync(c => c.Module == module, ct);
 
+    /// <summary>
+    /// <paramref name="sourceService"/>/<paramref name="callbackUrl"/>/<paramref name="correlationId"/>
+    /// default to AuthService's own in-process values — UserAppService/RoleAppService's call sites are
+    /// unaffected. A remote service submitting through InternalApprovalsController passes its own name,
+    /// a callback URL to its own internal/approvals/apply endpoint, and a correlation id; ApprovalAppService.
+    /// ReplayAsync's default case uses exactly these three fields to replay the mutation over HTTP instead
+    /// of an in-process switch case.
+    /// </summary>
     public async Task<ApprovalPendingDto> SubmitAsync(
         string module, string action, string? entityType, string? entityId, string? entityLabel,
-        string? oldDataJson, string newDataJson, Guid makerId, CancellationToken ct = default)
+        string? oldDataJson, string newDataJson, Guid makerId, CancellationToken ct = default,
+        string sourceService = ServiceName, string? callbackUrl = null, string? correlationId = null)
     {
         var makerName = await db.Users.AsNoTracking().Where(u => u.Id == makerId).Select(u => u.Name).FirstOrDefaultAsync(ct);
         var (checkerId, checkerName) = await SelectCheckerAsync(module, makerId, ct);
@@ -51,7 +60,9 @@ public class ApprovalGatingService(AuthDbContext db, AuditLogAppService auditLog
             CheckerId = checkerId,
             CheckerName = checkerName,
             RequestedAt = DateTimeOffset.UtcNow,
-            SourceService = ServiceName,
+            SourceService = sourceService,
+            CallbackUrl = callbackUrl,
+            CorrelationId = correlationId,
         };
         db.ApprovalRequests.Add(request);
         await db.SaveChangesAsync(ct);
@@ -88,14 +99,35 @@ public class ApprovalGatingService(AuthDbContext db, AuditLogAppService auditLog
                 $"No eligible checker is assigned to '{module}' other than yourself. Ask an administrator to assign another checker.");
         }
 
+        var result = await TrySelectCheckerAsync(module, eligible, ct);
+        return result ?? throw new ConflictAppException($"All checkers assigned to '{module}' are currently inactive.");
+    }
+
+    /// <summary>
+    /// The non-throwing core of the least-workload algorithm, reused by
+    /// CheckerAssignmentAppService.DeleteAsync to find a replacement for requests orphaned by a checker
+    /// removal — same "fewest current Pending requests, ties by Id" selection, just over a
+    /// caller-supplied eligible set (already maker-excluded) instead of always deriving it from
+    /// CheckerAssignments directly. Returns null when nobody in <paramref name="eligibleCheckerIds"/> is
+    /// currently Active; the caller decides what that means for them (SelectCheckerAsync throws,
+    /// CheckerAssignmentAppService.DeleteAsync blocks the removal).
+    /// </summary>
+    internal async Task<(Guid CheckerId, string? CheckerName)?> TrySelectCheckerAsync(
+        string module, IReadOnlyList<Guid> eligibleCheckerIds, CancellationToken ct)
+    {
+        if (eligibleCheckerIds.Count == 0)
+        {
+            return null;
+        }
+
         var active = await db.Users.AsNoTracking()
-            .Where(u => eligible.Contains(u.Id) && u.Status == UserStatus.Active)
+            .Where(u => eligibleCheckerIds.Contains(u.Id) && u.Status == UserStatus.Active)
             .Select(u => new { u.Id, u.Name })
             .ToListAsync(ct);
 
         if (active.Count == 0)
         {
-            throw new ConflictAppException($"All checkers assigned to '{module}' are currently inactive.");
+            return null;
         }
 
         var activeIds = active.Select(a => a.Id).ToList();

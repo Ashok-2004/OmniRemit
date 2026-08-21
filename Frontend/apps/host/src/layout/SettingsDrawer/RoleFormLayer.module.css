@@ -924,3 +924,69 @@
   .bottomBar { flex-direction: column-reverse; gap: 8px; }
   .bottomBar > * { width: 100%; }
 }
+
+/* Submitted-for-approval state — mirrors UserFormLayer's own successArea/successCard exactly, so a
+   gated Role create reads as the same system as a gated User create. */
+.successArea {
+  padding: 32px 24px;
+  display: flex;
+  justify-content: center;
+}
+
+.successCard {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 28px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  max-width: 440px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.04);
+}
+
+.successIconWrap {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: #ecfdf5;
+  color: #10b981;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.successTitle {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.successText {
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.doneBtn {
+  margin-top: 6px;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #ffffff;
+  border: none;
+  border-radius: 9px;
+  padding: 10px 28px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.28);
+  transition: box-shadow 140ms ease, transform 120ms ease;
+}
+
+.doneBtn:hover {
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.38);
+  transform: translateY(-1px);
+}

@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useAuthStore } from '../../features/auth/store/authStore'
 import { usersApi, type UserListItemDto } from '../../features/settings-users/api/usersApi'
-import { checkerAssignmentsApi, APPROVAL_MODULES } from '../../features/approvals/api/checkerAssignmentsApi'
+import { checkerAssignmentsApi, type AssignableModuleDto } from '../../features/approvals/api/checkerAssignmentsApi'
 import { useSettingsDrawerStore } from '../../shared/stores/settingsDrawerStore'
 import { Icon } from '../../shared/components/Icon/Icon'
 import { ApiError } from '../../shared/api/httpClient'
@@ -23,7 +23,8 @@ export function CheckerAssignmentFormLayer({ module: initialModule }: CheckerAss
   const popLayer = useSettingsDrawerStore((s) => s.popLayer)
   const notifyMutation = useSettingsDrawerStore((s) => s.notifyMutation)
 
-  const [module, setModule] = useState(initialModule ?? APPROVAL_MODULES[0].key)
+  const [module, setModule] = useState(initialModule ?? '')
+  const [modules, setModules] = useState<AssignableModuleDto[]>([])
   const [checkerUserId, setCheckerUserId] = useState('')
   const [users, setUsers] = useState<UserListItemDto[]>([])
   const [loadingUsers, setLoadingUsers] = useState(true)
@@ -51,6 +52,26 @@ export function CheckerAssignmentFormLayer({ module: initialModule }: CheckerAss
     }
   }, [accessToken])
 
+  useEffect(() => {
+    if (!accessToken) return
+    let cancelled = false
+
+    checkerAssignmentsApi
+      .listModules(accessToken)
+      .then((res) => {
+        if (cancelled) return
+        setModules(res)
+        setModule((current) => current || res[0]?.key || '')
+      })
+      .catch((err) => {
+        if (!cancelled) console.error('Failed to load assignable modules:', err)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [accessToken])
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     if (!accessToken || !checkerUserId) return
@@ -67,8 +88,6 @@ export function CheckerAssignmentFormLayer({ module: initialModule }: CheckerAss
       setSaving(false)
     }
   }
-
-  const selectedModuleMeta = APPROVAL_MODULES.find((m) => m.key === module)
 
   return (
     <div className={styles.layer}>
@@ -97,18 +116,12 @@ export function CheckerAssignmentFormLayer({ module: initialModule }: CheckerAss
                 Module <span className={styles.req}>*</span>
               </label>
               <select className={styles.select} value={module} onChange={(e) => setModule(e.target.value)}>
-                {APPROVAL_MODULES.map((m) => (
+                {modules.map((m) => (
                   <option key={m.key} value={m.key}>
-                    {m.label} {m.enforced ? '' : '(not yet enforced)'}
+                    {m.label}
                   </option>
                 ))}
               </select>
-              {selectedModuleMeta && !selectedModuleMeta.enforced && (
-                <span className={styles.hint}>
-                  This module's backend doesn't gate on assignment yet — the assignment is saved, but
-                  has no effect on any mutation until that support ships.
-                </span>
-              )}
             </div>
 
             <div className={styles.inputGroup}>

@@ -24,6 +24,11 @@ builder.Services.Configure<CorsOptions>(builder.Configuration.GetSection(CorsOpt
 builder.Services.Configure<JwtValidationOptions>(builder.Configuration.GetSection(JwtValidationOptions.SectionName));
 builder.Services.Configure<AuthIntegrationOptions>(builder.Configuration.GetSection(AuthIntegrationOptions.SectionName));
 builder.Services.Configure<RemoteHealthOptions>(builder.Configuration.GetSection(RemoteHealthOptions.SectionName));
+// Phase 2 Maker-Checker: Internal guards the inbound internal/approvals/apply endpoint AuthService
+// calls to replay an approved mutation; Self is this service's own externally-reachable base URL,
+// handed to AuthService as the CallbackUrl on every gated mutation it submits.
+builder.Services.Configure<InternalApiOptions>(builder.Configuration.GetSection(InternalApiOptions.SectionName));
+builder.Services.Configure<SelfOptions>(builder.Configuration.GetSection(SelfOptions.SectionName));
 
 var connectionString = builder.Configuration.GetConnectionString("RegistryDb");
 var isDbConfigured = !string.IsNullOrWhiteSpace(connectionString);

@@ -46,7 +46,20 @@ namespace LeadManagement.Api.Controllers
 
             try
             {
-                var result = await _leadService.CreateLeadAsync(dto);
+                var outcome = await _leadService.CreateLeadAsync(dto, CurrentUserId());
+
+                if (outcome.Pending is not null)
+                {
+                    // Gated: nothing was created. 202 Accepted — the request is understood and queued, not applied.
+                    return StatusCode(202, new ApiResponseDto<ApprovalPendingDto>
+                    {
+                        Success = true,
+                        Message = outcome.Pending.Message,
+                        Data = outcome.Pending
+                    });
+                }
+
+                var result = outcome.Applied!;
 
                 // Push central platform audit log asynchronously
                 await _authServiceClient.PushAuditLogAsync(
@@ -60,6 +73,12 @@ namespace LeadManagement.Api.Controllers
                     Message = "Lead submitted successfully.",
                     Data = result
                 });
+            }
+            catch (ApprovalServiceUnavailableException ex)
+            {
+                // A gating check that couldn't be verified must block the mutation, not silently apply
+                // it — never collapse this into the generic 500 branch below.
+                return StatusCode(503, new ApiResponseDto<LeadRecordDto> { Success = false, Message = ex.Message });
             }
             catch (Exception ex)
             {
@@ -143,7 +162,19 @@ namespace LeadManagement.Api.Controllers
 
             try
             {
-                var updated = await _leadService.UpdateLeadAsync(id, dto);
+                var outcome = await _leadService.UpdateLeadAsync(id, dto, CurrentUserId());
+
+                if (outcome.Pending is not null)
+                {
+                    return StatusCode(202, new ApiResponseDto<ApprovalPendingDto>
+                    {
+                        Success = true,
+                        Message = outcome.Pending.Message,
+                        Data = outcome.Pending
+                    });
+                }
+
+                var updated = outcome.Applied!;
 
                 // Push central platform audit log asynchronously
                 await _authServiceClient.PushAuditLogAsync(
@@ -165,6 +196,10 @@ namespace LeadManagement.Api.Controllers
                     Success = false,
                     Message = ex.Message
                 });
+            }
+            catch (ApprovalServiceUnavailableException ex)
+            {
+                return StatusCode(503, new ApiResponseDto<LeadRecordDto> { Success = false, Message = ex.Message });
             }
             catch (Exception ex)
             {
@@ -195,13 +230,14 @@ namespace LeadManagement.Api.Controllers
                 // lead itself is gone from the DB by the time PushAuditLogAsync runs below.
                 var leadName = (await _leadService.GetLeadByIdAsync(id))?.Name;
 
-                var success = await _leadService.DeleteLeadAsync(id, dto);
-                if (!success)
+                var pending = await _leadService.DeleteLeadAsync(id, dto, CurrentUserId());
+                if (pending is not null)
                 {
-                    return NotFound(new ApiResponseDto<bool>
+                    return StatusCode(202, new ApiResponseDto<ApprovalPendingDto>
                     {
-                        Success = false,
-                        Message = $"Lead with ID '{id}' was not found."
+                        Success = true,
+                        Message = pending.Message,
+                        Data = pending
                     });
                 }
 
@@ -217,6 +253,18 @@ namespace LeadManagement.Api.Controllers
                     Data = true,
                     Message = "This lead has been deleted."
                 });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new ApiResponseDto<bool>
+                {
+                    Success = false,
+                    Message = ex.Message
+                });
+            }
+            catch (ApprovalServiceUnavailableException ex)
+            {
+                return StatusCode(503, new ApiResponseDto<bool> { Success = false, Message = ex.Message });
             }
             catch (Exception ex)
             {

@@ -3,29 +3,19 @@ using System.ComponentModel.DataAnnotations;
 namespace AuthService.Application.DTOs;
 
 /// <summary>
-/// Plain string constants, not an enum — Phase 2 adds new module keys (Applications, Customer360
-/// FieldConfig, Lead Management Config) with zero schema/migration impact. Only Users/Roles are
-/// actually enforced in Phase 1; the rest exist so the Checker Assignment admin page can list every
-/// module from day one (with a "not yet enforced" indicator on the ones not wired yet).
+/// Plain string constants, not an enum. Users/Roles are the two modules AuthService replays in-process
+/// (see ApprovalAppService.ReplayAsync's explicit switch cases) — deliberately the SAME key strings as
+/// AuthDbSeeder.HostFeatureKeys.SettingsUsers/SettingsRoles (the PermissionFeature keys that already
+/// gate access to the Setup — User / Setup — Role screens), not a separate bespoke pair. Reusing the
+/// key means CheckerAssignmentAppService.GetAssignableModulesAsync needs zero special-casing for
+/// Users/Roles at all — they simply appear in the live PermissionFeature catalog like every other
+/// module, exactly as a remote service's modules already do. See migration
+/// UnifyUserRoleApprovalModuleKeys for the one-time backfill of pre-existing rows that predate this.
 /// </summary>
 public static class ApprovalModuleKeys
 {
-    public const string Users = "Users";
-    public const string Roles = "Roles";
-
-    // Phase 2 — reserved, not yet enforced by any backend gating check.
-    public const string Applications = "Applications";
-    public const string Customer360FieldConfig = "Customer360.FieldConfig";
-    public const string LeadManagementConfig = "LeadManagement.Config";
-
-    /// <summary>Every module key the Checker Assignment UI should list, in display order.</summary>
-    public static readonly string[] All =
-    [
-        Users, Roles, Applications, Customer360FieldConfig, LeadManagementConfig,
-    ];
-
-    /// <summary>Modules Phase 1 actually gates. Anything else in <see cref="All"/> is UI-visible but inert.</summary>
-    public static readonly string[] EnforcedInPhase1 = [Users, Roles];
+    public const string Users = AuthService.Infrastructure.Seed.AuthDbSeeder.HostFeatureKeys.SettingsUsers;
+    public const string Roles = AuthService.Infrastructure.Seed.AuthDbSeeder.HostFeatureKeys.SettingsRoles;
 }
 
 public static class ApprovalActionKeys
@@ -88,3 +78,19 @@ public record UpsertCheckerAssignmentRequest(
     string Module,
     [Required(ErrorMessage = "A checker user is required.")]
     Guid CheckerUserId);
+
+/// <summary>One module the Checker Assignment UI may offer a checker for — either <see cref="ApprovalModuleKeys.Users"/>/
+/// <see cref="ApprovalModuleKeys.Roles"/>, or a live PermissionFeature.Key from any registered remote app.</summary>
+public record AssignableModuleDto(string Key, string Label);
+
+/// <summary>Generic payload AuthService POSTs to a remote service's own internal/approvals/apply endpoint
+/// when replaying an approved mutation that originated there. Mirrors RecordAuditLogRequest's role as the
+/// one shared shape every service agrees on, without a shared package.</summary>
+public record ApplyApprovedMutationRequest(
+    string Module, string Action, string? EntityType, string? EntityId, string NewDataJson,
+    Guid ActingUserId, string? ActingUserName, string? CorrelationId);
+
+/// <summary>Body a remote service POSTs to internal/approvals/submit to gate one of its own mutations.</summary>
+public record SubmitInternalApprovalRequest(
+    string Module, string Action, string? EntityType, string? EntityId, string? EntityLabel,
+    string? OldDataJson, string NewDataJson, Guid MakerId, string SourceService, string CallbackUrl, string? CorrelationId);

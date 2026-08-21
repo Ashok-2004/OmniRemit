@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '../../../auth/store/authStore'
+import { useSettingsDrawerStore } from '../../../../shared/stores/settingsDrawerStore'
 import { useClickOutside } from '../../../../shared/hooks/useClickOutside'
 import { useMenuKeyboardNav } from '../../../../shared/hooks/useMenuKeyboardNav'
 import { Icon } from '../../../../shared/components/Icon/Icon'
@@ -34,6 +35,11 @@ function formatRelativeTime(iso: string): string {
  */
 export function ApprovalsMenu() {
   const accessToken = useAuthStore((s) => s.accessToken)
+  // Bumped by ApprovalCenterPage on approve/reject and by SettingsCheckerAssignmentTab on
+  // assign/remove — the same cross-component "something changed elsewhere, refetch" signal
+  // DashboardPage already relies on for unrelated Settings mutations. Included in the query keys
+  // below so React Query treats a bump as an immediate refetch trigger, not just the 60s poll.
+  const mutationCount = useSettingsDrawerStore((s) => s.mutationCount)
 
   const [open, setOpen] = useState(false)
   const wrapperRef = useRef<HTMLDivElement>(null)
@@ -43,7 +49,7 @@ export function ApprovalsMenu() {
   const handleKeyDown = useMenuKeyboardNav(wrapperRef, () => setOpen(false), triggerRef)
 
   const listQuery = useQuery({
-    queryKey: ['assignedApprovals', ITEM_LIMIT],
+    queryKey: ['assignedApprovals', ITEM_LIMIT, mutationCount],
     queryFn: () => approvalsApi.list(accessToken!, { page: 1, pageSize: ITEM_LIMIT, assignedToMe: true, status: 'Pending' }),
     enabled: Boolean(accessToken) && open,
     refetchInterval: 60_000,
@@ -51,7 +57,7 @@ export function ApprovalsMenu() {
   })
 
   const summaryQuery = useQuery({
-    queryKey: ['approvalSummaryBadge'],
+    queryKey: ['approvalSummaryBadge', mutationCount],
     queryFn: () => approvalsApi.summary(accessToken!),
     enabled: Boolean(accessToken),
     refetchInterval: 60_000,

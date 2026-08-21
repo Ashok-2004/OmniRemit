@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useAuthStore } from '../../features/auth/store/authStore'
 import { remoteAppsApi } from '../../features/settings-applications/api/remoteAppsApi'
+import { isApprovalPending, type ApprovalPendingDto } from '../../features/approvals/api/approvalsApi'
 import { useSettingsDrawerStore } from '../../shared/stores/settingsDrawerStore'
 import { Icon } from '../../shared/components/Icon/Icon'
 import { SkeletonBlock } from '../../shared/components/Skeleton'
@@ -54,6 +55,7 @@ export function ApplicationFormLayer({ appId }: ApplicationFormLayerProps) {
 
   const [loading, setLoading] = useState(isEdit)
   const [saving, setSaving] = useState(false)
+  const [pendingApproval, setPendingApproval] = useState<ApprovalPendingDto | null>(null)
 
   // Generic server error (non-validation)
   const [error, setError] = useState<string | null>(null)
@@ -132,16 +134,27 @@ export function ApplicationFormLayer({ appId }: ApplicationFormLayerProps) {
     try {
       const token = await ensureFreshAccessToken()
       if (isEdit && appId) {
-        await remoteAppsApi.update(token, appId, {
+        const result = await remoteAppsApi.update(token, appId, {
           displayName,
           iconKey: iconKey || null,
           manifestUrl,
           permissionsSourceUrl: permissionsSourceUrl || null,
           sidebarOrder,
         })
+
+        if (isApprovalPending(result)) {
+          // Nothing was actually changed — the "Applications" module has a checker assigned, so this
+          // submission is queued instead of applied. There's an existing row to return to, so the
+          // drawer just closes rather than showing a dedicated interstitial (mirrors UserFormLayer's
+          // own update path).
+          toast.success(result.message)
+          useSettingsDrawerStore.getState().resetToRoot('applications')
+          return
+        }
+
         toast.success(`Application '${displayName}' updated successfully.`)
       } else {
-        await remoteAppsApi.create(token, {
+        const result = await remoteAppsApi.create(token, {
           key,
           displayName,
           iconKey: iconKey || null,
@@ -149,6 +162,14 @@ export function ApplicationFormLayer({ appId }: ApplicationFormLayerProps) {
           permissionsSourceUrl: permissionsSourceUrl || null,
           sidebarOrder,
         })
+
+        if (isApprovalPending(result)) {
+          // No app was actually registered — nothing to sync into the sidebar yet.
+          toast.success(result.message)
+          setPendingApproval(result)
+          return
+        }
+
         toast.success(`Application '${displayName}' registered successfully.`)
       }
       const { useModuleRegistryStore } = await import('../../shared/stores/moduleRegistryStore')
@@ -171,6 +192,49 @@ export function ApplicationFormLayer({ appId }: ApplicationFormLayerProps) {
   const getFieldError = (serverKey: string): string | null => {
     const serverMsgs = fieldErrors[serverKey] ?? fieldErrors[serverKey.toLowerCase()] ?? []
     return serverMsgs[0] ?? null
+  }
+
+  if (pendingApproval) {
+    return (
+      <div className={styles.layer}>
+        <div className={styles.header}>
+          <div className={styles.headerTitleWrap}>
+            <div className={styles.headerIconBox}>
+              <Icon.Grid width={20} height={20} />
+            </div>
+            <div>
+              <h2 className={styles.title}>Register Remote Application</h2>
+              <p className={styles.subtitle}>Configure Module Federation 2.0 manifest and runtime discovery</p>
+            </div>
+          </div>
+          <button type="button" className={styles.closeBtn} onClick={popLayer} aria-label="Close">
+            <Icon.X width={20} height={20} />
+          </button>
+        </div>
+        <div className={styles.successArea}>
+          <div className={styles.successCard}>
+            <div className={styles.successIconWrap}>
+              <Icon.ShieldCheck width={42} height={42} />
+            </div>
+            <h3 className={styles.successTitle}>Request Submitted for Approval</h3>
+            <p className={styles.successText}>
+              Registering <strong>{displayName}</strong> requires approval before the application exists.
+              {pendingApproval.checkerName && pendingApproval.checkerName !== 'Unassigned'
+                ? ` It's been assigned to ${pendingApproval.checkerName}.`
+                : ''}{' '}
+              Track its status any time from My Requests.
+            </p>
+            <button
+              type="button"
+              className={styles.doneBtn}
+              onClick={() => useSettingsDrawerStore.getState().resetToRoot('applications')}
+            >
+              Done &amp; Return to Applications List
+            </button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   if (loading) {

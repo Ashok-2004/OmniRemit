@@ -26,6 +26,15 @@ public class CheckerAssignmentsController(CheckerAssignmentAppService assignment
     public async Task<ActionResult<IReadOnlyList<CheckerAssignmentDto>>> List([FromQuery] string? module, CancellationToken ct)
         => Ok(await assignments.ListAsync(module, ct));
 
+    /// <summary>Every module currently assignable a checker — AuthService's own Users/Roles plus every
+    /// active PermissionFeature from the same live catalog the Role editor renders. Sources the Checker
+    /// Assignment picker AND the Approval Center's module filter, so both stay in sync with whatever
+    /// remote apps are actually registered, with zero code change here as new ones are added.</summary>
+    [HttpGet("modules")]
+    [RequirePermission(Feature, "View")]
+    public async Task<ActionResult<IReadOnlyList<AssignableModuleDto>>> Modules(CancellationToken ct)
+        => Ok(await assignments.GetAssignableModulesAsync(ct));
+
     [HttpPost]
     [RequirePermission(Feature, "Manage")]
     public async Task<ActionResult<CheckerAssignmentDto>> Upsert([FromBody] UpsertCheckerAssignmentRequest request, CancellationToken ct)

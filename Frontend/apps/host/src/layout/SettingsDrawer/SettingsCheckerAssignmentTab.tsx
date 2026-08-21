@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuthStore } from '../../features/auth/store/authStore'
-import { checkerAssignmentsApi, APPROVAL_MODULES, type CheckerAssignmentDto } from '../../features/approvals/api/checkerAssignmentsApi'
+import { checkerAssignmentsApi, type AssignableModuleDto, type CheckerAssignmentDto } from '../../features/approvals/api/checkerAssignmentsApi'
 import { useSettingsDrawerStore } from '../../shared/stores/settingsDrawerStore'
 import { Icon } from '../../shared/components/Icon/Icon'
 import { Modal } from '../../shared/components/Modal/Modal'
@@ -11,10 +11,10 @@ import styles from './SettingsCheckerAssignmentTab.module.css'
 
 /**
  * Admin-only: maps each module to one or more checkers. This is the ONE central configuration
- * surface for the whole Maker-Checker system — every module listed here, whether or not its own
- * mutation endpoints are wired to actually gate on it yet (see APPROVAL_MODULES's `enforced` flag).
- * A module with zero rows below behaves exactly as it always has — nothing is gated until an admin
- * assigns at least one checker.
+ * surface for the whole Maker-Checker system. The module list is fetched live from AuthService's own
+ * PermissionFeature catalog (the same one the Role editor renders) — a remote app's module appears
+ * here the moment it registers/syncs, with no code change on this side. A module with zero rows below
+ * behaves exactly as it always has — nothing is gated until an admin assigns at least one checker.
  */
 export function SettingsCheckerAssignmentTab() {
   const accessToken = useAuthStore((s) => s.accessToken)
@@ -26,6 +26,7 @@ export function SettingsCheckerAssignmentTab() {
 
   const canManage = isAdministrator || hasCapability('host.system.checker-assignment', 'Manage')
 
+  const [modules, setModules] = useState<AssignableModuleDto[]>([])
   const [assignments, setAssignments] = useState<CheckerAssignmentDto[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -39,9 +40,13 @@ export function SettingsCheckerAssignmentTab() {
     async function load() {
       setLoading(true)
       try {
-        const res = await checkerAssignmentsApi.list(accessToken!)
+        const [modulesRes, assignmentsRes] = await Promise.all([
+          checkerAssignmentsApi.listModules(accessToken!),
+          checkerAssignmentsApi.list(accessToken!),
+        ])
         if (cancelled) return
-        setAssignments(res)
+        setModules(modulesRes)
+        setAssignments(assignmentsRes)
         setError(null)
       } catch (err) {
         if (cancelled) return
@@ -80,7 +85,10 @@ export function SettingsCheckerAssignmentTab() {
           <h3 className={styles.title}>Checker Assignment</h3>
           <p className={styles.subtitle}>
             Map each module to one or more checkers. A gated module's sensitive actions become
-            approval requests instead of applying directly — see the Approval Center.
+            approval requests instead of applying directly — see the Approval Center. This list comes
+            straight from every registered app's own permission catalog — whether a module here
+            actually enforces gating depends on that service's own backend calling the check; a module
+            appearing does not by itself guarantee its mutations are wired to gate on it yet.
           </p>
         </div>
       </div>
@@ -92,20 +100,13 @@ export function SettingsCheckerAssignmentTab() {
       )}
 
       <div className={styles.moduleList}>
-        {APPROVAL_MODULES.map((mod) => {
+        {modules.map((mod) => {
           const modAssignments = assignments.filter((a) => a.module === mod.key)
           return (
             <div key={mod.key} className={styles.moduleCard}>
               <div className={styles.moduleHeader}>
                 <div className={styles.moduleTitleRow}>
                   <span className={styles.moduleName}>{mod.label}</span>
-                  {mod.enforced ? (
-                    <span className={styles.enforcedBadge}>Gating active when assigned</span>
-                  ) : (
-                    <span className={styles.notEnforcedBadge} title="This module's backend isn't wired to gate on assignment yet — planned for a later phase.">
-                      Not yet enforced
-                    </span>
-                  )}
                 </div>
                 {canManage && (
                   <button
@@ -166,8 +167,11 @@ export function SettingsCheckerAssignmentTab() {
         }
       >
         {pendingRemove?.checkerName} will no longer be eligible to approve requests for '{pendingRemove?.module}'.
-        If they were the only assigned checker, this module becomes ungated — its mutations apply
-        directly again, exactly as they did before any checker was assigned.
+        Any request currently pending with them gets automatically reassigned to another eligible
+        checker for this module. If they were the only assigned checker, this module becomes ungated —
+        its mutations apply directly again, exactly as they did before any checker was assigned. If a
+        pending request would be left with no eligible checker, the removal is blocked instead — you'll
+        need to assign another checker first.
       </Modal>
     </div>
   )

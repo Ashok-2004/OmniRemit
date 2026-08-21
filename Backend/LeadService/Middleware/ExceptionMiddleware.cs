@@ -1,5 +1,6 @@
 using System.Net.Mime;
 using System.Text.Json;
+using LeadManagement.Api.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
 
 namespace LeadManagement.Api.Middleware;
@@ -36,6 +37,7 @@ public class ExceptionMiddleware(RequestDelegate next, ILogger<ExceptionMiddlewa
             KeyNotFoundException => StatusCodes.Status404NotFound,
             ArgumentException or InvalidOperationException => StatusCodes.Status400BadRequest,
             UnauthorizedAccessException => StatusCodes.Status401Unauthorized,
+            ApprovalServiceUnavailableException => StatusCodes.Status503ServiceUnavailable,
             _ => StatusCodes.Status500InternalServerError
         };
 
@@ -47,9 +49,10 @@ public class ExceptionMiddleware(RequestDelegate next, ILogger<ExceptionMiddlewa
                 KeyNotFoundException => "Resource Not Found",
                 ArgumentException or InvalidOperationException => "Invalid Request",
                 UnauthorizedAccessException => "Unauthorized",
+                ApprovalServiceUnavailableException => "Approval Service Unavailable",
                 _ => "An unexpected server error occurred."
             },
-            Detail = exception is KeyNotFoundException or ArgumentException or InvalidOperationException
+            Detail = exception is KeyNotFoundException or ArgumentException or InvalidOperationException or ApprovalServiceUnavailableException
                 ? exception.Message
                 : "Please contact support if the issue persists."
         };

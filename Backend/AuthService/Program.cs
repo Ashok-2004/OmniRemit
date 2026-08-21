@@ -62,6 +62,12 @@ builder.Services.AddScoped<PermissionCatalogAppService>();
 builder.Services.AddScoped<DashboardAppService>();
 builder.Services.AddScoped<SearchAppService>();
 
+// Phase 2: replaying an approved mutation that originated in a remote service means POSTing to THAT
+// service's own callback URL — a short timeout keeps one unreachable/slow remote from hanging a
+// checker's Approve click indefinitely (the same class of bug RemoteAppAppService.ResyncPermissionsAsync
+// hit with an unbounded outbound call).
+builder.Services.AddHttpClient<RemoteApprovalCallbackClient>(client => client.Timeout = TimeSpan.FromSeconds(10));
+
 // Response compression. The audit-log list and the permission catalog are the two biggest JSON
 // payloads in the platform and both compress extremely well. Enabled for HTTPS too — the BREACH
 // attack that made that inadvisable applies to responses reflecting a secret back to the caller,

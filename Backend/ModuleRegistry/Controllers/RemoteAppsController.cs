@@ -29,28 +29,39 @@ public class RemoteAppsController(RemoteAppAppService remoteApps) : ControllerBa
 
     [HttpPost]
     [RequirePermission(Feature, "Register")]
-    public async Task<ActionResult<RemoteAppDto>> Create([FromBody] CreateRemoteAppRequest request, CancellationToken ct)
+    public async Task<IActionResult> Create([FromBody] CreateRemoteAppRequest request, CancellationToken ct)
     {
         var result = await remoteApps.CreateAsync(request, CurrentUserId(), CurrentUserName(), ct);
-        return CreatedAtAction(nameof(Get), new { id = result.Id }, result);
+        if (result.Applied is not null)
+        {
+            return CreatedAtAction(nameof(Get), new { id = result.Applied.Id }, result.Applied);
+        }
+        // Gated: nothing was registered. 202 Accepted — the request is understood and queued, not applied.
+        return Accepted(result.Pending);
     }
 
     [HttpPut("{id:guid}")]
     [RequirePermission(Feature, "Edit")]
-    public async Task<ActionResult<RemoteAppDto>> Update(Guid id, [FromBody] UpdateRemoteAppRequest request, CancellationToken ct)
-        => Ok(await remoteApps.UpdateAsync(id, request, CurrentUserId(), CurrentUserName(), ct));
+    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateRemoteAppRequest request, CancellationToken ct)
+    {
+        var result = await remoteApps.UpdateAsync(id, request, CurrentUserId(), CurrentUserName(), ct);
+        return result.Applied is not null ? Ok(result.Applied) : Accepted(result.Pending);
+    }
 
     [HttpPatch("{id:guid}/status")]
     [RequirePermission(Feature, "Disable")]
-    public async Task<ActionResult<RemoteAppDto>> UpdateStatus(Guid id, [FromBody] UpdateRemoteAppStatusRequest request, CancellationToken ct)
-        => Ok(await remoteApps.UpdateStatusAsync(id, request.Status, request.MaintenanceMessage, CurrentUserId(), CurrentUserName(), ct));
+    public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] UpdateRemoteAppStatusRequest request, CancellationToken ct)
+    {
+        var result = await remoteApps.UpdateStatusAsync(id, request.Status, request.MaintenanceMessage, CurrentUserId(), CurrentUserName(), ct);
+        return result.Applied is not null ? Ok(result.Applied) : Accepted(result.Pending);
+    }
 
     [HttpDelete("{id:guid}")]
     [RequirePermission(Feature, "Delete")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
-        await remoteApps.DeleteAsync(id, CurrentUserId(), CurrentUserName(), ct);
-        return NoContent();
+        var pending = await remoteApps.DeleteAsync(id, CurrentUserId(), CurrentUserName(), ct);
+        return pending is null ? NoContent() : Accepted(pending);
     }
 
     [HttpPost("resync-permissions")]

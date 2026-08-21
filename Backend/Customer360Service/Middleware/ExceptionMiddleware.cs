@@ -1,3 +1,5 @@
+using backend.Infrastructure;
+
 namespace backend.Middleware;
 
 /// <summary>
@@ -20,6 +22,18 @@ public class ExceptionMiddleware
         try
         {
             await _next(context);
+        }
+        catch (ApprovalServiceUnavailableException ex)
+        {
+            // A gating check that couldn't be verified must block the mutation, not silently apply
+            // it — never collapse this into the generic 500 branch below.
+            context.Response.StatusCode = 503;
+
+            await context.Response.WriteAsJsonAsync(new
+            {
+                success = false,
+                message = ex.Message
+            });
         }
         catch (Exception ex)
         {

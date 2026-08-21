@@ -3,19 +3,14 @@ import { apiFetch } from '../../../shared/api/httpClient'
 
 const base = env.authServiceUrl
 
-/**
- * Every module key the Checker Assignment UI can list. Mirrors AuthService's ApprovalModuleKeys —
- * only Users/Roles are actually enforced in Phase 1; the rest exist so the admin can see the full
- * picture of the platform from day one, marked "not yet enforced" until their host/remote-app code
- * calls the shared submission helper in a later phase.
- */
-export const APPROVAL_MODULES = [
-  { key: 'Users', label: 'Users', enforced: true },
-  { key: 'Roles', label: 'Roles', enforced: true },
-  { key: 'Applications', label: 'Applications', enforced: false },
-  { key: 'Customer360.FieldConfig', label: 'Customer 360 — Field Settings', enforced: false },
-  { key: 'LeadManagement.Config', label: 'Lead Management — Config', enforced: false },
-] as const
+/** One module the Checker Assignment UI may offer a checker for — AuthService's own Users/Roles, or a
+ * live PermissionFeature.Key from any registered remote app. Sourced from the same dynamic capability
+ * catalog the Role editor renders, so a new remote app's module shows up here the moment it
+ * registers/syncs — no code change, here or in AuthService, when a future remote app is added. */
+export interface AssignableModuleDto {
+  key: string
+  label: string
+}
 
 export interface CheckerAssignmentDto {
   id: string
@@ -33,6 +28,9 @@ export interface UpsertCheckerAssignmentRequest {
 export const checkerAssignmentsApi = {
   list: (accessToken: string, module?: string) =>
     apiFetch<CheckerAssignmentDto[]>(`${base}/api/checker-assignments${module ? `?module=${encodeURIComponent(module)}` : ''}`, { accessToken }),
+
+  listModules: (accessToken: string) =>
+    apiFetch<AssignableModuleDto[]>(`${base}/api/checker-assignments/modules`, { accessToken }),
 
   upsert: (accessToken: string, body: UpsertCheckerAssignmentRequest) =>
     apiFetch<CheckerAssignmentDto>(`${base}/api/checker-assignments`, { method: 'POST', accessToken, body }),

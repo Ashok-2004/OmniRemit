@@ -1,6 +1,7 @@
 import { env } from '../../../config/env'
 import { apiFetch } from '../../../shared/api/httpClient'
 import type { PagedResult } from '../../settings-users/api/usersApi'
+import type { ApprovalPendingDto } from '../../approvals/api/approvalsApi'
 
 const base = env.moduleRegistryUrl
 
@@ -77,21 +78,25 @@ export const remoteAppsApi = {
 
   get: (accessToken: string, id: string) => apiFetch<RemoteAppDto>(`${base}/api/remote-apps/${id}`, { accessToken }),
 
+  // Resolves the real RemoteAppDto (200/201, applied as it always has) or an ApprovalPendingDto (202)
+  // if the "Applications" module has a checker assigned — callers must branch with isApprovalPending()
+  // before treating the result as the real thing.
   create: (accessToken: string, body: CreateRemoteAppRequest) =>
-    apiFetch<RemoteAppDto>(`${base}/api/remote-apps`, { method: 'POST', accessToken, body }),
+    apiFetch<RemoteAppDto | ApprovalPendingDto>(`${base}/api/remote-apps`, { method: 'POST', accessToken, body }),
 
   update: (accessToken: string, id: string, body: UpdateRemoteAppRequest) =>
-    apiFetch<RemoteAppDto>(`${base}/api/remote-apps/${id}`, { method: 'PUT', accessToken, body }),
+    apiFetch<RemoteAppDto | ApprovalPendingDto>(`${base}/api/remote-apps/${id}`, { method: 'PUT', accessToken, body }),
 
   updateStatus: (accessToken: string, id: string, status: RemoteAppStatus, maintenanceMessage?: string | null) =>
-    apiFetch<RemoteAppDto>(`${base}/api/remote-apps/${id}/status`, {
+    apiFetch<RemoteAppDto | ApprovalPendingDto>(`${base}/api/remote-apps/${id}/status`, {
       method: 'PATCH',
       accessToken,
       body: { status, maintenanceMessage },
     }),
 
+  /** Resolves `undefined` on the ungated path (204, deleted for real) or an ApprovalPendingDto (202) if gated. */
   remove: (accessToken: string, id: string) =>
-    apiFetch<void>(`${base}/api/remote-apps/${id}`, { method: 'DELETE', accessToken }),
+    apiFetch<ApprovalPendingDto | undefined>(`${base}/api/remote-apps/${id}`, { method: 'DELETE', accessToken }),
 
   resyncPermissions: (accessToken: string) =>
     apiFetch<{ resyncedCount: number }>(`${base}/api/remote-apps/resync-permissions`, { method: 'POST', accessToken }),

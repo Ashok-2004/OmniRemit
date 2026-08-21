@@ -44,6 +44,11 @@ builder.Services.AddResponseCompression(options => options.EnableForHttps = true
 builder.Services.Configure<CorsOptions>(builder.Configuration.GetSection(CorsOptions.SectionName));
 builder.Services.Configure<JwtValidationOptions>(builder.Configuration.GetSection(JwtValidationOptions.SectionName));
 builder.Services.Configure<AuthIntegrationOptions>(builder.Configuration.GetSection(AuthIntegrationOptions.SectionName));
+// Phase 2 Maker-Checker: Internal guards the inbound internal/approvals/apply endpoint AuthService
+// calls to replay an approved Lead mutation; Self holds this service's own callback base URL and the
+// live module key it was registered under.
+builder.Services.Configure<InternalApiOptions>(builder.Configuration.GetSection(InternalApiOptions.SectionName));
+builder.Services.Configure<SelfOptions>(builder.Configuration.GetSection(SelfOptions.SectionName));
 
 // Database Context
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
@@ -66,7 +71,9 @@ builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 builder.Services.AddScoped<ILeadService, LeadService>();
 builder.Services.AddHttpClient<IDashboardExternalService, DashboardExternalService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
-builder.Services.AddHttpClient<AuthServiceClient>();
+// Explicit timeout: a gating check now sits in the hot path of every Lead mutation, so an unbounded
+// default (100s) would hang the request instead of just delaying a best-effort audit push.
+builder.Services.AddHttpClient<AuthServiceClient>(client => client.Timeout = TimeSpan.FromSeconds(10));
 
 // CORS Policy
 builder.Services.AddCors(options =>
