@@ -116,7 +116,7 @@ export const AuditLogsPage: React.FC = () => {
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: '20px',
+        gap: '22px',
         maxWidth: '1340px',
         width: '100%',
         paddingBottom: '32px',
@@ -133,6 +133,7 @@ export const AuditLogsPage: React.FC = () => {
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: '20px',
+          flexWrap: 'wrap',
           position: 'relative',
           overflow: 'hidden',
           background: 'linear-gradient(120deg, #1e40af 0%, #2563eb 45%, #3b82f6 100%)',
@@ -259,7 +260,6 @@ export const AuditLogsPage: React.FC = () => {
             boxShadow: '0 2px 10px rgba(0, 0, 0, 0.12)',
             transition: 'all 0.15s ease',
             fontFamily: 'inherit',
-            flexShrink: 0,
             position: 'relative',
             zIndex: 1,
           }}
@@ -290,7 +290,10 @@ export const AuditLogsPage: React.FC = () => {
           borderRadius: '16px',
           border: '1px solid #eaecf0',
           boxShadow: '0 1px 4px rgba(15, 23, 42, 0.04)',
-          overflow: 'hidden',
+          /* overflow must NOT be hidden here — that would clip the inner overflowX:auto scroll container,
+             making the table un-scrollable on mobile. The border-radius is preserved by the card's own
+             background/border, not by overflow clipping. */
+          overflow: 'visible',
           boxSizing: 'border-box',
           display: 'flex',
           flexDirection: 'column',
@@ -413,11 +416,43 @@ export const AuditLogsPage: React.FC = () => {
 
         {/* Main Table */}
         {isLoadingAuditLogs ? (
-          <div style={{ padding: '60px 0', textAlign: 'center', color: '#94a3b8', fontSize: '13.5px' }}>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-              <RefreshCw size={18} className="animate-spin" style={{ color: '#2563eb' }} />
-              <span>Loading audit trail events...</span>
-            </div>
+          // Column-shaped, matching the real table's cells (host's AuditLogsPage skeleton rows use
+          // the same per-cell-shape convention) — a centered spinner+text row gave no sense of the
+          // table's structure while it loaded.
+          <div style={{ overflowX: 'auto' }} aria-hidden="true">
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
+              <tbody>
+                {Array.from({ length: 8 }, (_, i) => (
+                  <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '13px 18px' }}>
+                      <div className="lead-skel" style={{ width: 120, height: 15 }} />
+                    </td>
+                    <td style={{ padding: '13px 18px' }}>
+                      <div className="lead-skel" style={{ width: 84, height: 20, borderRadius: 6 }} />
+                    </td>
+                    <td style={{ padding: '13px 18px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                        <div className="lead-skel" style={{ width: 26, height: 26, borderRadius: 8, flexShrink: 0 }} />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                          <div className="lead-skel" style={{ width: 100, height: 13 }} />
+                          <div className="lead-skel" style={{ width: 60, height: 11 }} />
+                        </div>
+                      </div>
+                    </td>
+                    <td style={{ padding: '13px 18px' }}>
+                      <div className="lead-skel" style={{ width: '85%', height: 14 }} />
+                    </td>
+                    <td style={{ padding: '13px 18px' }}>
+                      <div className="lead-skel" style={{ width: 70, height: 13, marginBottom: 5 }} />
+                      <div className="lead-skel" style={{ width: 90, height: 11 }} />
+                    </td>
+                    <td style={{ padding: '13px 18px', textAlign: 'right' }}>
+                      <div className="lead-skel" style={{ width: 60, height: 26, borderRadius: 7, marginLeft: 'auto' }} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         ) : auditLogs.length === 0 ? (
           <div style={{ padding: '64px 20px', textAlign: 'center', color: '#64748b' }}>
@@ -479,38 +514,59 @@ export const AuditLogsPage: React.FC = () => {
                         {formatTimestamp(log.timestamp)}
                       </td>
 
-                      {/* Action Pill Badge */}
+                      {/* Action code — rectangular monospace pill, matching the host's AuditLogsPage
+                          .actionCell convention, so this reads as an action code rather than a status
+                          (which is what a fully-rounded pill with a dot means everywhere else in the
+                          app — Action and Status were both 999px pills here, indistinguishable at a
+                          glance). Keeps this table's own per-category color coding, just a different
+                          shape family than the Status pill below. */}
                       <td style={{ padding: '13px 18px' }}>
                         <span
                           style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '5px',
-                            padding: '3px 10px',
-                            borderRadius: '999px',
+                            display: 'inline-block',
+                            fontFamily: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace",
+                            padding: '2px 8px',
+                            borderRadius: '6px',
                             background: badge.bg,
                             color: badge.text,
                             fontSize: '11.5px',
-                            fontWeight: 700,
+                            fontWeight: 600,
                             border: `1px solid ${badge.border}`,
                           }}
                         >
-                          <span
-                            style={{
-                              width: '5px',
-                              height: '5px',
-                              borderRadius: '50%',
-                              background: badge.dot,
-                            }}
-                          />
                           {getActionLabel(log.actionType)}
                         </span>
                       </td>
 
-                      {/* Actor & Role */}
+                      {/* Actor & Role — avatar-initial chip, same pattern as host's AuditLogsPage
+                          .actorCell/.actorAvatar, so a person's name reads the same way in every
+                          audit table across the app. */}
                       <td style={{ padding: '13px 18px' }}>
-                        <div style={{ fontWeight: 600, color: '#0f172a' }}>{log.userName || 'System'}</div>
-                        <div style={{ color: '#64748b', fontSize: '11.5px', marginTop: '1px' }}>{log.userRole || 'User'}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                          <span
+                            style={{
+                              width: 26,
+                              height: 26,
+                              borderRadius: 8,
+                              background: 'linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%)',
+                              color: '#6d28d9',
+                              border: '1px solid #c4b5fd',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              letterSpacing: '-0.02em',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
+                            }}
+                          >
+                            {(log.userName || 'S').charAt(0).toUpperCase()}
+                          </span>
+                          <div>
+                            <div style={{ fontWeight: 600, color: '#0f172a', fontSize: 13 }}>{log.userName || 'System'}</div>
+                            <div style={{ color: '#64748b', fontSize: '11.5px', marginTop: '1px' }}>{log.userRole || 'User'}</div>
+                          </div>
+                        </div>
                       </td>
 
                       {/* Description */}
@@ -523,22 +579,44 @@ export const AuditLogsPage: React.FC = () => {
                         )}
                       </td>
 
-                      {/* Status & IP */}
+                      {/* Status & IP — a real bordered/tinted badge instead of naked colored text, so
+                          this is visually a "status" the same way every Badge elsewhere in the app is. */}
                       <td style={{ padding: '13px 18px' }}>
-                        <span
-                          style={{
-                            fontSize: '11.5px',
-                            fontWeight: 600,
-                            // The backend only ever writes "Success" (capitalized, not all-caps) —
-                            // LeadService has no failure-audit path yet — so a strict === 'SUCCESS'
-                            // comparison never matched anything and every row rendered red/danger
-                            // regardless of outcome. Compare case-insensitively instead.
-                            color: log.status?.toUpperCase() === 'SUCCESS' ? '#16a34a' : '#dc2626',
-                          }}
-                        >
-                          {log.status}
-                        </span>
-                        <div style={{ fontSize: '11.5px', color: '#94a3b8', marginTop: '1px', fontFamily: "'SF Mono', 'Fira Code', monospace" }}>
+                        {(() => {
+                          // The backend only ever writes "Success" (capitalized, not all-caps) —
+                          // LeadService has no failure-audit path yet — so a strict === 'SUCCESS'
+                          // comparison never matched anything and every row rendered red/danger
+                          // regardless of outcome. Compare case-insensitively instead.
+                          const isSuccess = log.status?.toUpperCase() === 'SUCCESS';
+                          return (
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                fontSize: '11.5px',
+                                fontWeight: 600,
+                                padding: '2px 9px',
+                                borderRadius: 999,
+                                background: isSuccess ? '#ecfdf5' : '#fef2f2',
+                                color: isSuccess ? '#047857' : '#dc2626',
+                                border: `1px solid ${isSuccess ? '#a7f3d0' : '#fecaca'}`,
+                              }}
+                            >
+                              <span
+                                style={{
+                                  width: 5,
+                                  height: 5,
+                                  borderRadius: '50%',
+                                  background: isSuccess ? '#10b981' : '#dc2626',
+                                  flexShrink: 0,
+                                }}
+                              />
+                              {log.status}
+                            </span>
+                          );
+                        })()}
+                        <div style={{ fontSize: '11.5px', color: '#94a3b8', marginTop: '3px', fontFamily: "'SF Mono', 'Fira Code', monospace" }}>
                           {log.ipAddress || '127.0.0.1'}
                         </div>
                       </td>

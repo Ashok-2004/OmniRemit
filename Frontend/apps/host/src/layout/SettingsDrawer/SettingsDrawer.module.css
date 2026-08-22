@@ -220,3 +220,38 @@
 
 .tabBody::-webkit-scrollbar       { width: 5px; }
 .tabBody::-webkit-scrollbar-thumb { background: #d1d9e6; border-radius: 5px; }
+
+/* ── Responsive ────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  /* On phones make the drawer full-width so it fills the screen rather than
+     leaving an awkward sliver; the 96vw default in min(800px, 96vw) already
+     handles this at 480px+ but 640px is where it starts feeling cramped. */
+  .drawerContainer {
+    width: 100vw;
+  }
+  /* Reduce header padding to give the content more room */
+  .header {
+    padding: 18px 20px 16px;
+  }
+  /* Tabs can overflow horizontally rather than wrap/truncate */
+  .tabsNav {
+    padding: 0 16px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .tabsNav::-webkit-scrollbar { display: none; }
+  .tabBody {
+    padding: 20px 20px 24px;
+  }
+}
+
+@media (max-width: 480px) {
+  .header {
+    padding: 14px 16px 12px;
+  }
+  .tabBody {
+    padding: 16px 16px 20px;
+  }
+}
+

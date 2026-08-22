@@ -10,6 +10,11 @@ interface InteractionStoreState {
   interactions: Interaction[];
   loading: boolean;
   error: string | null;
+  // Was dropped entirely (only `.message` was ever stored), so every consumer of this error had no
+  // way to tell a real 500/403 apart from a network failure — getFriendlyErrorMessage always fell
+  // into its "no status" branch and showed a generic connection message regardless of the actual
+  // cause. See Customer360.tsx's own errorStatus for the same pattern already used elsewhere.
+  errorStatus: number | null;
 
   // Pagination
   pageNumber: number;
@@ -38,6 +43,7 @@ export const useInteractionStore = create<InteractionStoreState>((set, get) => (
   interactions: [],
   loading: false,
   error: null,
+  errorStatus: null,
 
   // Pagination
   pageNumber: 1,
@@ -64,7 +70,7 @@ export const useInteractionStore = create<InteractionStoreState>((set, get) => (
   loadInteractions: async (customerId) => {
     if (!customerId) return;
     const version = ++_interactionsVersion;
-    set({ loading: true, error: null });
+    set({ loading: true, error: null, errorStatus: null });
 
     try {
       const { pageNumber, pageSize } = get();
@@ -83,7 +89,7 @@ export const useInteractionStore = create<InteractionStoreState>((set, get) => (
       });
     } catch (err) {
       if (version !== _interactionsVersion) return;
-      set({ error: (err as ApiError).message, loading: false });
+      set({ error: (err as ApiError).message, errorStatus: (err as ApiError).status ?? null, loading: false });
       console.error('Error loading interactions:', err);
     }
   },

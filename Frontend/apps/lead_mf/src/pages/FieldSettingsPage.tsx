@@ -95,6 +95,7 @@ export const FieldSettingsPage: React.FC = () => {
     >
       {/* Hero Banner */}
       <div
+        className="lead-hero-banner"
         style={{
           borderRadius: '18px',
           padding: '24px 30px',
@@ -102,6 +103,7 @@ export const FieldSettingsPage: React.FC = () => {
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: '20px',
+          flexWrap: 'wrap',
           position: 'relative',
           overflow: 'hidden',
           background: 'linear-gradient(120deg, #1e40af 0%, #2563eb 45%, #3b82f6 100%)',
@@ -230,8 +232,8 @@ export const FieldSettingsPage: React.FC = () => {
             <div style={{ padding: '13px 20px', borderBottom: '1px solid #eaecf0', background: '#f8fafc', fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
               {section}
             </div>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
+            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+              <table style={{ width: '100%', minWidth: '820px', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
                 <thead>
                   <tr style={{ background: '#ffffff', borderBottom: '1px solid #eaecf0' }}>
                     {['Field', 'Label', 'Order', 'Visible', 'Required', 'Editable', 'Sensitive', 'Masking Rule', 'Visible Chars'].map((h) => (

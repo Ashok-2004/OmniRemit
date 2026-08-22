@@ -20,10 +20,16 @@
 
   --surface-ground: #f8fafc;
   --surface-card: #ffffff;
-  --surface-alt: #f1f5f9;
+  --surface-alt: #f8fafc;
 
-  --border-subtle: #eaecf0;
-  --border-medium: #e2e8f0;
+  /* Was #eaecf0 / #e2e8f0 — neither matched the host's actual border tokens
+     (theme.css: --omni-color-border: #e2e8f0, --omni-color-border-strong: #cbd5e1).
+     Realigned so every info-card/section-container/table border etc. that reads
+     var(--border-subtle) picks up the host's real default border color instead of
+     a slightly-off gray, with --border-medium now the host's "strong" tier for
+     hover/active states. */
+  --border-subtle: #e2e8f0;
+  --border-medium: #cbd5e1;
   --border-focus: #2563eb;
 
   --text-heading: #0f172a;
@@ -31,10 +37,13 @@
   --text-secondary: #64748b;
   --text-muted: #94a3b8;
 
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 18px;
+  /* Was one full tier larger than the host's radius scale throughout
+     (theme.css: --omni-radius-sm/md/lg/xl = 6/8/12/16px) — every rounded corner in
+     this app read as noticeably chunkier than the same-purpose corner in the host. */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
   --radius-pill: 999px;
 
   --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.02);
@@ -48,6 +57,9 @@
   font-family: var(--font-family);
   color: var(--text-body);
   width: 100%;
+  /* Safety net: nothing inside this remote should ever be able to widen the host page and force
+     horizontal scroll on a narrow viewport — clip instead of blowing out the layout. */
+  overflow-x: hidden;
   box-sizing: border-box;
   background: transparent;
 }
@@ -213,56 +225,65 @@
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
-/* Primary and Secondary Action Buttons */
+/* Primary and Secondary Action Buttons — matches host's Button.module.css .primary/.secondary.md
+   exactly: 42px height, 18px horizontal padding, 12px radius, 14px/600 text, same gradient and
+   shadow depth. Was 44px/20px/10px(fixed, not even the design-token radius)/13.5px — close but
+   never quite the same numbers as the same button anywhere in the host. */
 .c360-btn-primary {
-  height: 44px;
-  padding: 0 20px;
-  border-radius: 10px;
-  border: none;
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  height: 42px;
+  padding: 0 18px;
+  border-radius: var(--radius-lg);
+  border: 1px solid transparent;
+  background: linear-gradient(135deg, #2f72f5 0%, #1d4ed8 100%);
   color: #ffffff;
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  box-shadow: var(--shadow-primary-btn);
-  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.18),
+    0 4px 12px rgba(37, 99, 235, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  transition: background 0.16s ease, box-shadow 0.16s ease, transform 0.1s ease;
   white-space: nowrap;
 }
 
 .c360-btn-primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.38);
+  background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+  box-shadow:
+    0 2px 4px rgba(15, 23, 42, 0.2),
+    0 8px 20px rgba(37, 99, 235, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 
 .c360-btn-primary:active:not(:disabled) {
-  transform: translateY(0);
+  transform: scale(0.977);
 }
 
 .c360-btn-primary:disabled {
-  opacity: 0.55;
+  opacity: 0.5;
   cursor: not-allowed;
   box-shadow: none;
 }
 
 .c360-btn-secondary {
-  height: 44px;
+  height: 42px;
   padding: 0 16px;
-  border-radius: 10px;
-  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-subtle);
   background: #ffffff;
   color: var(--text-heading);
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
   transition: all 0.15s ease;
   white-space: nowrap;
 }
@@ -497,21 +518,24 @@
   text-align: left;
 }
 
+/* Matches host's Table.module.css th/td exactly: 12px/16px padding, 12px/600 uppercase header text
+   at 0.03em tracking, and one consistent border color (was 11.5px/700/0.04em with a lighter, ad-hoc
+   #f1f5f9 for the body rows that didn't match the header's own border, or the host's). */
 .c360-table th {
   background: #f8fafc;
-  padding: 12px 18px;
-  font-size: 11.5px;
-  font-weight: 700;
+  padding: 12px 16px;
+  font-size: 12px;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
   color: var(--text-secondary);
   border-bottom: 1px solid var(--border-subtle);
   white-space: nowrap;
 }
 
 .c360-table td {
-  padding: 14px 18px;
-  border-bottom: 1px solid #f1f5f9;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-subtle);
   color: var(--text-heading);
   vertical-align: middle;
 }
@@ -609,17 +633,11 @@
 
 .info-cards-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
 }
 
-@media (max-width: 900px) {
-  .info-cards-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 560px) {
+@media (max-width: 640px) {
   .info-cards-grid {
     grid-template-columns: 1fr;
   }
@@ -632,8 +650,14 @@
   background: var(--surface-ground);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  padding: 12px 14px;
+  padding: 12px 16px;
   min-width: 0;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.info-card:hover {
+  border-color: var(--border-medium);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
 }
 
 .info-card.full-width {
@@ -657,7 +681,7 @@
 }
 
 .info-value {
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--text-heading);
   word-break: break-word;
@@ -702,17 +726,19 @@
   cursor: not-allowed;
 }
 
+/* Same gradient as .c360-btn-primary — host's primary button is never a flat fill, only ever this
+   gradient, at every size. */
 .btn-primary,
 .btn.btn-primary {
-  background: var(--primary-600);
-  border-color: var(--primary-600);
+  background: linear-gradient(135deg, #2f72f5 0%, #1d4ed8 100%);
+  border-color: transparent;
   color: #ffffff;
   box-shadow: var(--shadow-primary-btn);
 }
 
 .btn-primary:hover,
 .btn.btn-primary:hover {
-  background: var(--primary-700);
+  background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
   border-color: var(--primary-700);
   color: #ffffff;
 }
@@ -756,6 +782,47 @@
   font-size: 13px;
 }
 
+/* ── Skeleton shimmer — same convention as the host's Skeleton component
+   (Frontend/apps/host/src/shared/components/Skeleton/Skeleton.module.css):
+   flat #eaecf0 block + a white diagonal sweep. Used in place of a spinner
+   for full-content loading states, so the page's shape is visible before
+   the data arrives instead of a blank centered spinner. ── */
+.c360-skel {
+  position: relative;
+  overflow: hidden;
+  background: #eaecf0;
+  border-radius: 6px;
+}
+
+.c360-skel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.62) 50%, transparent 100%);
+  animation: c360-shimmer-sweep 1.4s ease-in-out infinite;
+}
+
+@keyframes c360-shimmer-sweep {
+  100% { transform: translateX(100%); }
+}
+
+.c360-skel-circle { border-radius: 50%; flex-shrink: 0; }
+.c360-skel-pill { border-radius: 999px; }
+.c360-skel-text { height: 0.85em; border-radius: 4px; }
+
+.c360-skel-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .c360-skel::after { animation: none; background: rgba(255, 255, 255, 0.4); }
+}
+
 .empty-state {
   padding: 32px 20px;
   text-align: center;
@@ -796,13 +863,31 @@
   overflow: hidden;
   display: flex;
   align-items: center;
+  /* flex-wrap so the right-side action (Export CSV / New Search / etc.) drops below the
+     icon+title block instead of forcing the row — and the whole page — wider than the
+     viewport on a narrow screen. */
+  flex-wrap: wrap;
   justify-content: space-between;
-  gap: 24px;
+  gap: 16px 24px;
   padding: 28px 32px;
   border-radius: var(--radius-xl);
   background: linear-gradient(120deg, var(--primary-800) 0%, var(--primary-600) 45%, var(--primary-500) 100%);
   box-shadow: 0 4px 20px rgba(37, 99, 235, 0.25), 0 1px 4px rgba(37, 99, 235, 0.15);
   color: #ffffff;
+}
+
+/* The icon+title flex group every .c360-hero-banner uses (Customer360, AuditLogs, AllProducts,
+   AllInteractions, FieldSettings) — was inline-styled per page with no min-width:0, so as a flex
+   item it refused to shrink below its title/subtitle's un-wrapped content width. That's the actual
+   root cause of the banner (and the whole page under it) rendering wider than the viewport. */
+.c360-hero-left {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  flex: 1 1 260px;
 }
 
 .c360-hero-title {
@@ -817,6 +902,12 @@
   margin: 4px 0 0;
   font-size: 13px;
   color: rgba(255, 255, 255, 0.82);
+}
+
+@media (max-width: 640px) {
+  .c360-hero-banner { padding: 20px 20px; }
+  .c360-hero-title { font-size: 18px; }
+  .c360-hero-subtitle { font-size: 12.5px; }
 }
 
 .c360-hero-pill {
@@ -886,7 +977,9 @@
 .drawer-header.blue-header {
   position: relative;
   overflow: hidden;
-  background: linear-gradient(120deg, var(--primary-800) 0%, var(--primary-600) 45%, var(--primary-500) 100%);
+  /* Same 4-stop gradient as the host's SettingsDrawer header exactly (was missing the darkest
+     leading stop, --primary-900, that the host's version opens with). */
+  background: linear-gradient(120deg, var(--primary-900) 0%, var(--primary-800) 30%, var(--primary-600) 65%, var(--primary-500) 100%);
   color: #ffffff;
   border-bottom: none;
 }
@@ -972,13 +1065,19 @@
   gap: 10px;
 }
 
+/* Same blue left-border accent as .info-section-title (this app's own profile-page section
+   headers) and the host's SettingsDrawer tab section headers — this was the one section-title
+   style in the app without it, so a drawer looked visually distinct from every other section
+   header the user sees, in Customer 360 and in the host. */
 .drawer-section-title {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--primary-700);
+  padding-left: 10px;
+  border-left: 3px solid var(--primary-600);
 }
 
 .drawer-section-card {
@@ -1083,38 +1182,40 @@
 
 /* ---- status-badge (Customer360.tsx, ProductDetailsModal.tsx) ---- */
 
+/* Matches host's Badge.module.css .badge exactly: padding, radius, font-size, weight, and the
+   "border: transparent by default, only the neutral-equivalent variant gets a visible border"
+   convention (host's colored variants — success/warning/danger/info — never show a border; c360's
+   active/pending/wip previously all had one, which host's design never does). */
 .status-badge {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 10px;
+  gap: 4px;
+  padding: 2px 12px;
   border-radius: var(--radius-pill);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
+  border: 1px solid transparent;
 }
 
 .status-active {
   background: #ecfdf5;
   color: #047857;
-  border: 1px solid #a7f3d0;
 }
 
 .status-validated {
   background: var(--surface-alt);
   color: var(--text-secondary);
-  border: 1px solid var(--border-medium);
+  border-color: var(--border-medium);
 }
 
 .status-pending {
   background: #fffbeb;
   color: #b45309;
-  border: 1px solid #fde68a;
 }
 
 .status-wip {
   background: var(--primary-50);
   color: var(--primary-700);
-  border: 1px solid var(--primary-200);
 }
 
 .data-table-container {
@@ -1136,16 +1237,17 @@
    detail content underneath scrolls. */
 .customer-layout-container {
   display: grid;
-  grid-template-columns: 260px 1fr;
-  gap: 18px;
+  grid-template-columns: 280px 1fr;
+  gap: 20px;
   align-items: start;
-  height: calc(100vh - 116px);
+  min-height: 0;
+  width: 100%;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 960px) {
   .customer-layout-container {
     grid-template-columns: 1fr;
-    height: auto;
+    gap: 16px;
   }
 }
 
@@ -1154,12 +1256,15 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card);
-  padding: 20px;
+  padding: 24px 20px;
   position: sticky;
-  top: 0;
+  top: 16px;
   align-self: start;
-  max-height: 100%;
+  max-height: calc(100vh - 32px);
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .customer-right-column {
@@ -1167,16 +1272,10 @@
   flex-direction: column;
   gap: 16px;
   min-width: 0;
-  height: 100%;
-  overflow-y: auto;
-  /* Small gutter so the scrollbar doesn't sit flush against card edges/content. */
-  padding-right: 4px;
+  width: 100%;
 }
 
-@media (max-width: 900px) {
-  /* On narrow screens the two columns stack into one; a nested scroll region there just fights the
-     page's own scroll and touch scrolling, so let this flow with the page like a normal single
-     column instead. */
+@media (max-width: 960px) {
   .customer-left-column,
   .customer-right-column {
     position: static;
@@ -1189,26 +1288,36 @@
 .left-tab-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
-  padding: 9px 12px;
-  border-radius: var(--radius-sm);
-  border: none;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
   background: transparent;
   color: var(--text-body);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
+  transition: all 0.15s ease;
+  outline: none;
+  text-decoration: none;
 }
 
 .left-tab-btn:hover {
   background: var(--surface-ground);
+  color: var(--primary-600);
 }
 
 .left-tab-btn.active {
   background: var(--primary-50);
   color: var(--primary-700);
+  font-weight: 700;
+  border-color: var(--primary-200);
+}
+
+.left-tab-btn svg {
+  flex-shrink: 0;
 }
 
 /* ---- data table (Customer360.tsx's own tables, distinct from .c360-table) ---- */

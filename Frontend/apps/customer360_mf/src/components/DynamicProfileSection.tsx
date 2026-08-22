@@ -59,11 +59,23 @@ function resolveRawValue(
   contactInfo: ContactDetail | null,
   apiField: string
 ): unknown {
+  if (!apiField) return undefined;
+
   if (apiField.startsWith('contact.')) {
     const key = apiField.slice('contact.'.length) as keyof ContactDetail;
-    return contactInfo ? contactInfo[key] : undefined;
+    const contactVal = contactInfo ? contactInfo[key] : undefined;
+    if (contactVal !== undefined && contactVal !== null) return contactVal;
+    return profile ? (profile as unknown as Record<string, unknown>)[key] : undefined;
   }
-  return profile ? (profile as unknown as Record<string, unknown>)[apiField] : undefined;
+
+  const profVal = profile ? (profile as unknown as Record<string, unknown>)[apiField] : undefined;
+  if (profVal !== undefined && profVal !== null) return profVal;
+
+  if (contactInfo && apiField in contactInfo) {
+    return (contactInfo as unknown as Record<string, unknown>)[apiField];
+  }
+
+  return undefined;
 }
 
 /** Adjacent configs (already sorted by displayOrder) grouped by Section, preserving the order each

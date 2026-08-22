@@ -192,7 +192,64 @@
 .logTable tbody tr:hover { background: #f8fafc; }
 
 .timeCell { white-space: nowrap; color: #475569; font-size: 12px; font-weight: 500; }
-.entityLabel { font-weight: 600; color: #0f172a; }
+
+/* Was plain text — same chip treatment as AuditLogsPage.module.css's .entityId, since this
+   table has one entityLabel field rather than Audit's separate entityType/entityId pair. */
+/* Was a bordered chip matching Audit's secondary .entityId — but this table has one entityLabel
+   field standing in for BOTH of Audit's entityType (primary, bold plain text) and entityId
+   (secondary, muted chip); as the primary descriptor it reads better in the entityType style, not
+   boxed like a badge — the boxed treatment made every row look "busier" than Audit's plain-text
+   Entity column. */
+.entityLabel {
+  font-weight: 600;
+  color: #334155;
+  font-size: 13px;
+}
+
+/* Maker/Checker cells — same avatar-chip + name pattern as AuditLogsPage.module.css
+   .actorCell/.actorAvatar/.actorName, so a person's name reads identically in both tables. */
+.actorCell {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.actorAvatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%);
+  color: #6d28d9;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  letter-spacing: -0.02em;
+  border: 1px solid #c4b5fd;
+}
+
+.actorName {
+  font-weight: 600;
+  color: #0f172a;
+  font-size: 13px;
+}
+
+/* Action code — same monospace pill as AuditLogsPage.module.css's .actionCell, distinguishing it
+   from the rounded Badge components used for Module/Status instead of reading as plain text. */
+.actionCell {
+  display: inline-block;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #1d4ed8;
+  background: #eff6ff;
+  border: 1px solid #dbeafe;
+  border-radius: 6px;
+  padding: 2px 7px;
+}
+
 .mutedText { color: #94a3b8; font-size: 12px; }
 .emptyCell { text-align: center; padding: 52px 24px; color: #94a3b8; font-size: 13.5px; font-weight: 500; }
 
@@ -219,36 +276,140 @@
 .drawerSection { padding-bottom: 20px; border-bottom: 1px solid #f1f5f9; }
 .drawerSection:last-child { padding-bottom: 0; border-bottom: none; }
 .drawerSectionTitle {
+  display: flex; align-items: center; gap: 6px;
   font-size: 11px; font-weight: 700; color: #2563eb; text-transform: uppercase;
   letter-spacing: 0.07em; margin: 0 0 12px;
 }
-
-.detailList {
-  display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); gap: 12px 20px;
-  align-items: baseline; min-width: 0;
+/* A plain-text qualifier next to a section title (e.g. "Before (Current Record)") — deliberately
+   NOT uppercase/bold/blue like the title itself, so it reads as a clarifying aside, not a heading. */
+.drawerSectionTitleTag {
+  font-size: 11px; font-weight: 500; color: #94a3b8; text-transform: none; letter-spacing: normal;
 }
+
+/* Overview + Approval Timeline side by side — both are "what/who/when" context about the request
+   (as opposed to Before/Requested Change, the actual data payload), so they read as one paired
+   block instead of two separately-dividered sections stacked on top of each other.
+   align-items: stretch (the grid default, set explicitly here for clarity) — not "start" — so both
+   columns stretch to the row's full height regardless of which has more content (Overview's 4 rows
+   vs Timeline's 2 steps): with "start" the divider only spanned its OWN column's shorter content
+   and visibly stopped partway down next to Overview's remaining rows. */
+.overviewTimelineGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: stretch; }
+.overviewTimelineColDivider { padding-left: 28px; border-left: 1px solid #f1f5f9; }
+
+@media (max-width: 640px) {
+  .overviewTimelineGrid { grid-template-columns: 1fr; gap: 20px; }
+  .overviewTimelineColDivider { padding-left: 0; border-left: none; padding-top: 16px; border-top: 1px solid #f1f5f9; }
+}
+
+/* Icon-led rows (was a plain 2-column label/value grid) — each row now has a small tinted icon
+   chip, matching the same "icon + stacked label/value" language as .fieldCard below, so Overview
+   reads consistently with the rest of the drawer instead of being the one plain-text section. */
+.detailList { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.detailRow { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.detailIcon {
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 28px; height: 28px; border-radius: 8px; background: #eff6ff; color: #2563eb;
+}
+/* Action's icon shape now varies by the real action (Trash/Edit/Plus/...) — kept neutral gray
+   rather than blue like Module/Entity, since it's metadata, not a semantic "safe" indicator. */
+.detailIconNeutral { background: #f1f5f9; color: #64748b; }
+/* Status already carries its own semantic color via the Badge tone (amber/green/red) — the icon
+   chip is just a distinct accent for visual variety, not a second status signal. */
+.detailIconPurple { background: #f5f3ff; color: #7c3aed; }
+.detailRowBody { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .detailList dt { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; }
 .detailList dd { font-size: 13.5px; color: #0f172a; margin: 0; font-weight: 500; overflow-wrap: anywhere; }
 
-.dataFieldList { display: flex; flex-direction: column; gap: 8px; margin: 0; }
-.dataFieldRow {
-  display: grid; grid-template-columns: minmax(0, 140px) minmax(0, 1fr); gap: 12px;
-  padding: 6px 10px; background: #f8fafc; border-radius: 7px; font-size: 12.5px;
+/* Was rows with a #f8fafc background sitting on a drawer body whose OWN background is the exact
+   same #f8fafc — the "card" was completely invisible, which is what actually read as flat/ugly, not
+   the data itself. Rather than inventing a different treatment, this now matches
+   AuditLogsPage.module.css's .detailList exactly (used in that page's own, already-clean record
+   drawer): no per-row background at all, just a clean grid with real breathing room and an
+   uppercase micro-label — the same "detail list" language throughout the app instead of a second,
+   competing one just for this drawer. Value font dropped from monospace (fine for a raw phone
+   number, odd for "Shivam" or "Yes") to the normal UI font. */
+.dataFieldList {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  gap: 12px 20px;
+  align-items: baseline;
+  min-width: 0;
 }
-.dataFieldRow dt { font-weight: 600; color: #64748b; text-transform: capitalize; }
-.dataFieldRow dd { margin: 0; color: #0f172a; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace; }
+.dataFieldRow { display: contents; }
+.dataFieldRow dt {
+  font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase;
+  letter-spacing: 0.06em; white-space: nowrap; max-width: 140px; overflow: hidden; text-overflow: ellipsis;
+}
+.dataFieldRow dd { font-size: 13.5px; color: #0f172a; margin: 0; font-weight: 500; min-width: 0; overflow-wrap: anywhere; }
+/* A bare "—" read as a bold, same-weight value next to real data, making a row with several empty
+   fields look broken rather than "this field genuinely has nothing set". Recede it instead.
+   Bare selector (was scoped to .dataFieldRow dd) so .fieldCardGrid's cards can reuse it too. */
+.emptyValue { color: #cbd5e1; font-weight: 400; font-style: italic; }
 
 .wrapText { overflow-wrap: anywhere; word-break: break-word; white-space: pre-wrap; font-size: 12.5px; color: #334155; }
 
+/* ── Top-level field data as a 2-per-row grid of bordered cards (Before / Requested Change) —
+   border/radius/background/hover copied verbatim from ProfilePage.module.css's own
+   .capabilitiesGrid/.capItem, the app's existing 2-per-row bordered-card convention, so this reads
+   as the same design language rather than a one-off. Collapses to 1 column at 768px, same
+   breakpoint .capabilitiesGrid uses, matching this drawer's own ~800px width class. ── */
+.fieldCardGrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.fieldCard {
+  display: flex; align-items: center; gap: 12px;
+  padding: 13px 14px; background: #f8fafc; border: 1px solid #eaecf0; border-radius: 12px;
+  transition: all 0.15s ease; min-width: 0;
+}
+.fieldCard:hover {
+  background: #ffffff; border-color: #bfdbfe;
+  box-shadow: 0 2px 10px rgba(37, 99, 235, 0.06); transform: translateY(-1px);
+}
+/* Icon chip — colors picked per-field by getFieldIconMeta (inline style), same 36px/10px-radius
+   chip size as ProfilePage's .capIconWrap so this is visually the same "icon-led card" component. */
+.fieldCardIcon {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0;
+}
+.fieldCardBody { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.fieldCardLabel { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.06em; }
+.fieldCardValue { font-size: 14px; font-weight: 500; color: #0f172a; margin: 0; overflow-wrap: anywhere; }
+
+/* ── Array-shaped snapshots (e.g. Field Settings' array of field-config rows) — each element as its
+   own labeled mini-card instead of the "[object Object]" text a bare String(item) used to produce. ── */
+.arrayItemList { display: flex; flex-direction: column; gap: 8px; }
+.arrayItemCard {
+  background: #f8fafc; border: 1px solid #eaecf0; border-radius: 8px; padding: 8px 10px;
+  display: flex; flex-direction: column; gap: 6px; font-size: 12.5px;
+}
+.arrayItemHeading { font-weight: 700; color: #1d4ed8; font-size: 12.5px; }
+
+/* A nested array-of-objects value within an ordinary field row (rare, but the same fix applies). */
+.nestedRows { display: flex; flex-direction: column; gap: 6px; }
+.nestedRow { background: #ffffff; border: 1px solid #eaecf0; border-radius: 6px; padding: 6px 8px; }
+
 /* ── Timeline ── */
 .timeline { display: flex; flex-direction: column; gap: 14px; }
-.timelineStep { display: flex; align-items: flex-start; gap: 12px; }
-.timelineDot { width: 10px; height: 10px; border-radius: 50%; background: #2563eb; margin-top: 4px; flex-shrink: 0; }
+.timelineStep { display: flex; align-items: flex-start; gap: 12px; position: relative; }
+.timelineDot { width: 10px; height: 10px; border-radius: 50%; background: #2563eb; margin-top: 4px; flex-shrink: 0; position: relative; }
 .timelineDotPending { background: #d97706; }
 .timelineDotDone { background: #059669; }
+/* Connecting line between steps — first stepper/connector pattern in the host app (dots used to
+   float in isolation with nothing joining them). Anchored to .timelineStep with top/bottom (not a
+   fixed height) so it stays correct even if a step's label ever wraps to two lines.
+   top:14px = the dot's own margin-top(4) + height(10), i.e. exactly its bottom edge.
+   bottom:-18px = .timeline's gap(14) + the NEXT dot's margin-top(4), i.e. exactly its top edge. */
+.timelineStep:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 14px;
+  bottom: -18px;
+  width: 2px;
+  background: #eaecf0;
+  border-radius: 1px;
+}
 .timelineStep > div { display: flex; flex-direction: column; gap: 2px; }
 .timelineLabel { font-size: 13px; font-weight: 600; color: #0f172a; }
-.timelineTime { font-size: 11.5px; color: #94a3b8; }
+.timelineTime { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: #94a3b8; }
 
 .rejectionReasonText {
   margin: 12px 0 0; padding: 10px 12px; background: #fef2f2; border: 1px solid #fecaca;
@@ -296,8 +457,50 @@
   .searchBox { width: 100%; }
 }
 
+/* At 640px the date range pill group starts overflowing the header — stack header vertically */
+@media (max-width: 640px) {
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 20px 20px;
+    gap: 12px;
+  }
+  /* Let the date range pill group wrap its buttons so none are clipped */
+  .dateRangeGroup {
+    flex-wrap: wrap;
+    border-radius: 10px;
+    width: 100%;
+  }
+  .dateRangeButton,
+  .dateRangeActive {
+    flex: 1;
+    text-align: center;
+    border-right: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .dateRangeButton:last-child,
+  .dateRangeActive:last-child {
+    border-bottom: none;
+  }
+  /* Stack approval/reject decision buttons vertically in the detail drawer */
+  .decisionActions { flex-direction: column; align-items: stretch; }
+  .approveBtn, .rejectBtn, .cancelRejectBtn { justify-content: center; }
+}
+
 @media (max-width: 768px) {
   .header { padding: 20px 22px; }
-  .detailList { grid-template-columns: 1fr; gap: 4px 0; }
   .dataFieldRow { grid-template-columns: 1fr; }
+  .fieldCardGrid { grid-template-columns: 1fr; }
+  /* Ensure table container has smooth momentum scrolling on iOS */
+  .tableContainer { -webkit-overflow-scrolling: touch; }
 }
+
+@media (max-width: 480px) {
+  .header { padding: 16px 16px; }
+  .summaryGrid { gap: 8px; }
+  .summaryCard { padding: 12px 14px; }
+  .summaryValue { font-size: 22px; }
+  .pagination { flex-wrap: wrap; gap: 8px; }
+  .pageIndicator { min-width: 80px; }
+}
+

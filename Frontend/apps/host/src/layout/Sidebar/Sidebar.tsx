@@ -3,6 +3,7 @@ import { classNames } from '../../shared/utils/classNames'
 import { SkeletonBlock } from '../../shared/components/Skeleton'
 import { Icon } from '../../shared/components/Icon/Icon'
 import { resolveIcon } from '../../shared/components/Icon/resolveIcon'
+import { BrandMark } from '../../shared/components/BrandMark/BrandMark'
 import styles from './Sidebar.module.css'
 import { APP_NAME } from '../../shared/config/branding'
 
@@ -64,18 +65,7 @@ export function Sidebar({ apps, canAccessAuditLogs, canAccessApprovals, isAdmini
 
       {/* ── Brand ─────────────────────────────────────────── */}
       <div className={styles.brand}>
-        <div className={styles.brandMark} aria-hidden="true">
-          <svg width="20" height="20" viewBox="0 0 36 36" fill="none">
-            <polygon points="18,2 32,10 32,26 18,34 4,26 4,10"
-              stroke="rgba(255,255,255,0.9)" strokeWidth="2.2" strokeLinejoin="round" fill="none" />
-            <line x1="18" y1="18" x2="18" y2="34" stroke="rgba(255,255,255,0.9)" strokeWidth="2.2" />
-            <line x1="18" y1="18" x2="32" y2="10" stroke="rgba(255,255,255,0.9)" strokeWidth="2.2" />
-            <line x1="18" y1="18" x2="4"  y2="10" stroke="rgba(255,255,255,0.9)" strokeWidth="2.2" />
-            <polygon points="18,7 27,12 18,17 9,12"
-              stroke="rgba(255,255,255,0.6)" strokeWidth="1.2"
-              fill="rgba(255,255,255,0.15)" />
-          </svg>
-        </div>
+        <BrandMark size={34} />
         <div className={styles.brandNames}>
           <span className={styles.brandName}>
             {/* Name from config; split only so the two-tone styling still applies. */}

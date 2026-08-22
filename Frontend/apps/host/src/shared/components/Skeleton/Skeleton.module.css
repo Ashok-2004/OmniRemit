@@ -156,6 +156,47 @@
   animation: skFadeIn 0.3s ease both;
 }
 
+/* ── Donut chart skeleton — mirrors DashboardPage.module.css
+   .donutContainer/.donutSvgWrap/.legendList exactly ───────── */
+.donutSkelContainer {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  min-height: 180px;
+  animation: skFadeIn 0.3s ease both;
+}
+
+.donutSkelRingWrap {
+  position: relative;
+  width: 148px;
+  height: 148px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.donutSkelCenter {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.legendSkelList {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 1;
+}
+
+.legendSkelItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .dashWidgetSkel {
   display: flex;
   align-items: center;
@@ -194,6 +235,7 @@
   .activityItemSkel,
   .quickActionSkel,
   .dashWidgetSkel,
+  .donutSkelContainer,
   .contentFadeIn {
     animation: none;
   }

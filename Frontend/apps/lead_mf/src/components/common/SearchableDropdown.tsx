@@ -156,6 +156,7 @@ export const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
               boxShadow: 'none',
               background: 'transparent',
               width: '100%',
+              minWidth: 0,
               fontSize: '14px',
               color: '#0f172a',
               cursor: disabled ? 'not-allowed' : 'text',

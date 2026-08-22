@@ -1113,10 +1113,33 @@
   }
 }
 
+@media (max-width: 640px) {
+  /* Wrap date range pills below the title when header is already stacked */
+  .dateRangeGroup {
+    flex-wrap: wrap;
+    border-radius: 10px;
+    width: 100%;
+  }
+  .dateRangeButton,
+  .dateRangeActive {
+    flex: 1;
+    text-align: center;
+    border-right: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .dateRangeButton:last-child,
+  .dateRangeActive:last-child {
+    border-bottom: none;
+  }
+  /* Hide verbose rows-per-page label on narrow toolbars */
+  .rowsDropdownLabel { display: none; }
+}
+
 @media (max-width: 480px) {
   .header { padding: 16px 16px; }
   .summaryGrid { gap: 8px; }
   .summaryCard { padding: 12px 14px; }
   .summaryValue { font-size: 22px; }
+  .pagination { flex-wrap: wrap; gap: 8px; }
+  .pageIndicator { min-width: 80px; }
 }
-

@@ -3,8 +3,9 @@ import { useCustomerStore } from '../store/customerStore';
 import { useProductStore } from '../store/productStore';
 import { useNavigationStore } from '../store/navigationStore';
 import ProductDetailsModal from '../components/ProductDetailsModal';
-import { ArrowLeft, Search, Eye, Layers, RefreshCw, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Search, Eye, Layers, RefreshCw, X, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
 import type { CorporateProfile, IndividualProfile } from '../types/api';
+import { getFriendlyErrorMessage } from '../utils/errorMessages';
 
 export default function AllProducts() {
   const { profile, customerType } = useCustomerStore();
@@ -13,6 +14,7 @@ export default function AllProducts() {
     products,
     loading,
     error,
+    errorStatus,
     pageNumber,
     pageSize,
     totalCount,
@@ -70,7 +72,7 @@ export default function AllProducts() {
         <div style={{ position: 'absolute', top: '-40px', right: '-40px', width: '180px', height: '180px', borderRadius: '50%', background: 'rgba(255, 255, 255, 0.08)', pointerEvents: 'none' }} />
         <div style={{ position: 'absolute', bottom: '-50px', right: '120px', width: '130px', height: '130px', borderRadius: '50%', background: 'rgba(255, 255, 255, 0.05)', pointerEvents: 'none' }} />
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '18px', position: 'relative', zIndex: 1 }}>
+        <div className="c360-hero-left">
           <div
             style={{
               width: '50px',
@@ -233,6 +235,18 @@ export default function AllProducts() {
               <RefreshCw size={18} className="animate-spin" style={{ color: '#2563eb' }} />
               <span>Loading customer product accounts...</span>
             </div>
+          </div>
+        ) : error ? (
+          // A genuine fetch failure used to fall straight into the "no products found" empty state
+          // below — indistinguishable from a customer who simply has zero product accounts. This
+          // gives an operator a real, actionable reason instead of a false "nothing here".
+          <div className="error-container" style={{ margin: '20px' }}>
+            <AlertTriangle size={20} style={{ color: '#dc2626', marginBottom: 8 }} />
+            <h3>Unable to Load Products</h3>
+            <p>{getFriendlyErrorMessage({ message: error, status: errorStatus ?? undefined })}</p>
+            <button className="c360-btn-primary" onClick={() => customerId && loadProducts(customerId)} style={{ marginTop: 12 }}>
+              Retry
+            </button>
           </div>
         ) : filteredProducts.length === 0 ? (
           <div style={{ padding: '64px 20px', textAlign: 'center', color: '#64748b' }}>

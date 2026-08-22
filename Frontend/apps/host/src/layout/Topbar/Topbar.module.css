@@ -342,7 +342,19 @@
 
 @media (max-width: 480px) {
   .topbar { padding: 0 10px; gap: 6px; }
-  /* Compress actions gap */
   .actions { gap: 2px; }
+  /* Hide the divider line between search and action icons — saves precious space */
+  .actionsDivider { display: none; }
+  /* Reduce icon button padding so all 3 icons fit comfortably */
+  .iconBtn { padding: 6px; }
 }
+
+@media (max-width: 360px) {
+  /* On the narrowest phones tighten even further and let search take all remaining space */
+  .topbar { gap: 4px; }
+  .actions { gap: 2px; }
+  .iconBtn { padding: 5px; }
+  .search { max-width: none; min-width: 0; }
+}
+
 

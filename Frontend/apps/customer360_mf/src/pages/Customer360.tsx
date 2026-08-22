@@ -23,12 +23,111 @@ import type {
   FieldConfig,
 } from '../types/api';
 
+import { DEFAULT_INDIVIDUAL_FIELD_CONFIGS, DEFAULT_CORPORATE_FIELD_CONFIGS } from '../constants/defaultFieldConfigs';
+
+
+/** One "sub-item" row skeleton — matches .left-tab-btn's real height/padding (10px 14px, 13px text). */
+function NavItemSkeleton({ indent = false }: { indent?: boolean }) {
+  return (
+    <div className="c360-skel" style={{ height: 34, borderRadius: 8, marginLeft: indent ? 12 : 0 }} />
+  );
+}
+
+/**
+ * Matches the real right-side content exactly: SectionContainer's `.section-container` card,
+ * `.info-section-title` (the blue left-border header), and `.info-cards-grid` of `.info-card` boxes
+ * (icon+label row, then a value line) — not a generic 2-column label/value list, which looked nothing
+ * like the real bordered field-card grid once the content actually loaded in.
+ */
+function InfoSectionSkeleton({ cardCount = 9 }: { cardCount?: number }) {
+  return (
+    <div className="section-container" aria-hidden="true">
+      <div className="c360-skel c360-skel-text" style={{ width: 150, height: 14, marginBottom: 16 }} />
+      <div className="info-cards-grid">
+        {Array.from({ length: cardCount }, (_, i) => (
+          <div key={i} className="info-card">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div className="c360-skel c360-skel-circle" style={{ width: 12, height: 12 }} />
+              <div className="c360-skel c360-skel-text" style={{ width: '55%', height: '0.7em' }} />
+            </div>
+            <div className="c360-skel c360-skel-text" style={{ width: '75%', height: '1em' }} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Left-column skeleton for the Individual profile — matches the real two-level nav exactly
+ * (Customer360.tsx's individual .customer-left-column): a "Customer Details" group header + 4
+ * indented sub-items, a divider, then a "Customer Workspace" group header + 3 indented sub-items.
+ * The previous shared skeleton showed 4 flat bars, nothing like this nested, two-group structure.
+ */
+function IndividualLeftColumnSkeleton() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', width: '100%', gap: 12 }}>
+      <NavItemSkeleton />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+        {[0, 1, 2, 3].map((i) => <NavItemSkeleton key={i} indent />)}
+      </div>
+      <div style={{ width: '100%', height: 1, background: '#F3F4F6', margin: '4px 0' }} />
+      <NavItemSkeleton />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+        {[0, 1, 2].map((i) => <NavItemSkeleton key={i} indent />)}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Left-column skeleton for the Non-Individual (corporate) profile — matches the real flat,
+ * non-collapsible 6-item list (Company Overview / Company Information / Contact & Relationship /
+ * RM Manager Information / Products & Signatories / Interested Products). The previous shared
+ * skeleton only showed 4 generic bars — two items short of the real list.
+ */
+function NonIndividualLeftColumnSkeleton() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', width: '100%', gap: 8 }}>
+      {[0, 1, 2, 3, 4, 5].map((i) => <NavItemSkeleton key={i} />)}
+    </div>
+  );
+}
+
+/**
+ * Mirrors the real .customer-layout-container shape (avatar + name/title/badge on the left, section
+ * cards on the right) — but, critically, the left column now renders the CORRECT nav shape for
+ * whichever customer type is being searched, since Individual and Non-Individual have genuinely
+ * different nav structures (see IndividualLeftColumnSkeleton / NonIndividualLeftColumnSkeleton docs).
+ * `isIndividual` is already known before the profile itself loads (it's the search form's own
+ * selection), so there's no reason to guess with one generic shape for both.
+ */
+function ProfileWorkspaceSkeleton({ isIndividual }: { isIndividual: boolean }) {
+  return (
+    <div className="customer-layout-container" aria-hidden="true">
+      <div className="customer-left-column">
+        <div className="c360-skel c360-skel-circle" style={{ width: 80, height: 80, aspectRatio: '1 / 1', flexShrink: 0, marginBottom: 16 }} />
+        <div className="c360-skel c360-skel-text" style={{ width: '72%', height: 16, marginBottom: 8 }} />
+        <div className="c360-skel c360-skel-text" style={{ width: '52%', marginBottom: 14 }} />
+        <div className="c360-skel c360-skel-pill" style={{ width: 130, height: 22, marginBottom: 22 }} />
+        <div style={{ width: '100%', height: 1, background: '#E5E7EB', marginBottom: 16 }} />
+        {isIndividual ? <IndividualLeftColumnSkeleton /> : <NonIndividualLeftColumnSkeleton />}
+      </div>
+
+      <div className="customer-right-column">
+        <InfoSectionSkeleton />
+      </div>
+    </div>
+  );
+}
+
 export default function Customer360() {
   const { customerType, profile, contactInfo, loading, error, errorStatus, loadActiveProfile } = useCustomerStore();
   const {
     interactions,
     loading: loadingInteractions,
     error: interactionsError,
+    errorStatus: interactionsErrorStatus,
     loadInteractions,
     openCaseModal
   } = useInteractionStore();
@@ -36,6 +135,7 @@ export default function Customer360() {
     products,
     loading: loadingProducts,
     error: productsError,
+    errorStatus: productsErrorStatus,
     loadProducts,
     openProductModal,
     pageNumber,
@@ -54,7 +154,7 @@ export default function Customer360() {
   // Tab states
   const [activeTab, setActiveTab] = useState('personal_details'); // 'personal_details' for Individual; 'overview' for Corporate
   const [activeSubTab, setActiveSubTab] = useState(''); // no longer used for Individual details
-  const [detailsExpanded, setDetailsExpanded] = useState(false);
+  const [detailsExpanded, setDetailsExpanded] = useState(true);
   const [workspaceExpanded, setWorkspaceExpanded] = useState(true);
   const [productsTab, setProductsTab] = useState('held'); // 'held' or 'interested' for Individual
 
@@ -177,8 +277,8 @@ export default function Customer360() {
   // once, alongside the search-options fetch above — both are effectively static reference data for
   // the lifetime of this component.
   // ---------------------------------------------------------------------------
-  const [individualFieldConfigs, setIndividualFieldConfigs] = useState<FieldConfig[]>([]);
-  const [corporateFieldConfigs, setCorporateFieldConfigs] = useState<FieldConfig[]>([]);
+  const [individualFieldConfigs, setIndividualFieldConfigs] = useState<FieldConfig[]>(DEFAULT_INDIVIDUAL_FIELD_CONFIGS);
+  const [corporateFieldConfigs, setCorporateFieldConfigs] = useState<FieldConfig[]>(DEFAULT_CORPORATE_FIELD_CONFIGS);
 
   useEffect(() => {
     let active = true;
@@ -265,15 +365,23 @@ export default function Customer360() {
     const tabParam = searchParams.get('tab');
     if (tabParam && profile) {
       let resolvedTab = tabParam;
-      if (['residency_details', 'contact_details'].includes(tabParam)) {
+      if (['residency_details', 'contact_details', 'residency_contact_details', 'residency', 'contact'].includes(tabParam)) {
         resolvedTab = 'residency_contact_details';
-      } else if (['additional_details', 'referrer_relationship'].includes(tabParam)) {
+        setDetailsExpanded(true);
+      } else if (['personal_details', 'personal'].includes(tabParam)) {
+        resolvedTab = 'personal_details';
+        setDetailsExpanded(true);
+      } else if (['employment_details', 'employment'].includes(tabParam)) {
+        resolvedTab = 'employment_details';
+        setDetailsExpanded(true);
+      } else if (['additional_details', 'referrer_relationship', 'additional_relationship_details', 'additional', 'relationship'].includes(tabParam)) {
         resolvedTab = 'additional_relationship_details';
-      } else if (['contact', 'referral'].includes(tabParam)) {
+        setDetailsExpanded(true);
+      } else if (['contact', 'referral', 'contact_relationship'].includes(tabParam)) {
         resolvedTab = 'contact_relationship';
-      } else if (['products', 'signatories'].includes(tabParam)) {
+      } else if (['products', 'signatories', 'products_signatories'].includes(tabParam)) {
         resolvedTab = 'products_signatories';
-        setCorpSubTab(tabParam);
+        setCorpSubTab(tabParam === 'signatories' ? 'signatories' : 'products');
       }
       setActiveTab(resolvedTab);
       if (customerType === 'individual') {
@@ -528,12 +636,7 @@ export default function Customer360() {
   // the search form (which would flash briefly before swapping to the
   // restored workspace) and never a stale/empty table.
   if (bootstrapping) {
-    return (
-      <div className="loading-overlay" style={{ height: '70vh' }}>
-        <div className="spinner"></div>
-        <p style={{ fontWeight: 600, color: '#374151' }}>Restoring your session...</p>
-      </div>
-    );
+    return <ProfileWorkspaceSkeleton isIndividual={isIndividual} />;
   }
 
   // CustomerProduct's real CRM field is `accountNumber` (see types/api.ts) —
@@ -670,7 +773,7 @@ export default function Customer360() {
         <div style={{ position: 'absolute', top: '-40px', right: '-40px', width: '180px', height: '180px', borderRadius: '50%', background: 'rgba(255, 255, 255, 0.08)', pointerEvents: 'none' }} />
         <div style={{ position: 'absolute', bottom: '-50px', right: '120px', width: '130px', height: '130px', borderRadius: '50%', background: 'rgba(255, 255, 255, 0.05)', pointerEvents: 'none' }} />
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '18px', position: 'relative', zIndex: 1 }}>
+        <div className="c360-hero-left">
           <div
             style={{
               width: '50px',
@@ -856,7 +959,7 @@ export default function Customer360() {
         <div style={{ position: 'absolute', top: '-40px', right: '-40px', width: '180px', height: '180px', borderRadius: '50%', background: 'rgba(255, 255, 255, 0.08)', pointerEvents: 'none' }} />
         <div style={{ position: 'absolute', bottom: '-50px', right: '120px', width: '130px', height: '130px', borderRadius: '50%', background: 'rgba(255, 255, 255, 0.05)', pointerEvents: 'none' }} />
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '18px', position: 'relative', zIndex: 1 }}>
+        <div className="c360-hero-left">
           <div
             style={{
               width: '50px',
@@ -1003,36 +1106,41 @@ export default function Customer360() {
     </>
   );
 
-  if (isIndividual && (!isSearched || !profile)) {
+  /*
+   * `loading` is checked FIRST, before anything else, and for BOTH customer types identically: the
+   * search panel/hero stays visible (never replaced), and ONLY the results area below it — the exact
+   * space the real profile is about to render into — gets ProfileWorkspaceSkeleton. This applies
+   * equally whether it's the very first search (no profile yet) or a reload of an already-loaded
+   * profile, so there's exactly one loading presentation, not two different ones depending on when
+   * loading happens to become true.
+   */
+  if (loading) {
     return (
       <div>
-        {renderIndividualSearchPanel()}
-
-        {loading ? (
-          <div className="loading-overlay" style={{ height: '40vh' }}>
-            <div className="spinner"></div>
-            <p style={{ fontWeight: 600, color: '#374151' }}>Searching Customer Profile...</p>
-          </div>
-        ) : (
-          <div className="c360-empty-prompt">
-            <div className="c360-empty-prompt-icon">
-              <User size={28} />
-            </div>
-            <h3 className="c360-empty-prompt-title">No Customer Profile Selected</h3>
-            <p className="c360-empty-prompt-desc">
-              Select an ID type above (NRIC, Phone Number, Full Name, or Secondary ID) and enter the value to view the complete Customer 360 profile.
-            </p>
-          </div>
-        )}
+        {isIndividual ? renderIndividualSearchPanel() : renderCorporateSearchPanel()}
+        <ProfileWorkspaceSkeleton isIndividual={isIndividual} />
       </div>
     );
   }
 
-  if (loading) {
+  // Not yet searched, and nothing loaded — for EITHER customer type. This used to only check
+  // `isIndividual`, so Corporate had no equivalent and fell through to a bare, page-replacing
+  // skeleton instead of keeping its own search panel visible here.
+  if ((isIndividual && (!isSearched || !profile)) || (!isIndividual && (!isSearchedCorp || !profile))) {
     return (
-      <div className="loading-overlay" style={{ height: '70vh' }}>
-        <div className="spinner"></div>
-        <p style={{ fontWeight: 600, color: '#374151' }}>Loading Customer 360 Workspace...</p>
+      <div>
+        {isIndividual ? renderIndividualSearchPanel() : renderCorporateSearchPanel()}
+        <div className="c360-empty-prompt">
+          <div className="c360-empty-prompt-icon">
+            {isIndividual ? <User size={28} /> : <Building2 size={28} />}
+          </div>
+          <h3 className="c360-empty-prompt-title">No Customer Profile Selected</h3>
+          <p className="c360-empty-prompt-desc">
+            {isIndividual
+              ? 'Select an ID type above (NRIC, Phone Number, Full Name, or Secondary ID) and enter the value to view the complete Customer 360 profile.'
+              : 'Select a search type above (BRN, Old BRN, or Company Name) and enter the value to view the complete Customer 360 profile.'}
+          </p>
+        </div>
       </div>
     );
   }
@@ -1052,22 +1160,11 @@ export default function Customer360() {
     );
   }
 
-  if (!profile) {
-    return (
-      <div>
-        {isIndividual ? renderIndividualSearchPanel() : renderCorporateSearchPanel()}
-        <div className="c360-empty-prompt" style={{ marginTop: 20 }}>
-          <div className="c360-empty-prompt-icon">
-            <Search size={28} />
-          </div>
-          <h3 className="c360-empty-prompt-title">No Active Profile Loaded</h3>
-          <p className="c360-empty-prompt-desc">
-            Use the search form above to find and load a customer record.
-          </p>
-        </div>
-      </div>
-    );
-  }
+  // Not actually reachable: every branch above already returns unless `profile` is set (both halves
+  // of the `loading`-false guard require `profile` truthy). This is here purely so TypeScript can
+  // narrow `profile` past its `| null` type below — the OR'd conditions above are too complex for its
+  // control-flow analysis to see through on their own.
+  if (!profile) return null;
 
   // `profile` is CustomerProfile = IndividualProfile | CorporateProfile. This
   // component renders one shape or the other depending on `isIndividual`, so
@@ -1088,18 +1185,20 @@ export default function Customer360() {
           {/* Left Column: Summary Card */}
           <div className="customer-left-column">
             {/* Purple circle avatar */}
-            <div style={{ 
-              width: 80, 
-              height: 80, 
-              borderRadius: '50%', 
-              backgroundColor: '#004EEB', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center', 
-              color: '#FFFFFF', 
-              fontSize: 28, 
-              fontWeight: 700, 
-              marginBottom: 16 
+            <div style={{
+              width: 80,
+              height: 80,
+              aspectRatio: '1 / 1',
+              flexShrink: 0,
+              borderRadius: '50%',
+              backgroundColor: '#004EEB',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#FFFFFF',
+              fontSize: 28,
+              fontWeight: 700,
+              marginBottom: 16
             }}>
               {getInitials(individualProfile.fullName)}
             </div>
@@ -1135,7 +1234,7 @@ export default function Customer360() {
                 <button 
                   className="left-tab-btn" 
                   onClick={() => setDetailsExpanded(!detailsExpanded)}
-                  style={{ justifyContent: 'space-between', fontWeight: 800, color: '#374151', paddingBottom: 6 }}
+                  style={{ justifyContent: 'space-between', fontWeight: 800, color: '#374151' }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <User size={16} />
@@ -1148,30 +1247,26 @@ export default function Customer360() {
                     <button 
                       className={`left-tab-btn ${activeTab === 'personal_details' ? 'active' : ''}`}
                       onClick={() => setActiveTab('personal_details')}
-                      style={{ fontSize: 13, padding: '8px 12px', fontWeight: activeTab === 'personal_details' ? 700 : 500 }}
                     >
-                      Personal Details
+                      <span>Personal Details</span>
                     </button>
                     <button 
                       className={`left-tab-btn ${activeTab === 'residency_contact_details' ? 'active' : ''}`}
                       onClick={() => setActiveTab('residency_contact_details')}
-                      style={{ fontSize: 13, padding: '8px 12px', fontWeight: activeTab === 'residency_contact_details' ? 700 : 500 }}
                     >
-                      Residency & Contact Details
+                      <span>Residency & Contact Details</span>
                     </button>
                     <button 
                       className={`left-tab-btn ${activeTab === 'employment_details' ? 'active' : ''}`}
                       onClick={() => setActiveTab('employment_details')}
-                      style={{ fontSize: 13, padding: '8px 12px', fontWeight: activeTab === 'employment_details' ? 700 : 500 }}
                     >
-                      Employment Details
+                      <span>Employment Details</span>
                     </button>
                     <button 
                       className={`left-tab-btn ${activeTab === 'additional_relationship_details' ? 'active' : ''}`}
                       onClick={() => setActiveTab('additional_relationship_details')}
-                      style={{ fontSize: 13, padding: '8px 12px', fontWeight: activeTab === 'additional_relationship_details' ? 700 : 500 }}
                     >
-                      Additional & Relationship Details
+                      <span>Additional & Relationship Details</span>
                     </button>
                   </div>
                 )}
@@ -1185,7 +1280,7 @@ export default function Customer360() {
                 <button 
                   className="left-tab-btn" 
                   onClick={() => setWorkspaceExpanded(!workspaceExpanded)}
-                  style={{ justifyContent: 'space-between', fontWeight: 800, color: '#374151', paddingBottom: 6 }}
+                  style={{ justifyContent: 'space-between', fontWeight: 800, color: '#374151' }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <Briefcase size={16} />
@@ -1198,23 +1293,20 @@ export default function Customer360() {
                     <button 
                       className={`left-tab-btn ${activeTab === 'user_interactions' ? 'active' : ''}`}
                       onClick={() => setActiveTab('user_interactions')}
-                      style={{ fontSize: 13, padding: '8px 12px', fontWeight: activeTab === 'user_interactions' ? 700 : 500 }}
                     >
-                      User Interactions
+                      <span>User Interactions</span>
                     </button>
                     <button 
                       className={`left-tab-btn ${activeTab === 'products' ? 'active' : ''}`}
                       onClick={() => setActiveTab('products')}
-                      style={{ fontSize: 13, padding: '8px 12px', fontWeight: activeTab === 'products' ? 700 : 500 }}
                     >
-                      Products
+                      <span>Products</span>
                     </button>
                     <button 
                       className={`left-tab-btn ${activeTab === 'rm_details' ? 'active' : ''}`}
                       onClick={() => setActiveTab('rm_details')}
-                      style={{ fontSize: 13, padding: '8px 12px', fontWeight: activeTab === 'rm_details' ? 700 : 500 }}
                     >
-                      RM Details
+                      <span>RM Details</span>
                     </button>
                   </div>
                 )}
@@ -1237,7 +1329,7 @@ export default function Customer360() {
               }
             >
               {/* DETAILS TABS & WORKSPACE DIRECT SECTIONS */}
-              {['personal_details', 'residency_contact_details', 'employment_details', 'additional_relationship_details'].includes(activeTab) && (
+              {['personal_details', 'residency_contact_details', 'employment_details', 'additional_relationship_details', 'personal', 'residency_details', 'residency', 'contact_details', 'contact', 'employment', 'additional_details', 'additional', 'details'].includes(activeTab) && (
                 <IndividualDetails
                   subTab={activeTab}
                   profile={individualProfile}
@@ -1354,7 +1446,7 @@ export default function Customer360() {
                     <div style={{ padding: 24, textAlign: 'center' }}>Loading interactions...</div>
                   ) : interactionsError ? (
                     <div className="error-container">
-                      <p>{getFriendlyErrorMessage({ message: interactionsError })}</p>
+                      <p>{getFriendlyErrorMessage({ message: interactionsError ?? undefined, status: interactionsErrorStatus ?? undefined })}</p>
                       <button className="btn btn-primary" onClick={() => loadInteractions(individualProfile.nationalId as string)} style={{ marginTop: 12 }}>
                         Retry
                       </button>
@@ -1611,7 +1703,7 @@ export default function Customer360() {
                         <div style={{ padding: 24, textAlign: 'center' }}>Loading products...</div>
                       ) : productsError ? (
                         <div className="error-container">
-                          <p>{getFriendlyErrorMessage({ message: productsError })}</p>
+                          <p>{getFriendlyErrorMessage({ message: productsError ?? undefined, status: productsErrorStatus ?? undefined })}</p>
                           <button className="btn btn-primary" onClick={() => loadProducts(individualProfile.nationalId as string, pageNumber, pageSize)} style={{ marginTop: 12 }}>
                             Retry
                           </button>
@@ -1794,18 +1886,20 @@ export default function Customer360() {
           {/* Left Column: Summary Card */}
           <div className="customer-left-column">
             {/* Blue circle avatar for company */}
-            <div style={{ 
-               width: 80, 
-               height: 80, 
-               borderRadius: '50%', 
-               backgroundColor: '#004EEB', 
-               display: 'flex', 
-               alignItems: 'center', 
-               justifyContent: 'center', 
-               color: '#FFFFFF', 
-               fontSize: 28, 
-               fontWeight: 700, 
-               marginBottom: 16 
+            <div style={{
+               width: 80,
+               height: 80,
+               aspectRatio: '1 / 1',
+               flexShrink: 0,
+               borderRadius: '50%',
+               backgroundColor: '#004EEB',
+               display: 'flex',
+               alignItems: 'center',
+               justifyContent: 'center',
+               color: '#FFFFFF',
+               fontSize: 28,
+               fontWeight: 700,
+               marginBottom: 16
              }}>
                {getInitials(corporateProfile.organizationName)}
              </div>
@@ -1839,148 +1933,52 @@ export default function Customer360() {
               <button 
                 className={`left-tab-btn ${activeTab === 'overview' ? 'active' : ''}`}
                 onClick={() => setActiveTab('overview')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  width: '100%',
-                  padding: '10px 14px',
-                  borderRadius: 8,
-                  border: 'none',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  transition: 'all 0.2s',
-                  backgroundColor: activeTab === 'overview' ? 'rgba(0, 78, 235, 0.08)' : 'transparent',
-                  color: activeTab === 'overview' ? '#004EEB' : '#4B5563'
-                }}
               >
                 <Building2 size={16} />
-                Company Overview
+                <span>Company Overview</span>
               </button>
 
               <button 
                 className={`left-tab-btn ${activeTab === 'company_info' ? 'active' : ''}`}
                 onClick={() => setActiveTab('company_info')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  width: '100%',
-                  padding: '10px 14px',
-                  borderRadius: 8,
-                  border: 'none',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  transition: 'all 0.2s',
-                  backgroundColor: activeTab === 'company_info' ? 'rgba(0, 78, 235, 0.08)' : 'transparent',
-                  color: activeTab === 'company_info' ? '#004EEB' : '#4B5563'
-                }}
               >
                 <Briefcase size={16} />
-                Company Information
+                <span>Company Information</span>
               </button>
 
               <button 
-                 className={`left-tab-btn ${activeTab === 'contact_relationship' ? 'active' : ''}`}
-                 onClick={() => setActiveTab('contact_relationship')}
-                 style={{
-                   display: 'flex',
-                   alignItems: 'center',
-                   gap: 10,
-                   width: '100%',
-                   padding: '10px 14px',
-                   borderRadius: 8,
-                   border: 'none',
-                   fontSize: 13,
-                   fontWeight: 600,
-                   cursor: 'pointer',
-                   textAlign: 'left',
-                   transition: 'all 0.2s',
-                   backgroundColor: activeTab === 'contact_relationship' ? 'rgba(0, 78, 235, 0.08)' : 'transparent',
-                   color: activeTab === 'contact_relationship' ? '#004EEB' : '#4B5563'
-                 }}
-               >
-                 <Phone size={16} />
-                 Contact & Relationship
-               </button>
- 
-               <button 
-                 className={`left-tab-btn ${activeTab === 'rmManager' ? 'active' : ''}`}
-                 onClick={() => setActiveTab('rmManager')}
-                 style={{
-                   display: 'flex',
-                   alignItems: 'center',
-                   gap: 10,
-                   width: '100%',
-                   padding: '10px 14px',
-                   borderRadius: 8,
-                   border: 'none',
-                   fontSize: 13,
-                   fontWeight: 600,
-                   cursor: 'pointer',
-                   textAlign: 'left',
-                   transition: 'all 0.2s',
-                   backgroundColor: activeTab === 'rmManager' ? 'rgba(0, 78, 235, 0.08)' : 'transparent',
-                   color: activeTab === 'rmManager' ? '#004EEB' : '#4B5563'
-                 }}
-               >
-                 <User size={16} />
-                 RM Manager Information
-               </button>
- 
-               <button 
-                 className={`left-tab-btn ${activeTab === 'products_signatories' ? 'active' : ''}`}
-                 onClick={() => {
-                   setActiveTab('products_signatories');
-                   setCorpSubTab('products');
-                 }}
-                 style={{
-                   display: 'flex',
-                   alignItems: 'center',
-                   gap: 10,
-                   width: '100%',
-                   padding: '10px 14px',
-                   borderRadius: 8,
-                   border: 'none',
-                   fontSize: 13,
-                   fontWeight: 600,
-                   cursor: 'pointer',
-                   textAlign: 'left',
-                   transition: 'all 0.2s',
-                   backgroundColor: activeTab === 'products_signatories' ? 'rgba(0, 78, 235, 0.08)' : 'transparent',
-                   color: activeTab === 'products_signatories' ? '#004EEB' : '#4B5563'
-                 }}
-               >
-                 <Layers size={16} />
-                 Products & Signatories
-               </button>
+                className={`left-tab-btn ${activeTab === 'contact_relationship' ? 'active' : ''}`}
+                onClick={() => setActiveTab('contact_relationship')}
+              >
+                <Phone size={16} />
+                <span>Contact & Relationship</span>
+              </button>
+
+              <button 
+                className={`left-tab-btn ${activeTab === 'rmManager' ? 'active' : ''}`}
+                onClick={() => setActiveTab('rmManager')}
+              >
+                <User size={16} />
+                <span>RM Manager Information</span>
+              </button>
+
+              <button 
+                className={`left-tab-btn ${activeTab === 'products_signatories' ? 'active' : ''}`}
+                onClick={() => {
+                  setActiveTab('products_signatories');
+                  setCorpSubTab('products');
+                }}
+              >
+                <Layers size={16} />
+                <span>Products & Signatories</span>
+              </button>
 
               <button 
                 className={`left-tab-btn ${activeTab === 'interestedProducts' ? 'active' : ''}`}
                 onClick={() => setActiveTab('interestedProducts')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  width: '100%',
-                  padding: '10px 14px',
-                  borderRadius: 8,
-                  border: 'none',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  transition: 'all 0.2s',
-                  backgroundColor: activeTab === 'interestedProducts' ? 'rgba(0, 78, 235, 0.08)' : 'transparent',
-                  color: activeTab === 'interestedProducts' ? '#004EEB' : '#4B5563'
-                }}
               >
                 <TrendingUp size={16} />
-                Interested Products
+                <span>Interested Products</span>
               </button>
             </div>
           </div>
@@ -2003,20 +2001,29 @@ export default function Customer360() {
               {(() => {
                 const CORP_SUBTAB_SECTIONS: Record<string, string[]> = {
                   overview: ['Company Details', 'Online Banking Status', 'Business Registration'],
+                  company_overview: ['Company Details', 'Online Banking Status', 'Business Registration'],
                   company_info: ['Company Information'],
+                  company: ['Company Information'],
                   contact_relationship: ['Contact Information', 'Referrer & Relationship Information'],
+                  contact: ['Contact Information', 'Referrer & Relationship Information'],
                   rmManager: ['RM Manager Information'],
+                  rm_manager: ['RM Manager Information'],
+                  rm: ['RM Manager Information'],
                 };
                 const sectionsForTab = CORP_SUBTAB_SECTIONS[activeTab];
                 if (!sectionsForTab) return null;
 
-                const configsForTab = corporateFieldConfigs
+                const effectiveCorpConfigs = corporateFieldConfigs && corporateFieldConfigs.length > 0
+                  ? corporateFieldConfigs
+                  : DEFAULT_CORPORATE_FIELD_CONFIGS;
+
+                const configsForTab = effectiveCorpConfigs
                   .filter((f) => sectionsForTab.includes(f.section))
                   .sort((a, b) => a.displayOrder - b.displayOrder);
                 const grouped = groupBySection(configsForTab);
 
                 return (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     {grouped.map(({ section, fields }) => (
                       <DynamicProfileSection
                         key={section}
@@ -2192,7 +2199,7 @@ export default function Customer360() {
                         <div style={{ padding: 24, textAlign: 'center' }}>Loading products...</div>
                       ) : productsError ? (
                         <div className="error-container">
-                          <p>{getFriendlyErrorMessage({ message: productsError })}</p>
+                          <p>{getFriendlyErrorMessage({ message: productsError ?? undefined, status: productsErrorStatus ?? undefined })}</p>
                           <button className="btn btn-primary" onClick={() => loadProducts(corporateProfile.brn as string, pageNumber, pageSize)} style={{ marginTop: 12 }}>
                             Retry
                           </button>

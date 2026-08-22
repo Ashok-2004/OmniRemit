@@ -9,9 +9,6 @@ export const CreateLeadPage: React.FC = () => {
         display: 'flex',
         flexDirection: 'column',
         gap: '22px',
-        // Was 900px — every other page in this app (Dashboard, View Lead, Audit Logs) and the host
-        // itself cap at 1340px, so this page's content was visibly narrower than the rest of the app
-        // for no reason.
         maxWidth: '1340px',
         width: '100%',
         paddingBottom: '40px',
@@ -21,6 +18,7 @@ export const CreateLeadPage: React.FC = () => {
     >
       {/* Page Hero Banner */}
       <div
+        className="lead-hero-banner"
         style={{
           borderRadius: '18px',
           padding: '24px 30px',
@@ -28,6 +26,7 @@ export const CreateLeadPage: React.FC = () => {
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: '20px',
+          flexWrap: 'wrap',
           position: 'relative',
           overflow: 'hidden',
           background: 'linear-gradient(120deg, #1e40af 0%, #2563eb 45%, #3b82f6 100%)',
@@ -66,6 +65,8 @@ export const CreateLeadPage: React.FC = () => {
             display: 'flex',
             alignItems: 'center',
             gap: '18px',
+            minWidth: 0,
+            flexWrap: 'wrap',
             position: 'relative',
             zIndex: 1,
           }}
@@ -89,7 +90,7 @@ export const CreateLeadPage: React.FC = () => {
             <FileText size={24} />
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
             <h1
               style={{
                 fontSize: '20px',
@@ -99,6 +100,7 @@ export const CreateLeadPage: React.FC = () => {
                 letterSpacing: '-0.025em',
                 lineHeight: 1.2,
                 fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+                wordBreak: 'break-word',
               }}
             >
               Submit New Lead Application
@@ -108,6 +110,7 @@ export const CreateLeadPage: React.FC = () => {
                 fontSize: '13px',
                 color: 'rgba(255, 255, 255, 0.82)',
                 margin: 0,
+                wordBreak: 'break-word',
               }}
             >
               Complete all required fields to register a new customer financing enquiry
@@ -129,7 +132,6 @@ export const CreateLeadPage: React.FC = () => {
             fontSize: '12px',
             fontWeight: 600,
             backdropFilter: 'blur(4px)',
-            flexShrink: 0,
             position: 'relative',
             zIndex: 1,
           }}
@@ -138,15 +140,13 @@ export const CreateLeadPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Form Card */}
+      {/* Form Card — uses responsive form-card CSS class instead of fixed inline padding */}
       <div
+        className="form-card"
         style={{
-          background: '#ffffff',
-          border: '1px solid #eaecf0',
-          borderRadius: '16px',
-          padding: '32px 36px',
-          boxShadow: '0 1px 4px rgba(15, 23, 42, 0.04)',
           boxSizing: 'border-box',
+          width: '100%',
+          marginBottom: 0,
         }}
       >
         <LeadFormContainer />
@@ -154,3 +154,4 @@ export const CreateLeadPage: React.FC = () => {
     </div>
   );
 };
+

@@ -31,6 +31,13 @@ export const DashboardPage: React.FC = () => {
         boxSizing: 'border-box',
       }}
     >
+      {/* Inject responsive grid CSS for chart rows */}
+      <style>{`
+        @media (max-width: 768px) {
+          .lead-dash-charts-grid { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
+
       {/* Hero Welcome Banner */}
       <DashboardHeader />
 
@@ -39,6 +46,7 @@ export const DashboardPage: React.FC = () => {
 
       {/* Row 1: Charts — 2-column grid */}
       <div
+        className="lead-dash-charts-grid"
         style={{
           display: 'grid',
           gridTemplateColumns: '1fr 1fr',

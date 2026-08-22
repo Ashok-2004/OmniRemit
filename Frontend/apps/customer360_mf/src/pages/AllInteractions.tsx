@@ -3,8 +3,9 @@ import { useCustomerStore } from '../store/customerStore';
 import { useInteractionStore } from '../store/interactionStore';
 import { useNavigationStore } from '../store/navigationStore';
 import CaseDetailsModal from '../components/CaseDetailsModal';
-import { ArrowLeft, Search, Eye, MessageSquare, RefreshCw, X, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
+import { ArrowLeft, Search, Eye, MessageSquare, RefreshCw, X, ChevronLeft, ChevronRight, Clock, AlertTriangle } from 'lucide-react';
 import type { IndividualProfile, CorporateProfile } from '../types/api';
+import { getFriendlyErrorMessage } from '../utils/errorMessages';
 
 const getStatusBadge = (status?: string | null) => {
   const s = status?.toLowerCase() || 'new';
@@ -27,6 +28,7 @@ export default function AllInteractions() {
     interactions,
     loading,
     error: interactionsError,
+    errorStatus: interactionsErrorStatus,
     pageNumber,
     pageSize,
     totalCount,
@@ -94,7 +96,7 @@ export default function AllInteractions() {
         <div style={{ position: 'absolute', top: '-40px', right: '-40px', width: '180px', height: '180px', borderRadius: '50%', background: 'rgba(255, 255, 255, 0.08)', pointerEvents: 'none' }} />
         <div style={{ position: 'absolute', bottom: '-50px', right: '120px', width: '130px', height: '130px', borderRadius: '50%', background: 'rgba(255, 255, 255, 0.05)', pointerEvents: 'none' }} />
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '18px', position: 'relative', zIndex: 1 }}>
+        <div className="c360-hero-left">
           <div
             style={{
               width: '50px',
@@ -256,6 +258,17 @@ export default function AllInteractions() {
               <RefreshCw size={18} className="animate-spin" style={{ color: '#2563eb' }} />
               <span>Loading interaction and case logs...</span>
             </div>
+          </div>
+        ) : interactionsError ? (
+          // A genuine fetch failure used to fall straight into the "no logs found" empty state below
+          // — indistinguishable from a customer who simply has no interaction history.
+          <div className="error-container" style={{ margin: '20px' }}>
+            <AlertTriangle size={20} style={{ color: '#dc2626', marginBottom: 8 }} />
+            <h3>Unable to Load Interactions</h3>
+            <p>{getFriendlyErrorMessage({ message: interactionsError, status: interactionsErrorStatus ?? undefined })}</p>
+            <button className="c360-btn-primary" onClick={() => customerId && loadInteractions(customerId)} style={{ marginTop: 12 }}>
+              Retry
+            </button>
           </div>
         ) : filteredInteractions.length === 0 ? (
           <div style={{ padding: '64px 20px', textAlign: 'center', color: '#64748b' }}>

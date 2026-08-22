@@ -97,7 +97,7 @@ export default function FieldSettings() {
       <div className="c360-hero-banner">
         <div style={{ position: 'absolute', top: '-50px', right: '-50px', width: '220px', height: '220px', borderRadius: '50%', background: 'rgba(255, 255, 255, 0.07)', pointerEvents: 'none' }} />
         <div style={{ position: 'absolute', bottom: '-60px', right: '120px', width: '160px', height: '160px', borderRadius: '50%', background: 'rgba(255, 255, 255, 0.05)', pointerEvents: 'none' }} />
-        <div style={{ display: 'flex', alignItems: 'center', gap: '18px', position: 'relative', zIndex: 1 }}>
+        <div className="c360-hero-left">
           <div style={{ width: '50px', height: '50px', borderRadius: '14px', background: 'rgba(255, 255, 255, 0.18)', border: '1.5px solid rgba(255, 255, 255, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ffffff', flexShrink: 0 }}>
             <Settings size={24} />
           </div>

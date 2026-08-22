@@ -6,7 +6,7 @@ import { auditLogsApi, type AuditLogDto } from '../../features/system-audit-logs
 import { dashboardApi, type DashboardStatsDto, type HealthEntryDto } from '../../features/dashboard/api/dashboardApi'
 import { ApiError } from '../../shared/api/httpClient'
 import { useSettingsDrawerStore } from '../../shared/stores/settingsDrawerStore'
-import { SkeletonStatCard, SkeletonDashboardWidget, SkeletonAuditRow } from '../../shared/components/Skeleton'
+import { SkeletonStatCard, SkeletonDashboardWidget, SkeletonAuditRow, SkeletonDonutChart } from '../../shared/components/Skeleton'
 import { Icon } from '../../shared/components/Icon/Icon'
 import styles from './DashboardPage.module.css'
 import { APP_NAME, COPYRIGHT_YEAR } from '../../shared/config/branding'
@@ -417,68 +417,70 @@ export function DashboardPage() {
             </div>
           </div>
 
-          <div className={styles.donutContainer}>
-            {/* SVG Donut Chart */}
-            <div className={styles.donutSvgWrap}>
-              <svg width="140" height="140" viewBox="0 0 150 150" className={styles.donutSvg}>
-                {/* Background Ring */}
-                <circle
-                  cx="75"
-                  cy="75"
-                  r="54"
-                  fill="transparent"
-                  stroke="#f1f5f9"
-                  strokeWidth="18"
-                />
+          {loading ? (
+            <SkeletonDonutChart />
+          ) : (
+            <div className={styles.donutContainer}>
+              {/* SVG Donut Chart */}
+              <div className={styles.donutSvgWrap}>
+                <svg width="140" height="140" viewBox="0 0 150 150" className={styles.donutSvg}>
+                  {/* Background Ring */}
+                  <circle
+                    cx="75"
+                    cy="75"
+                    r="54"
+                    fill="transparent"
+                    stroke="#f1f5f9"
+                    strokeWidth="18"
+                  />
 
-                {/* Segments */}
-                {donutSegments.map((segment) =>
-                  segment.count > 0 ? (
-                    <circle
-                      key={segment.name}
-                      cx="75"
-                      cy="75"
-                      r="54"
-                      fill="transparent"
-                      stroke={segment.color}
-                      strokeWidth="18"
-                      strokeDasharray={segment.strokeDasharray}
-                      strokeDashoffset={segment.strokeDashoffset}
-                      strokeLinecap="round"
-                      style={{
-                        transformOrigin: 'center',
-                        transform: 'rotate(-90deg)',
-                        transition: 'stroke-dashoffset 0.4s ease, stroke-dasharray 0.4s ease',
-                      }}
-                    />
-                  ) : null,
-                )}
-              </svg>
+                  {/* Segments */}
+                  {donutSegments.map((segment) =>
+                    segment.count > 0 ? (
+                      <circle
+                        key={segment.name}
+                        cx="75"
+                        cy="75"
+                        r="54"
+                        fill="transparent"
+                        stroke={segment.color}
+                        strokeWidth="18"
+                        strokeDasharray={segment.strokeDasharray}
+                        strokeDashoffset={segment.strokeDashoffset}
+                        strokeLinecap="round"
+                        style={{
+                          transformOrigin: 'center',
+                          transform: 'rotate(-90deg)',
+                          transition: 'stroke-dashoffset 0.4s ease, stroke-dasharray 0.4s ease',
+                        }}
+                      />
+                    ) : null,
+                  )}
+                </svg>
 
-              {/* Center Donut Label */}
-              <div className={styles.donutCenter}>
-                <span className={styles.donutTotalNum}>
-                  {loading ? '...' : totalUsers}
-                </span>
-                <span className={styles.donutTotalLabel}>Total</span>
+                {/* Center Donut Label */}
+                <div className={styles.donutCenter}>
+                  <span className={styles.donutTotalNum}>{totalUsers}</span>
+                  <span className={styles.donutTotalLabel}>Total</span>
+                </div>
+              </div>
+
+              {/* Legend List on Right */}
+              <div className={styles.legendList}>
+                {roleDistribution.map((item) => (
+                  <div key={item.name} className={styles.legendItem}>
+                    <div className={styles.legendLeft}>
+                      <span className={styles.legendDot} style={{ background: item.color }} />
+                      <span className={styles.legendName}>{item.name}</span>
+                    </div>
+                    <span className={styles.legendStat}>
+                      {item.count} ({item.percentage}%)
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
-
-            {/* Legend List on Right */}
-            <div className={styles.legendList}>
-              {roleDistribution.map((item) => (
-                <div key={item.name} className={styles.legendItem}>
-                  <div className={styles.legendLeft}>
-                    <span className={styles.legendDot} style={{ background: item.color }} />
-                    <span className={styles.legendName}>{item.name}</span>
-                  </div>
-                  <span className={styles.legendStat}>
-                    {item.count} ({item.percentage}%)
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Widget 2: Quick Operations (Side-by-side with Users by Role) */}

@@ -120,7 +120,7 @@ export default function AuditLogs() {
         <div style={{ position: 'absolute', top: '-40px', right: '-40px', width: '180px', height: '180px', borderRadius: '50%', background: 'rgba(255, 255, 255, 0.08)', pointerEvents: 'none' }} />
         <div style={{ position: 'absolute', bottom: '-50px', right: '120px', width: '130px', height: '130px', borderRadius: '50%', background: 'rgba(255, 255, 255, 0.05)', pointerEvents: 'none' }} />
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '18px', position: 'relative', zIndex: 1 }}>
+        <div className="c360-hero-left">
           <div
             style={{
               width: '50px',
@@ -277,11 +277,45 @@ export default function AuditLogs() {
 
         {/* Table Content */}
         {loading ? (
-          <div style={{ padding: '60px 0', textAlign: 'center', color: '#94a3b8', fontSize: '13.5px' }}>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-              <RefreshCw size={18} className="animate-spin" style={{ color: '#2563eb' }} />
-              <span>Loading audit trail events...</span>
-            </div>
+          <div style={{ overflowX: 'auto' }} aria-hidden="true">
+            <table className="c360-table">
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Action</th>
+                  <th>Actor / Officer</th>
+                  <th>Customer Reference</th>
+                  <th>Description</th>
+                  <th>Status</th>
+                  <th style={{ textAlign: 'right' }}>Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: 8 }, (_, i) => (
+                  <tr key={i}>
+                    <td><div className="c360-skel c360-skel-text" style={{ width: '85%' }} /></td>
+                    <td><div className="c360-skel c360-skel-pill" style={{ width: 72, height: 18 }} /></td>
+                    <td><div className="c360-skel c360-skel-text" style={{ width: '70%' }} /></td>
+                    <td><div className="c360-skel c360-skel-text" style={{ width: '80%' }} /></td>
+                    <td><div className="c360-skel c360-skel-text" style={{ width: '90%' }} /></td>
+                    <td><div className="c360-skel c360-skel-pill" style={{ width: 60, height: 18 }} /></td>
+                    <td style={{ textAlign: 'right' }}><div className="c360-skel c360-skel-text" style={{ width: 40, marginLeft: 'auto' }} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : error ? (
+          // `error` was already set with a friendly message (getFriendlyErrorMessage, above) but
+          // never actually rendered anywhere — a genuine fetch failure silently fell through to
+          // "No audit logs found" below, indistinguishable from a customer with a clean history.
+          <div className="error-container" style={{ margin: '20px' }}>
+            <ShieldCheck size={20} style={{ color: '#dc2626', marginBottom: 8 }} />
+            <h3>Unable to Load Audit Logs</h3>
+            <p>{error}</p>
+            <button className="c360-btn-primary" onClick={fetchLogs} style={{ marginTop: 12 }}>
+              Retry
+            </button>
           </div>
         ) : logs.length === 0 ? (
           <div style={{ padding: '64px 20px', textAlign: 'center', color: '#64748b' }}>

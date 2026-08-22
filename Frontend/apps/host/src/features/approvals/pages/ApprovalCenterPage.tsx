@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useAuthStore } from '../../auth/store/authStore'
 import { useSettingsDrawerStore } from '../../../shared/stores/settingsDrawerStore'
 import { Badge, type BadgeTone } from '../../../shared/components/Badge/Badge'
@@ -7,7 +7,6 @@ import { ApiError } from '../../../shared/api/httpClient'
 import { useDebouncedValue } from '../../../shared/hooks/useDebouncedValue'
 import {
   approvalsApi,
-  type ApprovalRequestListItemDto,
   type ApprovalRequestDetailDto,
   type ApprovalSummaryDto,
   type ApprovalStatus,
@@ -20,7 +19,6 @@ import { Icon } from '../../../shared/components/Icon/Icon'
 import drawerStyles from '../../../layout/SettingsDrawer/SettingsDrawer.module.css'
 import styles from './ApprovalCenterPage.module.css'
 
-const FEATURE = 'host.system.approvals'
 const DEFAULT_PAGE_SIZE = 10
 
 const STATUS_TONES: Record<ApprovalStatus, BadgeTone> = {
@@ -35,6 +33,24 @@ const ACTION_LABELS: Record<string, string> = {
   Delete: 'Delete',
   Enable: 'Enable',
   Disable: 'Disable',
+}
+
+/** The Overview row's Action icon shown a generic pencil regardless of the actual action — a
+ * Delete request looked identical to an Update one. Shape now matches the real action. */
+const ACTION_ICONS: Record<string, typeof Icon.User> = {
+  Create: Icon.Plus,
+  Update: Icon.Edit,
+  Delete: Icon.Trash,
+  Enable: Icon.CheckCircle,
+  Disable: Icon.X,
+}
+
+/** Why the "Requested Change" section has nothing to show — was a single static "No change
+ * payload recorded." for every action, which read as a technical error even for a Delete request,
+ * where having no "after" state is the entirely expected, correct outcome. */
+function requestedChangeEmptyMessage(action: string): string {
+  if (action === 'Delete') return 'No new data — this record is being deleted, not changed.'
+  return 'No change details available for this request.'
 }
 
 function formatTimestamp(iso: string | null) {
@@ -59,39 +75,181 @@ function humanizeKey(key: string): string {
  * back to the raw id when no sibling is present, so older/other snapshots degrade gracefully instead
  * of breaking. "Overrides" is always excluded — it gets its own dedicated Permission Changes section.
  */
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
+}
+
+/** A snapshot's per-field row list, given an already-parsed flat object. Shared by renderDataFields
+ * (top-level object snapshots, e.g. Users/Roles) and renderArrayItemRows (each element of an array
+ * snapshot, e.g. Field Settings' array of field-config rows) so both go through the same
+ * XId/XName-collapsing + humanizing + value-formatting logic. */
+function objectToRows(parsed: Record<string, unknown>): { label: string; value: unknown }[] {
+  const keys = Object.keys(parsed)
+  const nameSiblingOf = new Set(
+    keys.filter((k) => /Id$/.test(k) && keys.includes(`${k.slice(0, -2)}Name`)),
+  )
+  const consumedNameKeys = new Set([...nameSiblingOf].map((k) => `${k.slice(0, -2)}Name`))
+
+  const rows: { label: string; value: unknown }[] = []
+  for (const key of keys) {
+    const lower = key.toLowerCase()
+    if (lower === 'permissions' || lower === 'overrides' || lower === 'id') continue
+    if (consumedNameKeys.has(key)) continue // shown via its XId row instead
+    if (nameSiblingOf.has(key)) {
+      rows.push({ label: humanizeKey(key.slice(0, -2)), value: parsed[`${key.slice(0, -2)}Name`] })
+    } else {
+      rows.push({ label: humanizeKey(key), value: parsed[key] })
+    }
+  }
+  return rows
+}
+
+/**
+ * Formats a single field's value for display. Was a bare `String(value)` — harmless for the
+ * strings/numbers every OTHER module's snapshot happens to store, but a boolean read as "true"/
+ * "false" instead of "Yes"/"No", and — the actual reported bug — a nested object or array (as in a
+ * Field Settings row's own sub-values) stringified to the literal, meaningless text "[object Object]".
+ */
+function renderValue(value: unknown): ReactNode {
+  if (value === null || value === undefined || value === '') return '—'
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No'
+  if (Array.isArray(value)) {
+    if (value.length === 0) return '—'
+    if (value.every((item) => !isPlainObject(item))) return value.map((item) => String(item)).join(', ')
+    return (
+      <div className={styles.nestedRows}>
+        {value.map((item, i) => (
+          <div key={i} className={styles.nestedRow}>
+            {isPlainObject(item) ? renderRowList(objectToRows(item)) : String(item)}
+          </div>
+        ))}
+      </div>
+    )
+  }
+  if (isPlainObject(value)) return renderRowList(objectToRows(value))
+  return String(value)
+}
+
+function renderRowList(rows: { label: string; value: unknown }[]) {
+  if (rows.length === 0) return null
+  return (
+    <dl className={styles.dataFieldList}>
+      {rows.map(({ label, value }) => {
+        const isEmpty = value === null || value === undefined || value === ''
+        return (
+          <div key={label} className={styles.dataFieldRow}>
+            <dt>{label}</dt>
+            <dd className={isEmpty ? styles.emptyValue : undefined}>{renderValue(value)}</dd>
+          </div>
+        )
+      })}
+    </dl>
+  )
+}
+
+/**
+ * Picks an icon + tint for a field card, matched by keyword against the field's (already humanized)
+ * label. This component renders snapshots from ANY module (Users, Roles, Applications, Field
+ * Settings, ...), so field names are dynamic — a fixed per-field-name icon map can't cover every
+ * possible field, and guessing wrong would be misleading. Common, recognizable concepts get a
+ * real matching icon; anything unrecognized falls back to a neutral document icon rather than a
+ * forced, potentially-wrong guess.
+ */
+const FIELD_ICON_RULES: { test: RegExp; Icon: typeof Icon.User; bg: string; color: string }[] = [
+  { test: /email/i, Icon: Icon.Mail, bg: '#eff6ff', color: '#2563eb' },
+  { test: /phone|mobile|contact/i, Icon: Icon.Headset, bg: '#ecfeff', color: '#0891b2' },
+  { test: /name/i, Icon: Icon.User, bg: '#eff6ff', color: '#2563eb' },
+  { test: /role/i, Icon: Icon.Shield, bg: '#f5f3ff', color: '#7c3aed' },
+  { test: /(active|status|enabled?|disabled?)/i, Icon: Icon.CheckCircle, bg: '#ecfdf5', color: '#059669' },
+  { test: /(auth|password|provider|key|secret)/i, Icon: Icon.Key, bg: '#fff7ed', color: '#d97706' },
+  { test: /(date|time)$/i, Icon: Icon.Calendar, bg: '#eff6ff', color: '#2563eb' },
+]
+const DEFAULT_FIELD_ICON = { Icon: Icon.FileText, bg: '#f8fafc', color: '#64748b' }
+
+function getFieldIconMeta(label: string) {
+  return FIELD_ICON_RULES.find((r) => r.test.test(label)) ?? DEFAULT_FIELD_ICON
+}
+
+/** Top-level Before/Requested-Change fields as a 2-per-row grid of bordered cards — was a plain
+ * label/value list (still is, via renderRowList, for nested/array-item content) which read as flat
+ * and unstructured next to the rest of the app's card-based presentation. Card visual language
+ * (border/radius/background/hover) copied verbatim from ProfilePage.module.css's
+ * .capabilitiesGrid/.capItem, the app's own existing 2-per-row bordered-card convention. */
+function renderFieldCardGrid(rows: { label: string; value: unknown }[]) {
+  if (rows.length === 0) return null
+  return (
+    <dl className={styles.fieldCardGrid}>
+      {rows.map(({ label, value }) => {
+        const isEmpty = value === null || value === undefined || value === ''
+        const { Icon: FieldIcon, bg, color } = getFieldIconMeta(label)
+        return (
+          <div key={label} className={styles.fieldCard}>
+            <span className={styles.fieldCardIcon} style={{ background: bg, color }}>
+              <FieldIcon width={15} height={15} />
+            </span>
+            <div className={styles.fieldCardBody}>
+              <dt className={styles.fieldCardLabel}>{label}</dt>
+              <dd className={`${styles.fieldCardValue} ${isEmpty ? styles.emptyValue : ''}`}>
+                {renderValue(value)}
+              </dd>
+            </div>
+          </div>
+        )
+      })}
+    </dl>
+  )
+}
+
+/** One array-snapshot element (e.g. a single field-config row) as a labeled mini-card — its own
+ * name/label picked from whichever of these properties it actually has, then its remaining fields
+ * rendered as a compact row list underneath. */
+function renderArrayItem(item: unknown, index: number) {
+  if (!isPlainObject(item)) {
+    return <div className={styles.arrayItemCard}>{String(item)}</div>
+  }
+  const labelKeys = ['displayLabel', 'DisplayLabel', 'name', 'Name', 'label', 'Label', 'apiField', 'ApiField', 'key', 'Key']
+  const heading = labelKeys.map((k) => item[k]).find((v): v is string => typeof v === 'string' && v.trim() !== '') ?? `Item ${index + 1}`
+  const rows = objectToRows(item).filter(({ label }) => !labelKeys.some((k) => humanizeKey(k) === label))
+  return (
+    <div className={styles.arrayItemCard}>
+      <div className={styles.arrayItemHeading}>{heading}</div>
+      {renderRowList(rows)}
+    </div>
+  )
+}
+
+/**
+ * Pretty-prints a JSON snapshot as a key/value list, falling back to raw text if it isn't valid JSON.
+ *
+ * Generic XId/XName convention: any key ending in "Id" (e.g. "RoleId") is paired with a sibling
+ * "XName" key (e.g. "RoleName") in the SAME object, if one exists — the raw id is hidden and a single
+ * friendly row ("Role: Tech Lead") renders in its place. No module gets special-cased by name here;
+ * any backend snapshot that wants a friendly display just needs to include that sibling field. Falls
+ * back to the raw id when no sibling is present, so older/other snapshots degrade gracefully instead
+ * of breaking. "Overrides" is always excluded — it gets its own dedicated Permission Changes section.
+ *
+ * Field Settings (and any future module) can snapshot an ARRAY of records instead of one flat object
+ * — this used to render as literal "0 [object Object]", "1 [object Object]" rows (Object.keys() on an
+ * array yields its indices, and a raw object stringifies to that exact text). Each element now renders
+ * as its own labeled mini-card instead.
+ */
 function renderDataFields(json: string | null, emptyLabel: string) {
   if (!json) return <p className={styles.mutedText}>{emptyLabel}</p>
   try {
-    const parsed = JSON.parse(json) as Record<string, unknown>
-    const keys = Object.keys(parsed)
-    const nameSiblingOf = new Set(
-      keys.filter((k) => /Id$/.test(k) && keys.includes(`${k.slice(0, -2)}Name`)),
-    )
-    const consumedNameKeys = new Set([...nameSiblingOf].map((k) => `${k.slice(0, -2)}Name`))
+    const parsed = JSON.parse(json) as unknown
 
-    const rows: { label: string; value: unknown }[] = []
-    for (const key of keys) {
-      const lower = key.toLowerCase()
-      if (lower === 'permissions' || lower === 'overrides') continue
-      if (consumedNameKeys.has(key)) continue // shown via its XId row instead
-      if (nameSiblingOf.has(key)) {
-        rows.push({ label: humanizeKey(key.slice(0, -2)), value: parsed[`${key.slice(0, -2)}Name`] })
-      } else {
-        rows.push({ label: humanizeKey(key), value: parsed[key] })
-      }
+    if (Array.isArray(parsed)) {
+      if (parsed.length === 0) return <p className={styles.mutedText}>{emptyLabel}</p>
+      return (
+        <div className={styles.arrayItemList}>
+          {parsed.map((item, i) => <div key={i}>{renderArrayItem(item, i)}</div>)}
+        </div>
+      )
     }
 
+    const rows = isPlainObject(parsed) ? objectToRows(parsed) : []
     if (rows.length === 0) return <p className={styles.mutedText}>{emptyLabel}</p>
-    return (
-      <dl className={styles.dataFieldList}>
-        {rows.map(({ label, value }) => (
-          <div key={label} className={styles.dataFieldRow}>
-            <dt>{label}</dt>
-            <dd>{value === null || value === undefined || value === '' ? '—' : String(value)}</dd>
-          </div>
-        ))}
-      </dl>
-    )
+    return renderFieldCardGrid(rows)
   } catch {
     return <p className={styles.wrapText}>{json}</p>
   }
@@ -534,9 +692,29 @@ export function ApprovalCenterPage() {
           </thead>
           <tbody>
             {items === null ? (
+              // Shaped per-column, matching AuditLogsPage's own skeleton rows — a single bar spanning
+              // the whole row read as noticeably less finished next to that page's per-cell shapes.
               Array.from({ length: pageSize }).map((_, i) => (
                 <tr key={i}>
-                  <td colSpan={9}><SkeletonBlock height={20} radius="4px" /></td>
+                  <td><SkeletonBlock width={130} height={16} radius="4px" /></td>
+                  <td><SkeletonBlock width={90} height={22} radius="999px" /></td>
+                  <td><SkeletonBlock width={95} height={22} radius="6px" /></td>
+                  <td><SkeletonBlock width={110} height={22} radius="6px" /></td>
+                  <td>
+                    <div className={styles.actorCell}>
+                      <SkeletonBlock width={26} height={26} radius="8px" />
+                      <SkeletonBlock width={100} height={16} radius="4px" />
+                    </div>
+                  </td>
+                  <td>
+                    <div className={styles.actorCell}>
+                      <SkeletonBlock width={26} height={26} radius="8px" />
+                      <SkeletonBlock width={90} height={16} radius="4px" />
+                    </div>
+                  </td>
+                  <td><SkeletonBlock width={70} height={22} radius="999px" /></td>
+                  <td><SkeletonBlock width={100} height={16} radius="4px" /></td>
+                  <td><SkeletonBlock width={52} height={26} radius="7px" /></td>
                 </tr>
               ))
             ) : items.length === 0 ? (
@@ -548,7 +726,7 @@ export function ApprovalCenterPage() {
                 <tr key={r.id}>
                   <td className={styles.timeCell}>{formatTimestamp(r.requestedAt)}</td>
                   <td><Badge tone="info">{moduleLabelsByKey.get(r.module) ?? r.module}</Badge></td>
-                  <td>{ACTION_LABELS[r.action] ?? r.action}</td>
+                  <td><span className={styles.actionCell}>{ACTION_LABELS[r.action] ?? r.action}</span></td>
                   <td>
                     {r.entityLabel ? (
                       <span className={styles.entityLabel}>{r.entityLabel}</span>
@@ -556,8 +734,26 @@ export function ApprovalCenterPage() {
                       <span className={styles.mutedText}>—</span>
                     )}
                   </td>
-                  <td>{r.makerName ?? <span className={styles.mutedText}>Unknown</span>}</td>
-                  <td>{r.checkerName ?? <span className={styles.mutedText}>Unassigned</span>}</td>
+                  <td>
+                    {r.makerName ? (
+                      <div className={styles.actorCell}>
+                        <span className={styles.actorAvatar}>{r.makerName.charAt(0).toUpperCase()}</span>
+                        <span className={styles.actorName}>{r.makerName}</span>
+                      </div>
+                    ) : (
+                      <span className={styles.mutedText}>Unknown</span>
+                    )}
+                  </td>
+                  <td>
+                    {r.checkerName ? (
+                      <div className={styles.actorCell}>
+                        <span className={styles.actorAvatar}>{r.checkerName.charAt(0).toUpperCase()}</span>
+                        <span className={styles.actorName}>{r.checkerName}</span>
+                      </div>
+                    ) : (
+                      <span className={styles.mutedText}>Unassigned</span>
+                    )}
+                  </td>
                   <td><Badge tone={STATUS_TONES[r.status]} dot>{r.status}</Badge></td>
                   <td className={styles.timeCell}>
                     {r.decidedAt ? formatTimestamp(r.decidedAt) : <span className={styles.mutedText}>—</span>}
@@ -618,60 +814,93 @@ export function ApprovalCenterPage() {
                 ) : detail ? (
                   <div className={styles.drawerSections}>
                     <section className={styles.drawerSection}>
-                      <h3 className={styles.drawerSectionTitle}>Overview</h3>
-                      <dl className={styles.detailList}>
-                        <dt>Module</dt>
-                        <dd><Badge tone="info">{detail.module}</Badge></dd>
-                        <dt>Action</dt>
-                        <dd>{ACTION_LABELS[detail.action] ?? detail.action}</dd>
-                        {detail.entityType && (
-                          <>
-                            <dt>Entity</dt>
-                            <dd>{detail.entityType}{detail.entityLabel ? ` — ${detail.entityLabel}` : ''}</dd>
-                          </>
-                        )}
-                        <dt>Status</dt>
-                        <dd><Badge tone={STATUS_TONES[detail.status]} dot>{detail.status}</Badge></dd>
-                      </dl>
-                    </section>
-
-                    <section className={styles.drawerSection}>
-                      <h3 className={styles.drawerSectionTitle}>Approval Timeline</h3>
-                      <div className={styles.timeline}>
-                        <div className={styles.timelineStep}>
-                          <span className={styles.timelineDot} />
-                          <div>
-                            <span className={styles.timelineLabel}>Requested by {detail.makerName ?? 'Unknown'}</span>
-                            <span className={styles.timelineTime}>{formatTimestamp(detail.requestedAt)}</span>
-                          </div>
+                      <div className={styles.overviewTimelineGrid}>
+                        <div className={styles.overviewTimelineCol}>
+                          <h3 className={styles.drawerSectionTitle}>Overview</h3>
+                          <dl className={styles.detailList}>
+                            <div className={styles.detailRow}>
+                              <span className={styles.detailIcon}><Icon.Grid width={14} height={14} /></span>
+                              <div className={styles.detailRowBody}>
+                                <dt>Module</dt>
+                                <dd><Badge tone="info">{detail.module}</Badge></dd>
+                              </div>
+                            </div>
+                            <div className={styles.detailRow}>
+                              <span className={`${styles.detailIcon} ${styles.detailIconNeutral}`}>
+                                {(() => { const ActionIcon = ACTION_ICONS[detail.action] ?? Icon.Edit; return <ActionIcon width={14} height={14} /> })()}
+                              </span>
+                              <div className={styles.detailRowBody}>
+                                <dt>Action</dt>
+                                <dd>{ACTION_LABELS[detail.action] ?? detail.action}</dd>
+                              </div>
+                            </div>
+                            {detail.entityType && (
+                              <div className={styles.detailRow}>
+                                <span className={styles.detailIcon}><Icon.User width={14} height={14} /></span>
+                                <div className={styles.detailRowBody}>
+                                  <dt>Entity</dt>
+                                  <dd>{detail.entityType}{detail.entityLabel ? ` — ${detail.entityLabel}` : ''}</dd>
+                                </div>
+                              </div>
+                            )}
+                            <div className={styles.detailRow}>
+                              <span className={`${styles.detailIcon} ${styles.detailIconPurple}`}><Icon.Info width={14} height={14} /></span>
+                              <div className={styles.detailRowBody}>
+                                <dt>Status</dt>
+                                <dd><Badge tone={STATUS_TONES[detail.status]} dot>{detail.status}</Badge></dd>
+                              </div>
+                            </div>
+                          </dl>
                         </div>
-                        <div className={styles.timelineStep}>
-                          <span className={`${styles.timelineDot} ${detail.status === 'Pending' ? styles.timelineDotPending : styles.timelineDotDone}`} />
-                          <div>
-                            <span className={styles.timelineLabel}>
-                              {detail.status === 'Pending'
-                                ? `Awaiting ${detail.checkerName ?? 'an assigned checker'}`
-                                : `${detail.status} by ${detail.checkerName ?? 'checker'}`}
-                            </span>
-                            {detail.decidedAt && <span className={styles.timelineTime}>{formatTimestamp(detail.decidedAt)}</span>}
+
+                        <div className={`${styles.overviewTimelineCol} ${styles.overviewTimelineColDivider}`}>
+                          <h3 className={styles.drawerSectionTitle}>Approval Timeline</h3>
+                          <div className={styles.timeline}>
+                            <div className={styles.timelineStep}>
+                              <span className={styles.timelineDot} />
+                              <div>
+                                <span className={styles.timelineLabel}>Requested by {detail.makerName ?? 'Unknown'}</span>
+                                <span className={styles.timelineTime}><Icon.Clock width={11} height={11} />{formatTimestamp(detail.requestedAt)}</span>
+                              </div>
+                            </div>
+                            <div className={styles.timelineStep}>
+                              <span className={`${styles.timelineDot} ${detail.status === 'Pending' ? styles.timelineDotPending : styles.timelineDotDone}`} />
+                              <div>
+                                <span className={styles.timelineLabel}>
+                                  {detail.status === 'Pending'
+                                    ? `Awaiting ${detail.checkerName ?? 'an assigned checker'}`
+                                    : `${detail.status} by ${detail.checkerName ?? 'checker'}`}
+                                </span>
+                                {detail.decidedAt && <span className={styles.timelineTime}><Icon.Clock width={11} height={11} />{formatTimestamp(detail.decidedAt)}</span>}
+                              </div>
+                            </div>
                           </div>
+                          {detail.rejectionReason && (
+                            <p className={styles.rejectionReasonText}>
+                              <strong>Rejection reason:</strong> {detail.rejectionReason}
+                            </p>
+                          )}
                         </div>
                       </div>
-                      {detail.rejectionReason && (
-                        <p className={styles.rejectionReasonText}>
-                          <strong>Rejection reason:</strong> {detail.rejectionReason}
-                        </p>
-                      )}
                     </section>
 
                     <section className={styles.drawerSection}>
-                      <h3 className={styles.drawerSectionTitle}>Before</h3>
+                      <h3 className={styles.drawerSectionTitle}>
+                        <Icon.Clock width={12} height={12} />
+                        Before
+                        {/* "(Current Record)" only makes sense when a record actually exists to show —
+                            a Create request's "Before" is deliberately empty, so this stays untagged then. */}
+                        {detail.action !== 'Create' && <span className={styles.drawerSectionTitleTag}>(Current Record)</span>}
+                      </h3>
                       {renderDataFields(detail.oldDataJson, detail.action === 'Create' ? 'New record — nothing existed before.' : 'No prior state recorded.')}
                     </section>
 
                     <section className={styles.drawerSection}>
-                      <h3 className={styles.drawerSectionTitle}>Requested Change</h3>
-                      {renderDataFields(detail.newDataJson, 'No change payload recorded.')}
+                      <h3 className={styles.drawerSectionTitle}>
+                        <Icon.FileText width={12} height={12} />
+                        Requested Change
+                      </h3>
+                      {renderDataFields(detail.newDataJson, requestedChangeEmptyMessage(detail.action))}
                     </section>
 
                     {(() => {

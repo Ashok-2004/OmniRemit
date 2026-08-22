@@ -1,0 +1,104 @@
+/* ══════════════════════════════════════════════════════════════
+   APP SHELL SKELETON — shown while RequireAuth is hydrating the
+   session on a hard refresh, before Sidebar/Topbar/AppShell mount.
+   Mirrors AppShell.module.css / Sidebar.module.css / Topbar.module.css
+   dimensions exactly so there is zero layout jump when the real
+   chrome replaces it a moment later — a shaped placeholder instead
+   of one lone bar floating in an otherwise blank page.
+   ══════════════════════════════════════════════════════════════ */
+
+.shell {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  background: #f4f6f8;
+}
+
+/* ── Sidebar column — matches Sidebar.module.css .sidebar (240px, white) ── */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  width: 240px;
+  flex-shrink: 0;
+  height: 100vh;
+  background: #ffffff;
+  border-right: 1px solid #eaecf0;
+  box-shadow: 1px 0 8px rgba(15, 23, 42, 0.04);
+}
+
+.brandRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 18px 16px;
+  border-bottom: 1px solid #f1f3f7;
+  flex-shrink: 0;
+}
+
+.nav {
+  padding: 14px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ── Topbar + content column — matches AppShell.module.css .main/.content ── */
+.main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 0 28px;
+  height: 64px;
+  flex-shrink: 0;
+  background: #ffffff;
+  border-bottom: 1px solid #eaecf0;
+}
+
+.topbarActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.content {
+  flex: 1;
+  padding: 26px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow: hidden;
+}
+
+.statGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+/* ── Mobile — sidebar column hidden, matching Sidebar's own mobile
+   behaviour (off-canvas), so the skeleton doesn't reserve 240px on a
+   phone-width refresh ── */
+@media (max-width: 768px) {
+  .sidebar { display: none; }
+  .topbar { padding: 0 14px; }
+  .content { padding: 14px 14px; }
+  .statGrid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 480px) {
+  .statGrid { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell { animation: none; }
+}

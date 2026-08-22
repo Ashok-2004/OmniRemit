@@ -1,5 +1,6 @@
 import { useState, useId, type FormEvent } from 'react'
 import { Icon } from '../../shared/components/Icon/Icon'
+import { BrandMark } from '../../shared/components/BrandMark/BrandMark'
 import { LoginHero } from './LoginHero'
 import styles from './LoginPage.module.css'
 import { APP_NAME } from '../../shared/config/branding'
@@ -42,11 +43,9 @@ export function LoginPage({ onSubmit, loading, errorMessage }: LoginPageProps) {
         <div className={styles.formCardContainer}>
           <form className={styles.formCard} onSubmit={handleSubmit} noValidate>
             
-            {/* Top Brand Badge */}
+            {/* Top Brand Badge — same OmniConnect mark as the Sidebar */}
             <div className={styles.brandBadge}>
-              <div className={styles.brandBadgeIcon}>
-                <Icon.Lock width={18} height={18} />
-              </div>
+              <BrandMark size={40} />
               <span className={styles.brandBadgeText}>{APP_NAME}</span>
             </div>
 
@@ -77,7 +76,7 @@ export function LoginPage({ onSubmit, loading, errorMessage }: LoginPageProps) {
                     id="login-email"
                     type="email"
                     autoComplete="username"
-                    placeholder="you@company.com"
+                    placeholder="Enter your work email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required

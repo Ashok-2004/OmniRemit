@@ -2,6 +2,7 @@ import { useRef, useState, useEffect, useCallback, type CSSProperties, type Reac
 import styles from './LoginHero.module.css'
 import { APP_NAME } from '../../../shared/config/branding'
 import { Icon } from '../../../shared/components/Icon/Icon'
+import { BrandMark } from '../../../shared/components/BrandMark/BrandMark'
 
 // ── App Registry ───────────────────────────────────────────────
 // To add a new app: push ONE object — { id, label, icon }.
@@ -108,31 +109,25 @@ export function LoginHero() {
 
         {/* ── Brand Header ── */}
         <header className={styles.brandHeader}>
-          <div className={styles.logoBadge} aria-hidden="true">
-            <svg width="22" height="22" viewBox="0 0 32 32" fill="none">
-              <path d="M16 2L28 9V23L16 30L4 23V9L16 2Z"
-                stroke="#38BDF8" strokeWidth="2" strokeLinejoin="round"
-                fill="rgba(56,189,248,0.12)" />
-              <path d="M16 2V16M28 9L16 16M4 9L16 16M16 16V30"
-                stroke="#60A5FA" strokeWidth="1.4" strokeOpacity="0.8" />
-              <circle cx="16" cy="16" r="3.2" fill="#38BDF8" />
-            </svg>
-          </div>
+          <BrandMark size={36} variant="inverted" />
           <span className={styles.brandTitle}>
             Omni<span>Connect</span>
           </span>
         </header>
 
-        {/* ── Hero Headings ── */}
+        {/* ── Eyebrow + Headline ── */}
         <div className={styles.headlineSection}>
+          <span className={styles.eyebrowBadge}>
+            <Icon.ShieldCheck width={12} height={12} />
+            Enterprise micro-frontend platform
+          </span>
           <h1 className={styles.mainHeading}>
-            One platform.<br />
-            Every team,<br />
-            <span className={styles.gradientHeading}>every app.</span>
+            Everything your team<br />
+            runs on, <span className={styles.gradientHeading}>in one place.</span>
           </h1>
           <p className={styles.subHeading}>
-            Securely access all the applications and tools your role provides
-            from one unified workspace.
+            Sign in for secure, role-based access to every application your
+            organization runs — unified under one login.
           </p>
         </div>
 
@@ -158,16 +153,16 @@ export function LoginHero() {
               <g key={i}>
                 {/* Soft glow halo */}
                 <line x1={ln.x1} y1={ln.y1} x2={ln.x2} y2={ln.y2}
-                  stroke="#38BDF8" strokeWidth="4" strokeOpacity="0.14"
+                  stroke="#ffffff" strokeWidth="4" strokeOpacity="0.16"
                   strokeLinecap="round" filter="url(#lineGlow)" />
                 {/* Main animated dash */}
                 <line x1={ln.x1} y1={ln.y1} x2={ln.x2} y2={ln.y2}
-                  stroke="#38BDF8" strokeWidth="1.5" strokeOpacity="0.70"
+                  stroke="#ffffff" strokeWidth="1.5" strokeOpacity="0.65"
                   strokeLinecap="round" strokeDasharray="6 5"
                   className={styles.pulseBeam} />
                 {/* Terminal dot at card end */}
                 <circle cx={ln.x2} cy={ln.y2} r="3.5"
-                  fill="#38BDF8" fillOpacity="0.80" />
+                  fill="#ffffff" fillOpacity="0.85" />
               </g>
             ))}
           </svg>
@@ -177,29 +172,29 @@ export function LoginHero() {
             fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
             <defs>
               <radialGradient id="hubGlow2" cx="50%" cy="50%" r="50%">
-                <stop offset="0%"   stopColor="#38BDF8" stopOpacity="0.45" />
-                <stop offset="60%"  stopColor="#2563EB" stopOpacity="0.20" />
-                <stop offset="100%" stopColor="#2563EB" stopOpacity="0" />
+                <stop offset="0%"   stopColor="#ffffff" stopOpacity="0.40" />
+                <stop offset="60%"  stopColor="#ffffff" stopOpacity="0.14" />
+                <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
               </radialGradient>
               <linearGradient id="pedTop2" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%"   stopColor="#1E40AF" />
-                <stop offset="55%"  stopColor="#0D1D5C" />
-                <stop offset="100%" stopColor="#070E2E" />
+                <stop offset="0%"   stopColor="#ffffff" />
+                <stop offset="55%"  stopColor="#dbeafe" />
+                <stop offset="100%" stopColor="#93c5fd" />
               </linearGradient>
               <linearGradient id="pedLeft2" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%"   stopColor="#2563EB" />
-                <stop offset="100%" stopColor="#050B28" />
+                <stop offset="0%"   stopColor="#bfdbfe" />
+                <stop offset="100%" stopColor="#3b82f6" />
               </linearGradient>
               <linearGradient id="pedRight2" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%"   stopColor="#1D4ED8" />
-                <stop offset="100%" stopColor="#030820" />
+                <stop offset="0%"   stopColor="#93c5fd" />
+                <stop offset="100%" stopColor="#1d4ed8" />
               </linearGradient>
               <linearGradient id="horizGrad2" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%"   stopColor="#2563EB" stopOpacity="0" />
-                <stop offset="35%"  stopColor="#38BDF8" stopOpacity="0.5" />
-                <stop offset="50%"  stopColor="#7DD3FC" stopOpacity="0.9" />
-                <stop offset="65%"  stopColor="#38BDF8" stopOpacity="0.5" />
-                <stop offset="100%" stopColor="#2563EB" stopOpacity="0" />
+                <stop offset="0%"   stopColor="#ffffff" stopOpacity="0" />
+                <stop offset="35%"  stopColor="#ffffff" stopOpacity="0.45" />
+                <stop offset="50%"  stopColor="#ffffff" stopOpacity="0.85" />
+                <stop offset="65%"  stopColor="#ffffff" stopOpacity="0.45" />
+                <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
               </linearGradient>
               <filter id="pedGlow2" x="-30%" y="-30%" width="160%" height="160%">
                 <feGaussianBlur stdDeviation="4" result="blur" />
@@ -208,19 +203,19 @@ export function LoginHero() {
             </defs>
             <path d="M 0 130 Q 120 95 240 130" stroke="url(#horizGrad2)" strokeWidth="2" fill="none" />
             <ellipse cx="120" cy="125" rx="85" ry="36" fill="url(#hubGlow2)" />
-            <ellipse cx="120" cy="132" rx="55" ry="20" fill="#020817" opacity="0.85" />
-            <polygon points="60,125 120,155 180,125 120,95"  fill="#07112A" stroke="#1E3A8A" strokeWidth="1" />
-            <polygon points="60,125 120,155 120,165 60,135"  fill="#04091C" />
-            <polygon points="120,155 180,125 180,135 120,165" fill="#030716" />
+            <ellipse cx="120" cy="132" rx="55" ry="20" fill="#1e3a8a" opacity="0.35" />
+            <polygon points="60,125 120,155 180,125 120,95"  fill="#2563eb" fillOpacity="0.55" stroke="#93c5fd" strokeWidth="1" />
+            <polygon points="60,125 120,155 120,165 60,135"  fill="#1e40af" fillOpacity="0.55" />
+            <polygon points="120,155 180,125 180,135 120,165" fill="#1d4ed8" fillOpacity="0.55" />
             <polygon points="70,115 120,142 170,115 120,88"
-              fill="url(#pedTop2)" stroke="#38BDF8" strokeWidth="2.5" filter="url(#pedGlow2)" />
+              fill="url(#pedTop2)" stroke="#ffffff" strokeWidth="2.5" filter="url(#pedGlow2)" />
             <polygon points="70,115 120,142 120,151 70,124" fill="url(#pedLeft2)" />
             <polygon points="120,142 170,115 170,124 120,151" fill="url(#pedRight2)" />
-            <polygon points="85,115 120,133 155,115 120,97" fill="#1E3A8A" stroke="#60A5FA" strokeWidth="1.4" />
+            <polygon points="85,115 120,133 155,115 120,97" fill="#eff6ff" stroke="#ffffff" strokeWidth="1.4" />
             <g transform="translate(103,90)">
               <polygon points="17,2 30,9 30,23 17,30 4,23 4,9"
-                fill="#071030" stroke="#38BDF8" strokeWidth="2" filter="url(#pedGlow2)" />
-              <path d="M17,2 L17,16 M30,9 L17,16 M4,9 L17,16 M17,16 L17,30" stroke="#60A5FA" strokeWidth="1.2" />
+                fill="#2563eb" stroke="#ffffff" strokeWidth="2" filter="url(#pedGlow2)" />
+              <path d="M17,2 L17,16 M30,9 L17,16 M4,9 L17,16 M17,16 L17,30" stroke="#bfdbfe" strokeWidth="1.2" />
               <polygon points="17,7 24,11 24,21 17,25 10,21 10,11" fill="#fff" opacity="0.95" />
               <path d="M17,7 L17,16 M24,11 L17,16 M10,11 L17,16 M17,16 L17,25" stroke="#1D4ED8" strokeWidth="1.2" />
             </g>

@@ -28,24 +28,17 @@
   overflow-y: auto;
   padding: 32px 28px;
   box-sizing: border-box;
-  /* Clean, light neutral — banking white */
-  background: #f5f7fa;
-}
-
-/* Subtle top accent bar */
-.formPanel::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, #1d4ed8 0%, #2563eb 50%, #3b82f6 100%);
+  /* Single, restrained echo of the hero's blue depth bleeding in from the
+     seam — same light source continuing across the page — instead of a
+     second unrelated glow lower down reading as a stray decorative blob. */
+  background:
+    radial-gradient(ellipse 65% 55% at 0% 50%, rgba(37,99,235,0.07) 0%, transparent 60%),
+    var(--omni-color-surface-alt);
 }
 
 .formCardContainer {
   width: 100%;
-  max-width: 400px;
+  max-width: 428px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -60,16 +53,28 @@
 /* ── Login Card ──────────────────────────────────────────────── */
 .formCard {
   width: 100%;
-  background: #ffffff;
-  border-radius: 16px;
-  border: 1px solid #dde3ef;
-  box-shadow:
-    0 1px 3px rgba(15,23,42,0.05),
-    0 8px 28px -8px rgba(15,23,42,0.10);
-  padding: 36px 36px 32px 36px;
+  background: var(--omni-color-surface);
+  border-radius: var(--omni-radius-xl);
+  border: 1px solid var(--omni-color-border);
+  box-shadow: var(--omni-shadow-lg);
+  padding: 38px 40px 34px 40px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Colored top accent bar — same device as DashboardPage's .statCard::before,
+   so this card reads as the same component family as the rest of the app. */
+.formCard::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #2563eb, #60a5fa);
 }
 
 /* ── Top Institution Badge ───────────────────────────────────── */
@@ -77,54 +82,45 @@
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 28px;
+  margin-bottom: 24px;
   align-self: flex-start;
 }
 
-.brandBadgeIcon {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  background: linear-gradient(145deg, #1d4ed8 0%, #1e40af 100%);
-  color: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 3px 12px rgba(29,78,216,0.38);
-  flex-shrink: 0;
-}
-
+/* Same size/weight/tracking as the Sidebar's wordmark — this is the same
+   wordmark, so it reads identically wherever it appears. */
 .brandBadgeText {
-  font-size: 16px;
-  font-weight: 700;
-  color: #0f172a;
-  letter-spacing: -0.025em;
+  font-size: 15.5px;
+  font-weight: var(--omni-font-weight-bold);
+  color: var(--omni-color-text-primary);
+  letter-spacing: -0.04em;
 }
 
 /* ── Card Header ─────────────────────────────────────────────── */
 .cardHeader {
   display: flex;
   flex-direction: column;
-  margin-bottom: 28px;
-  padding-bottom: 22px;
-  border-bottom: 1px solid #eef1f7;
+  margin-bottom: 26px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--omni-color-border);
 }
 
+/* Sized to the same ceiling as the app's biggest real heading
+   (DashboardPage.module.css .heroTitle, 22px) — not a marketing-page display size. */
 .cardTitle {
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 800;
-  color: #0c1836;
-  letter-spacing: -0.04em;
-  line-height: 1.18;
+  color: var(--omni-color-text-primary);
+  letter-spacing: -0.03em;
+  line-height: 1.2;
   margin: 0 0 6px 0;
 }
 
 .cardSubtitle {
-  font-size: 13.5px;
-  color: #6b7a99;
+  font-size: 13px;
+  color: var(--omni-color-text-secondary);
   margin: 0;
   font-weight: 400;
-  line-height: 1.50;
+  line-height: 1.55;
 }
 
 /* ── Error Alert ─────────────────────────────────────────────── */
@@ -133,12 +129,12 @@
   align-items: center;
   gap: 9px;
   padding: 11px 14px;
-  border-radius: 9px;
-  background: #fef2f2;
+  border-radius: var(--omni-radius-sm);
+  background: var(--omni-color-danger-bg);
   border: 1px solid #fecaca;
-  color: #b91c1c;
-  font-size: 13px;
-  font-weight: 500;
+  color: var(--omni-color-danger);
+  font-size: var(--omni-font-size-sm);
+  font-weight: var(--omni-font-weight-medium);
   margin-bottom: 20px;
 }
 
@@ -148,20 +144,20 @@
 .formFields {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  margin-bottom: 22px;
+  gap: 20px;
+  margin-bottom: 24px;
 }
 
 .fieldGroup {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 8px;
 }
 
 .fieldLabel {
-  font-size: 13px;
-  font-weight: 600;
-  color: #1e2d50;
+  font-size: var(--omni-font-size-sm);
+  font-weight: var(--omni-font-weight-semibold);
+  color: var(--omni-color-text-primary);
   letter-spacing: -0.01em;
 }
 
@@ -173,13 +169,13 @@
 
 .forgotPasswordLink {
   font-size: 12.5px;
-  font-weight: 600;
-  color: #2563eb;
+  font-weight: var(--omni-font-weight-semibold);
+  color: var(--omni-color-primary-600);
   text-decoration: none;
-  transition: color 0.15s ease;
+  transition: color var(--omni-transition-fast);
 }
 
-.forgotPasswordLink:hover { color: #1d4ed8; }
+.forgotPasswordLink:hover { color: var(--omni-color-primary-700); }
 
 /* ── Inputs ──────────────────────────────────────────────────── */
 .inputWrapper {
@@ -190,33 +186,40 @@
 
 .inputLeadingIcon {
   position: absolute;
-  left: 14px;
-  color: #a0aec0;
+  left: 15px;
+  color: var(--omni-color-text-muted);
   pointer-events: none;
   flex-shrink: 0;
+  transition: color var(--omni-transition-base);
 }
+
+/* Icon lights up to brand blue while its input is focused */
+.inputWrapper:focus-within .inputLeadingIcon { color: var(--omni-color-primary-600); }
 
 .textInput {
   width: 100%;
-  height: 46px;
-  padding: 0 44px 0 42px;
-  background: #f9fafc;
-  border: 1.5px solid #dde3ef;
-  border-radius: 10px;
-  font-size: 14px;
-  color: #0c1836;
+  height: 48px;
+  padding: 0 44px 0 44px;
+  background: var(--omni-color-surface-alt);
+  border: 1.5px solid var(--omni-color-border);
+  border-radius: var(--omni-radius-lg);
+  font-size: var(--omni-font-size-md);
+  color: var(--omni-color-text-primary);
   outline: none;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+  box-shadow: inset 0 1px 2px rgba(15,23,42,0.04);
+  transition: border-color var(--omni-transition-base), box-shadow var(--omni-transition-base), background var(--omni-transition-base);
   box-sizing: border-box;
   font-family: inherit;
 }
 
-.textInput::placeholder { color: #a0aec0; font-size: 13.5px; }
+.textInput::placeholder { color: var(--omni-color-text-muted); font-size: 13.5px; }
+
+.textInput:hover:not(:focus):not(:disabled) { border-color: var(--omni-color-border-strong); }
 
 .textInput:focus {
-  background: #ffffff;
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
+  background: var(--omni-color-surface);
+  border-color: var(--omni-color-primary-600);
+  box-shadow: inset 0 1px 2px rgba(15,23,42,0.04), 0 0 0 3.5px rgba(37,99,235,0.14);
 }
 
 .textInput:disabled { opacity: 0.6; cursor: not-allowed; }
@@ -227,15 +230,15 @@
   background: none;
   border: none;
   padding: 4px;
-  color: #a0aec0;
+  color: var(--omni-color-text-muted);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 5px;
-  transition: color 0.15s ease;
+  transition: color var(--omni-transition-fast);
 }
-.eyeToggleBtn:hover { color: #4a5568; }
+.eyeToggleBtn:hover { color: var(--omni-color-text-secondary); }
 
 /* ── Remember Me ─────────────────────────────────────────────── */
 .checkboxContainer {
@@ -258,57 +261,87 @@
   width: 18px;
   height: 18px;
   border-radius: 5px;
-  border: 1.5px solid #c8d0e0;
-  background: #ffffff;
+  border: 1.5px solid var(--omni-color-border-strong);
+  background: var(--omni-color-surface);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #ffffff;
-  transition: all 0.15s ease;
+  color: var(--omni-color-text-on-primary);
+  transition: all var(--omni-transition-fast);
   flex-shrink: 0;
 }
 
 .customCheckbox.checked {
-  background: #2563eb;
-  border-color: #2563eb;
+  background: var(--omni-color-primary-600);
+  border-color: var(--omni-color-primary-600);
 }
 
 .checkboxLabel {
   font-size: 13.5px;
-  font-weight: 500;
-  color: #3d5068;
+  font-weight: var(--omni-font-weight-medium);
+  color: var(--omni-color-text-secondary);
 }
 
-/* ── Sign In Button ──────────────────────────────────────────── */
+/* ── Sign In Button — mirrors shared Button `.primary.lg` exactly ──── */
 .signInButton {
   width: 100%;
   height: 48px;
-  border-radius: 10px;
-  border: none;
-  background: #1d4ed8;
-  color: #ffffff;
+  border-radius: var(--omni-radius-lg);
+  border: 1px solid transparent;
+  background: linear-gradient(135deg, #2f72f5 0%, var(--omni-color-primary-700) 100%);
+  color: var(--omni-color-text-on-primary);
   font-size: 15px;
-  font-weight: 700;
+  font-weight: var(--omni-font-weight-bold);
   letter-spacing: -0.01em;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 9px;
   cursor: pointer;
-  box-shadow: 0 3px 12px rgba(29,78,216,0.30);
-  transition: background 0.18s ease, box-shadow 0.18s ease, transform 0.14s ease;
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    0 1px 2px rgba(15,23,42,0.18),
+    0 4px 12px rgba(37,99,235,0.32),
+    inset 0 1px 0 rgba(255,255,255,0.14);
+  transition: background var(--omni-transition-base), box-shadow var(--omni-transition-base), transform 100ms ease;
   font-family: inherit;
 }
 
+.signInButton svg:last-child { transition: transform var(--omni-transition-base); }
+.signInButton:hover:not(:disabled) svg:last-child { transform: translateX(3px); }
+
+.signInButton::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 25%, rgba(255,255,255,0.13) 50%, transparent 75%);
+  transform: translateX(-110%);
+}
+
+.signInButton:hover:not(:disabled)::before {
+  transform: translateX(110%);
+  transition: transform 0.52s ease;
+}
+
 .signInButton:hover:not(:disabled) {
-  background: #1e40af;
-  box-shadow: 0 5px 18px rgba(29,78,216,0.38);
+  background: linear-gradient(135deg, var(--omni-color-primary-600) 0%, var(--omni-color-primary-800) 100%);
+  box-shadow:
+    0 2px 4px rgba(15,23,42,0.2),
+    0 8px 20px rgba(37,99,235,0.42),
+    inset 0 1px 0 rgba(255,255,255,0.14);
   transform: translateY(-1px);
 }
 
 .signInButton:active:not(:disabled) {
-  transform: translateY(0);
-  box-shadow: 0 2px 8px rgba(29,78,216,0.25);
+  transform: translateY(0) scale(0.985);
+}
+
+.signInButton:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 4px rgba(37,99,235,0.28),
+    0 4px 12px rgba(37,99,235,0.3);
 }
 
 .signInButton:disabled { opacity: 0.55; cursor: not-allowed; }
@@ -322,9 +355,9 @@
   align-items: center;
   gap: 14px;
   margin: 20px 0 16px 0;
-  color: #a0aec0;
+  color: var(--omni-color-text-muted);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: var(--omni-font-weight-bold);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -334,42 +367,42 @@
   content: '';
   flex: 1;
   height: 1px;
-  background: #edf0f7;
+  background: var(--omni-color-border);
 }
 
 /* ── SSO Button ──────────────────────────────────────────────── */
 .ssoButton {
   width: 100%;
-  height: 46px;
-  border-radius: 10px;
-  border: 1.5px solid #dde3ef;
-  background: #ffffff;
-  color: #1e2d50;
+  height: 48px;
+  border-radius: var(--omni-radius-lg);
+  border: 1.5px solid var(--omni-color-border);
+  background: var(--omni-color-surface);
+  color: var(--omni-color-text-primary);
   font-size: 13.5px;
-  font-weight: 600;
+  font-weight: var(--omni-font-weight-semibold);
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 9px;
   cursor: pointer;
-  transition: border-color 0.18s ease, background 0.18s ease;
+  transition: border-color var(--omni-transition-base), background var(--omni-transition-base), color var(--omni-transition-base);
   letter-spacing: -0.01em;
   font-family: inherit;
 }
 
 .ssoButton:hover {
-  border-color: #2563eb;
-  background: #f0f5ff;
-  color: #1d4ed8;
+  border-color: var(--omni-color-primary-600);
+  background: var(--omni-color-primary-50);
+  color: var(--omni-color-primary-700);
 }
 
 .ssoInfoToast {
   margin-top: 10px;
   padding: 9px 14px;
-  border-radius: 8px;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  color: #1e40af;
+  border-radius: var(--omni-radius-sm);
+  background: var(--omni-color-info-bg);
+  border: 1px solid var(--omni-color-primary-200);
+  color: var(--omni-color-info-text);
   font-size: 12px;
   line-height: 1.45;
   text-align: center;
@@ -382,21 +415,24 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 14px;
-  margin-top: 24px;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--omni-color-border);
 }
 
 .footerLink {
   font-size: 12px;
-  color: #8898b8;
+  color: var(--omni-color-text-muted);
   text-decoration: none;
-  font-weight: 500;
-  transition: color 0.15s ease;
+  font-weight: var(--omni-font-weight-medium);
+  transition: color var(--omni-transition-fast);
 }
 
-.footerLink:hover { color: #2563eb; }
+.footerLink:hover { color: var(--omni-color-primary-600); }
 
-.footerDot { color: #c8d0e0; font-size: 10px; }
+.footerDot { color: var(--omni-color-border-strong); font-size: 10px; }
 
 /* ── Responsive ─────────────────────────────────────────────── */
 @media (max-width: 1080px) {
@@ -415,6 +451,24 @@
     padding: 40px 20px;
   }
   .formCardContainer { max-width: 420px; }
+}
+
+/* Small phones — the desktop card padding/spacing was eating too much of a
+   360-400px-wide screen; give it its own tighter scale instead of shrinking
+   proportionally. */
+@media (max-width: 480px) {
+  .formPanel { padding: 24px 14px; }
+  .formCard  { padding: 26px 20px 22px 20px; }
+  .brandBadge { margin-bottom: 20px; }
+  .cardHeader {
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+  }
+  .cardTitle { font-size: 20px; }
+  .cardSubtitle { font-size: 12.5px; }
+  .formFields { gap: 16px; margin-bottom: 20px; }
+  .textInput, .signInButton, .ssoButton { height: 46px; }
+  .cardFooterLinks { margin-top: 18px; padding-top: 16px; }
 }
 
 @media (max-height: 700px) {

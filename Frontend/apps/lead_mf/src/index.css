@@ -41,6 +41,33 @@
   --radius-xl: 16px;
 }
 
+/* Skeleton shimmer — same convention as the host's Skeleton component and Customer 360's own
+   .c360-skel: a flat gray block with a white diagonal sweep, used for column-shaped loading
+   placeholders instead of a spinner. */
+.lead-skel {
+  position: relative;
+  overflow: hidden;
+  background: #eaecf0;
+  border-radius: 6px;
+}
+
+.lead-skel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.62) 50%, transparent 100%);
+  animation: lead-shimmer-sweep 1.4s ease-in-out infinite;
+}
+
+@keyframes lead-shimmer-sweep {
+  100% { transform: translateX(100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lead-skel::after { animation: none; background: rgba(255, 255, 255, 0.4); }
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -103,6 +130,19 @@ html, body {
 
 .lead-workspace-viewport--wide {
   max-width: 100%;
+}
+
+/* Reduce side padding on tablets/phones so content doesn't get squeezed */
+@media (max-width: 768px) {
+  .lead-workspace-viewport {
+    padding: 16px 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .lead-workspace-viewport {
+    padding: 12px 10px;
+  }
 }
 
 /* Nested Sub-Navigation items inside the Host Main Sidebar */
@@ -609,6 +649,7 @@ html, body {
   box-shadow: none !important;
   border-radius: 0 !important;
   flex: 1;
+  min-width: 0;
 }
 
 /* Custom Dropdown / Select */
@@ -818,6 +859,7 @@ html, body {
   cursor: pointer;
   user-select: none;
   line-height: 1.45;
+  word-break: break-word;
 }
 
 .custom-checkbox-input,
@@ -827,6 +869,7 @@ html, body {
   margin-top: 2px;
   accent-color: #2563eb;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 /* Submit Button — Host shimmer gradient (matches Button.primary exactly) */
@@ -898,6 +941,17 @@ html, body {
   animation: slideInDown 0.25s ease;
   min-width: 320px;
   max-width: 480px;
+}
+
+/* On phones the toast must not overflow the viewport — pin it to the screen edges */
+@media (max-width: 480px) {
+  .toast-notification {
+    right: 12px;
+    left: 12px;
+    min-width: unset;
+    max-width: unset;
+    top: 68px;
+  }
 }
 
 @keyframes slideInDown {
@@ -1722,6 +1776,40 @@ html, body {
    host's own SettingsDrawer and customer360_mf's drawer, `width: min(800px, 96vw)` on the base rule
    above already shrinks correctly on its own as the viewport narrows, without a second fixed-width
    rule fighting it. */
+
+/* On mobile the 160px label column can take too much room — stack label above value */
+@media (max-width: 640px) {
+  .lead-details-row {
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 0;
+  }
+  .lead-details-label {
+    width: auto;
+    min-width: auto;
+  }
+  /* Reduce form-card padding on mobile to give fields more horizontal space */
+  .form-card {
+    padding: 20px 18px;
+  }
+}
+
+@media (max-width: 480px) {
+  .form-card {
+    padding: 16px 14px;
+  }
+  /* Drawer body padding */
+  .drawer-body {
+    padding: 16px 16px;
+  }
+  .drawer-header, .drawer-header-blue {
+    padding: 18px 18px 16px;
+  }
+  .drawer-footer {
+    padding: 12px 16px;
+  }
+}
+
 @media (max-width: 1024px) {
   .lead-table-search {
     width: 220px;
@@ -1733,6 +1821,13 @@ html, body {
 }
 
 @media (max-width: 768px) {
+  .lead-hero-banner {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    padding: 18px 18px !important;
+    gap: 14px !important;
+  }
+
   .lead-table-controls {
     flex-direction: column;
     align-items: stretch;

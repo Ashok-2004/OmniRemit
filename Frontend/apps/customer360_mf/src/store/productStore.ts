@@ -26,6 +26,11 @@ interface ProductStoreState {
   products: CustomerProduct[];
   loading: boolean;
   error: string | null;
+  // Was dropped entirely (only `.message` was ever stored) — see interactionStore.ts's identical
+  // fix for the full rationale: without this, every consumer of `error` always fell into
+  // getFriendlyErrorMessage's "no status" branch and showed a generic connection message,
+  // regardless of whether the real cause was a 500, a 403, or an actual network failure.
+  errorStatus: number | null;
 
   // Pagination
   pageNumber: number;
@@ -56,6 +61,7 @@ export const useProductStore = create<ProductStoreState>((set, get) => ({
   products: [],
   loading: false,
   error: null,
+  errorStatus: null,
 
   // Pagination
   pageNumber: 1,
@@ -138,7 +144,7 @@ export const useProductStore = create<ProductStoreState>((set, get) => ({
       set({ selectedProductDetails: details, loadingDetails: false });
     } catch (err) {
       console.error('Error fetching product details:', err);
-      set({ error: (err as ApiError).message, loadingDetails: false });
+      set({ error: (err as ApiError).message, errorStatus: (err as ApiError).status ?? null, loadingDetails: false });
     }
   },
 
@@ -147,7 +153,7 @@ export const useProductStore = create<ProductStoreState>((set, get) => ({
   loadProducts: async (customerId, page, size) => {
     if (!customerId) return;
     const version = ++_productsVersion;
-    set({ loading: true, error: null });
+    set({ loading: true, error: null, errorStatus: null });
 
     try {
       const pageNum = page !== undefined ? page : get().pageNumber;
@@ -169,7 +175,7 @@ export const useProductStore = create<ProductStoreState>((set, get) => ({
       });
     } catch (err) {
       if (version !== _productsVersion) return;
-      set({ error: (err as ApiError).message, loading: false });
+      set({ error: (err as ApiError).message, errorStatus: (err as ApiError).status ?? null, loading: false });
       console.error('Error loading products:', err);
     }
   },

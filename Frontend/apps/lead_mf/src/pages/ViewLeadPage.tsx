@@ -145,6 +145,7 @@ export const ViewLeadPage: React.FC = () => {
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: '20px',
+          flexWrap: 'wrap',
           position: 'relative',
           overflow: 'hidden',
           background: 'linear-gradient(120deg, #1e40af 0%, #2563eb 45%, #3b82f6 100%)',
@@ -270,7 +271,6 @@ export const ViewLeadPage: React.FC = () => {
               boxShadow: '0 2px 10px rgba(0, 0, 0, 0.12)',
               transition: 'all 0.15s ease',
               fontFamily: 'inherit',
-              flexShrink: 0,
               position: 'relative',
               zIndex: 1,
             }}
@@ -298,7 +298,8 @@ export const ViewLeadPage: React.FC = () => {
           borderRadius: '16px',
           border: '1px solid #eaecf0',
           boxShadow: '0 1px 4px rgba(15, 23, 42, 0.04)',
-          overflow: 'hidden',
+          /* overflow must NOT be hidden here — that would clip the inner overflowX:auto scroll container */
+          overflow: 'visible',
           boxSizing: 'border-box',
           display: 'flex',
           flexDirection: 'column',
@@ -454,29 +455,29 @@ export const ViewLeadPage: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <table style={{ width: '100%', minWidth: '780px', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
               <thead>
-                <tr style={{ background: '#f8fafc', borderBottom: '1px solid #eaecf0' }}>
-                  <th style={{ padding: '12px 18px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', color: '#64748b' }}>
+                <tr style={{ background: 'linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)', borderBottom: '1px solid #eaecf0' }}>
+                  <th style={{ padding: '13px 18px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#475569', whiteSpace: 'nowrap' }}>
                     Customer Details
                   </th>
-                  <th style={{ padding: '12px 18px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', color: '#64748b' }}>
+                  <th style={{ padding: '13px 18px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#475569', whiteSpace: 'nowrap' }}>
                     IC / Contact
                   </th>
-                  <th style={{ padding: '12px 18px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', color: '#64748b' }}>
-                    Product & Amount
+                  <th style={{ padding: '13px 18px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#475569', whiteSpace: 'nowrap' }}>
+                    Product &amp; Amount
                   </th>
-                  <th style={{ padding: '12px 18px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', color: '#64748b' }}>
+                  <th style={{ padding: '13px 18px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#475569', whiteSpace: 'nowrap' }}>
                     Branch / State
                   </th>
-                  <th style={{ padding: '12px 18px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', color: '#64748b' }}>
+                  <th style={{ padding: '13px 18px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#475569', whiteSpace: 'nowrap' }}>
                     Status
                   </th>
-                  <th style={{ padding: '12px 18px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', color: '#64748b' }}>
+                  <th style={{ padding: '13px 18px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#475569', whiteSpace: 'nowrap' }}>
                     Created Date
                   </th>
-                  <th style={{ padding: '12px 18px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', color: '#64748b', textAlign: 'right' }}>
+                  <th style={{ padding: '13px 18px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#475569', whiteSpace: 'nowrap', textAlign: 'right' }}>
                     Actions
                   </th>
                 </tr>
@@ -502,8 +503,8 @@ export const ViewLeadPage: React.FC = () => {
                         e.currentTarget.style.background = 'transparent';
                       }}
                     >
-                      {/* Customer with Avatar */}
-                      <td style={{ padding: '13px 18px' }}>
+                      {/* Customer — avatar + name only, no ID badge */}
+                      <td style={{ padding: '13px 18px', verticalAlign: 'middle' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '11px' }}>
                           <div
                             style={{
@@ -523,28 +524,13 @@ export const ViewLeadPage: React.FC = () => {
                           >
                             {initials}
                           </div>
-                          <div>
-                            <div style={{ fontWeight: 600, color: '#0f172a' }}>{lead.name}</div>
-                            {lead.id && (
-                              <span
-                                style={{
-                                  fontSize: '11px',
-                                  color: '#2563eb',
-                                  background: '#eff6ff',
-                                  padding: '1px 6px',
-                                  borderRadius: '4px',
-                                  fontWeight: 500,
-                                }}
-                              >
-                                {lead.id}
-                              </span>
-                            )}
-                          </div>
+                          {/* Only the customer name — ID removed per user request */}
+                          <span style={{ fontWeight: 600, color: '#0f172a' }}>{lead.name}</span>
                         </div>
                       </td>
 
                       {/* IC & Phone — masked per Field Settings when the field is marked Sensitive */}
-                      <td style={{ padding: '13px 18px' }}>
+                      <td style={{ padding: '13px 18px', verticalAlign: 'middle' }}>
                         {isFieldVisible(commonFieldConfig, 'icNumber') && (
                           <div style={{ color: '#0f172a', fontWeight: 500, fontSize: '13px', fontFamily: "'SF Mono', 'Fira Code', monospace" }}>
                             {renderMaskedCell(commonFieldConfig, 'icNumber', lead.icNumber)}
@@ -556,17 +542,17 @@ export const ViewLeadPage: React.FC = () => {
                       </td>
 
                       {/* Product & Applied Amount */}
-                      <td style={{ padding: '13px 18px' }}>
+                      <td style={{ padding: '13px 18px', verticalAlign: 'middle' }}>
                         <div style={{ fontWeight: 600, color: '#0f172a' }}>{lead.product}</div>
                         {isFieldVisible(commonFieldConfig, 'appliedAmount') && lead.appliedAmount ? (
-                          <div style={{ fontSize: '12px', color: '#16a34a', fontWeight: 600, marginTop: '1px' }}>
+                          <div style={{ fontSize: '12px', color: '#16a34a', fontWeight: 600, marginTop: '2px' }}>
                             RM {Number(lead.appliedAmount).toLocaleString()}
                           </div>
                         ) : null}
                       </td>
 
                       {/* Branch & State */}
-                      <td style={{ padding: '13px 18px' }}>
+                      <td style={{ padding: '13px 18px', verticalAlign: 'middle' }}>
                         {isFieldVisible(commonFieldConfig, 'branch') && (
                           <div style={{ color: '#0f172a', fontWeight: 500 }}>{lead.branch || 'Not Assigned'}</div>
                         )}
@@ -575,8 +561,8 @@ export const ViewLeadPage: React.FC = () => {
                         )}
                       </td>
 
-                      {/* Status */}
-                      <td style={{ padding: '13px 18px' }}>
+                      {/* Status pill badge */}
+                      <td style={{ padding: '13px 18px', verticalAlign: 'middle' }}>
                         <span
                           style={{
                             display: 'inline-flex',
@@ -589,6 +575,7 @@ export const ViewLeadPage: React.FC = () => {
                             fontSize: '11.5px',
                             fontWeight: 600,
                             border: `1px solid ${statusInfo.border}`,
+                            whiteSpace: 'nowrap',
                           }}
                         >
                           <span
@@ -597,6 +584,7 @@ export const ViewLeadPage: React.FC = () => {
                               height: '5px',
                               borderRadius: '50%',
                               background: statusInfo.dot,
+                              flexShrink: 0,
                             }}
                           />
                           {statusInfo.label}
@@ -604,13 +592,15 @@ export const ViewLeadPage: React.FC = () => {
                       </td>
 
                       {/* Created Date */}
-                      <td style={{ padding: '13px 18px', color: '#64748b', fontSize: '12.5px' }}>
+                      <td style={{ padding: '13px 18px', verticalAlign: 'middle', color: '#64748b', fontSize: '12.5px', whiteSpace: 'nowrap' }}>
                         {lead.createdDate}
                       </td>
 
-                      {/* Action Buttons */}
-                      <td style={{ padding: '13px 18px', textAlign: 'right' }}>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      {/* Action Buttons — View has text label; Edit & Delete are icon-only with explicit
+                          width/height so they never collapse to 0 on narrow viewports */}
+                      <td style={{ padding: '13px 18px', textAlign: 'right', verticalAlign: 'middle' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                          {/* View — text + icon */}
                           <button
                             type="button"
                             onClick={() => openDetailsDrawer(lead)}
@@ -625,23 +615,22 @@ export const ViewLeadPage: React.FC = () => {
                               cursor: 'pointer',
                               display: 'inline-flex',
                               alignItems: 'center',
+                              justifyContent: 'center',
                               gap: '4px',
                               fontSize: '12px',
                               fontWeight: 600,
                               transition: 'all 0.12s ease',
                               fontFamily: 'inherit',
+                              whiteSpace: 'nowrap',
                             }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.background = '#dbeafe';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.background = '#eff6ff';
-                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = '#dbeafe'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = '#eff6ff'; }}
                           >
                             <Eye size={13} />
                             <span>View</span>
                           </button>
 
+                          {/* Edit — icon-only with explicit 30×30 so it never collapses */}
                           {canEditLead() && (
                             <button
                               type="button"
@@ -649,7 +638,8 @@ export const ViewLeadPage: React.FC = () => {
                               id={`edit-lead-${lead.id}`}
                               title="Edit Lead"
                               style={{
-                                padding: '5px 8px',
+                                width: '30px',
+                                height: '30px',
                                 borderRadius: '8px',
                                 background: '#fefce8',
                                 border: '1px solid #fef08a',
@@ -657,19 +647,18 @@ export const ViewLeadPage: React.FC = () => {
                                 cursor: 'pointer',
                                 display: 'inline-flex',
                                 alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
                                 transition: 'all 0.12s ease',
                               }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.background = '#fef9c3';
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.background = '#fefce8';
-                              }}
+                              onMouseEnter={(e) => { e.currentTarget.style.background = '#fef9c3'; e.currentTarget.style.borderColor = '#fde047'; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.background = '#fefce8'; e.currentTarget.style.borderColor = '#fef08a'; }}
                             >
-                              <Edit3 size={13} />
+                              <Edit3 size={14} />
                             </button>
                           )}
 
+                          {/* Delete — icon-only with explicit 30×30 */}
                           {canDeleteLead() && (
                             <button
                               type="button"
@@ -677,7 +666,8 @@ export const ViewLeadPage: React.FC = () => {
                               id={`delete-lead-${lead.id}`}
                               title="Delete Lead"
                               style={{
-                                padding: '5px 8px',
+                                width: '30px',
+                                height: '30px',
                                 borderRadius: '8px',
                                 background: '#fff1f2',
                                 border: '1px solid #fecdd3',
@@ -685,16 +675,14 @@ export const ViewLeadPage: React.FC = () => {
                                 cursor: 'pointer',
                                 display: 'inline-flex',
                                 alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
                                 transition: 'all 0.12s ease',
                               }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.background = '#ffe4e6';
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.background = '#fff1f2';
-                              }}
+                              onMouseEnter={(e) => { e.currentTarget.style.background = '#ffe4e6'; e.currentTarget.style.borderColor = '#fda4af'; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.background = '#fff1f2'; e.currentTarget.style.borderColor = '#fecdd3'; }}
                             >
-                              <Trash2 size={13} />
+                              <Trash2 size={14} />
                             </button>
                           )}
                         </div>
@@ -729,7 +717,7 @@ export const ViewLeadPage: React.FC = () => {
               <strong style={{ color: '#0f172a' }}>{totalRecords}</strong> records
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
               {/* Records Per Page */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <span>Per page:</span>

@@ -252,7 +252,14 @@ export const useCustomerStore = create<CustomerStoreState>((set, get) => ({
     } catch (err) {
       if (version !== _individualSearchVersion) return null;
       const error = err as ApiError;
-      set({ error: error.message, loading: false });
+      // A failed search (not-found or any other error) used to leave whatever profile was already
+      // cached from an EARLIER successful search still in place — the render gate downstream checks
+      // `!profile`, so as long as some individual profile from before was still sitting in the store,
+      // the page kept showing that stale profile instead of the not-found/error state, on every
+      // subsequent failed search and even on a fresh visit to the tab (module-level Zustand store
+      // persists across remounts). Clearing it here is what makes a failed search actually look like
+      // a failed search, symmetric with Corporate's own path below.
+      set({ error: error.message, individualProfile: null, individualContactInfo: null, profile: null, contactInfo: null, loading: false });
       throw err;
     }
   },
@@ -286,7 +293,8 @@ export const useCustomerStore = create<CustomerStoreState>((set, get) => ({
     } catch (err) {
       if (version !== _corporateSearchVersion) return null;
       const error = err as ApiError;
-      set({ error: error.message, loading: false });
+      // Same fix as loadProfileById's catch above — see its comment for the full rationale.
+      set({ error: error.message, corporateProfile: null, corporateContactInfo: null, profile: null, contactInfo: null, loading: false });
       throw err;
     }
   },

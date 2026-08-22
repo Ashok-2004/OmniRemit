@@ -71,7 +71,20 @@
 
 @media (max-width: 600px) {
   .header { flex-direction: column; align-items: flex-start; }
+  /* Filter pills wrap to a new line on small screens */
+  .filterPills { flex-wrap: wrap; width: 100%; }
+  .pill, .pillActive { flex: 1; text-align: center; }
+  /* Table scrolls horizontally with smooth iOS momentum */
+  .tableContainer { -webkit-overflow-scrolling: touch; }
+  /* Pagination wraps */
+  .pagination { flex-wrap: wrap; gap: 8px; }
+  .pageIndicator { min-width: 80px; }
 }
+
+@media (max-width: 480px) {
+  .tableContainer { border-radius: 12px; }
+}
+
 
 .revealBtn {
   display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 7px;

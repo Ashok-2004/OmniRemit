@@ -1,6 +1,11 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
 /* ── Hero Container ─────────────────────────────────────────── */
+/* The exact gradient used everywhere else in the app for a "hero" surface —
+   SettingsDrawer, every Settings tab, every form drawer, and Audit Logs all
+   use linear-gradient(120deg, #1e40af 0%, #2563eb 45-50%, #3b82f6 100%);
+   SettingsDrawer.module.css adds one darker leading stop (#1e3a8a) for a
+   taller panel, which is what this reuses verbatim — no invented navy. */
 .heroContainer {
   position: relative;
   width: 100%;
@@ -8,13 +13,13 @@
   max-height: 100vh;
   display: flex;
   flex-direction: column;
-  padding: 36px 44px 24px 44px;
+  padding: 40px 48px 26px 48px;
   overflow: hidden;
   box-sizing: border-box;
   user-select: none;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  color: #fff;
-  background: #02081c;
+  color: #ffffff;
+  background: linear-gradient(120deg, #1e3a8a 0%, #1e40af 30%, #2563eb 65%, #3b82f6 100%);
 }
 
 /* ── Background Layers ──────────────────────────────────────── */
@@ -22,9 +27,8 @@
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 75% 50% at 50% 68%, rgba(29,78,216,0.45) 0%, transparent 65%),
-    radial-gradient(ellipse 85% 40% at 25% -5%,  rgba(14,42,110,0.55) 0%, transparent 55%),
-    linear-gradient(180deg, #040d26 0%, #020918 45%, #030c22 100%);
+    radial-gradient(ellipse 70% 45% at 85% 6%,  rgba(56,132,255,0.24) 0%, transparent 60%),
+    radial-gradient(ellipse 75% 50% at 10% 98%, rgba(37,99,235,0.22) 0%, transparent 60%);
   pointer-events: none;
   z-index: 0;
 }
@@ -32,34 +36,49 @@
 .bgGridOverlay {
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(circle at 1px 1px, rgba(56,189,248,0.052) 1px, transparent 0);
-  background-size: 28px 28px;
+  background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.08) 1px, transparent 0);
+  background-size: 26px 26px;
+  mask-image: radial-gradient(ellipse 90% 70% at 50% 30%, #000 0%, transparent 75%);
   pointer-events: none;
   z-index: 1;
 }
 
 .bgGlowOrb {
   position: absolute;
-  top: -100px;
-  left: 10%;
-  width: 580px;
-  height: 580px;
+  top: -120px;
+  left: 4%;
+  width: 560px;
+  height: 560px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(37,99,235,0.24) 0%, rgba(56,189,248,0.10) 40%, transparent 70%);
-  filter: blur(55px);
+  background: radial-gradient(circle, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.05) 42%, transparent 70%);
+  filter: blur(60px);
   pointer-events: none;
   z-index: 1;
 }
 
 .bgCenterHorizon {
   position: absolute;
-  top: 60%;
+  top: 62%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 720px;
-  height: 360px;
-  background: radial-gradient(ellipse, rgba(29,78,216,0.35) 0%, transparent 70%);
+  width: 760px;
+  height: 380px;
+  background: radial-gradient(ellipse, rgba(255,255,255,0.12) 0%, transparent 70%);
   filter: blur(60px);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Decorative circles — same device used on the Dashboard hero banner */
+.heroContainer::after {
+  content: '';
+  position: absolute;
+  bottom: -70px;
+  right: -60px;
+  width: 260px;
+  height: 260px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.06);
   pointer-events: none;
   z-index: 1;
 }
@@ -81,57 +100,61 @@
   flex-shrink: 0;
 }
 
-.logoBadge {
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 9px;
-  background: rgba(10,30,80,0.72);
-  border: 1.5px solid rgba(56,189,248,0.42);
-  box-shadow: 0 0 20px rgba(56,189,248,0.18), inset 0 1px 0 rgba(255,255,255,0.10);
-}
-
+/* Same size/weight/tracking as the Sidebar's wordmark (Sidebar.module.css .brandName) */
 .brandTitle {
-  font-size: 20px;
+  font-size: 15.5px;
   font-weight: 800;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.04em;
   color: #fff;
 }
 
-.brandTitle span { color: #38bdf8; }
+.brandTitle span { color: #bfdbfe; }
 
 /* ── Headline Section ───────────────────────────────────────── */
 .headlineSection {
   flex-shrink: 0;
-  margin-top: 24px;
+  margin-top: 26px;
 }
 
+.eyebrowBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px 5px 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.24);
+  color: #dbeafe;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin-bottom: 16px;
+}
+
+/* The biggest heading anywhere in the app tops out around 22px (Dashboard's
+   .heroTitle); this is the single most prominent line on the whole product,
+   so it gets a little more room, but nowhere near a marketing-page display
+   size — same weight/tracking convention as every other hero heading. */
 .mainHeading {
-  font-size: 42px;
+  font-size: 30px;
   font-weight: 800;
-  line-height: 1.10;
-  letter-spacing: -0.045em;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
   color: #fff;
-  margin: 0 0 14px 0;
+  margin: 0 0 10px 0;
 }
 
 .gradientHeading {
-  background: linear-gradient(90deg, #3b82f6 0%, #60a5fa 55%, #38bdf8 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  display: inline;
+  color: #93c5fd;
 }
 
 .subHeading {
   font-size: 14px;
-  line-height: 1.62;
-  color: #7f96b8;
+  line-height: 1.6;
+  color: rgba(255,255,255,0.72);
   margin: 0;
   font-weight: 400;
-  max-width: 400px;
+  max-width: 420px;
 }
 
 /* ── Isometric Stage ────────────────────────────────────────── */
@@ -139,9 +162,9 @@
   position: relative;
   width: 100%;
   flex: 1;
-  min-height: 260px;
-  max-height: 380px;
-  margin: 8px 0 6px 0;
+  min-height: 230px;
+  max-height: 340px;
+  margin: 14px 0 10px 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -155,7 +178,7 @@
   height: 200px;
   flex-shrink: 0;
   z-index: 3;
-  filter: drop-shadow(0 14px 30px rgba(0,0,0,0.65));
+  filter: drop-shadow(0 16px 26px rgba(2,6,23,0.45));
   position: relative;
 }
 
@@ -177,37 +200,37 @@
 }
 
 @keyframes beamPulse {
-  0%   { stroke-opacity: 0.30; stroke-dashoffset: 0; }
-  100% { stroke-opacity: 0.85; stroke-dashoffset: -22; }
+  0%   { stroke-opacity: 0.35; stroke-dashoffset: 0; }
+  100% { stroke-opacity: 0.90; stroke-dashoffset: -22; }
 }
 
-/* ── App Cards ──────────────────────────────────────────────── */
+/* ── App Cards — white glass, consistent with the card language
+   used across the rest of the host (white surface + soft shadow) ── */
 .appCard {
   position: absolute;
   display: flex;
   align-items: center;
   gap: 9px;
   padding: 8px 13px 8px 9px;
-  background: rgba(7,15,40,0.80);
-  border: 1px solid rgba(56,189,248,0.22);
+  background: rgba(255,255,255,0.14);
+  border: 1px solid rgba(255,255,255,0.26);
   border-radius: 12px;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   box-shadow:
-    0 6px 24px -4px rgba(0,0,0,0.60),
-    0 0 18px rgba(56,189,248,0.08),
-    inset 0 1px 0 rgba(255,255,255,0.07);
-  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+    0 8px 24px -6px rgba(2,6,23,0.45),
+    inset 0 1px 0 rgba(255,255,255,0.18);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
   z-index: 10;
   cursor: default;
 }
 
 .appCard:hover {
-  border-color: rgba(56,189,248,0.55);
+  background: rgba(255,255,255,0.20);
+  border-color: rgba(255,255,255,0.44);
   box-shadow:
-    0 8px 28px -4px rgba(0,0,0,0.70),
-    0 0 22px rgba(56,189,248,0.18),
-    inset 0 1px 0 rgba(255,255,255,0.12);
+    0 10px 28px -6px rgba(2,6,23,0.50),
+    inset 0 1px 0 rgba(255,255,255,0.22);
 }
 
 .cardIconBox {
@@ -226,20 +249,45 @@
 .cardLabel {
   font-size: 11px;
   font-weight: 700;
-  color: #dde6f5;
+  color: #fff;
   line-height: 1.28;
   white-space: nowrap;
   letter-spacing: -0.01em;
 }
 
+/* ── Status dot — blinking "live" indicator (solid dot + expanding ping ring) ── */
 .statusDot {
+  position: relative;
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #22c55e;
-  box-shadow: 0 0 9px rgba(34,197,94,0.85);
+  background: #4ade80;
   margin-left: 2px;
   flex-shrink: 0;
+  animation: statusBlink 1.8s ease-in-out infinite;
+}
+
+/* .statusDot::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  border: 1.5px solid #4ade80;
+  animation: statusPing 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+} */
+
+@keyframes statusBlink {
+  0%, 100% { opacity: 1;    box-shadow: 0 0 9px rgba(74,222,128,0.9); }
+  50%      { opacity: 0.35; box-shadow: 0 0 3px rgba(74,222,128,0.4); }
+}
+
+@keyframes statusPing {
+  0%   { transform: scale(0.7); opacity: 0.7; }
+  75%, 100% { transform: scale(2.2); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .statusDot, .statusDot::after, .pulseBeam { animation: none; }
 }
 
 /* ── Feature Strip ──────────────────────────────────────────── */
@@ -247,8 +295,8 @@
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   padding: 13px 16px;
-  background: rgba(5,12,36,0.68);
-  border: 1px solid rgba(56,189,248,0.12);
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.22);
   border-radius: 14px;
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
@@ -261,7 +309,7 @@
   align-items: center;
   gap: 10px;
   padding: 0 10px;
-  border-right: 1px solid rgba(56,189,248,0.10);
+  border-right: 1px solid rgba(255,255,255,0.16);
 }
 .featureItem:first-child { padding-left: 4px; }
 .featureItem:last-child  { border-right: none; }
@@ -270,13 +318,13 @@
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  background: rgba(37,99,235,0.20);
-  border: 1px solid rgba(56,189,248,0.18);
+  background: rgba(255,255,255,0.16);
+  border: 1px solid rgba(255,255,255,0.26);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: #60a5fa;
+  color: #fff;
 }
 
 .featureTextCol {
@@ -288,14 +336,14 @@
 .featureTitle {
   font-size: 11.5px;
   font-weight: 700;
-  color: #dde6f5;
+  color: #fff;
   letter-spacing: -0.01em;
   white-space: nowrap;
 }
 
 .featureSub {
   font-size: 9.5px;
-  color: #516078;
+  color: rgba(255,255,255,0.62);
   font-weight: 400;
   white-space: nowrap;
   margin-top: 1px;
@@ -305,23 +353,23 @@
 .heroFooter {
   margin-top: 16px;
   font-size: 11.5px;
-  color: #3d5068;
+  color: rgba(255,255,255,0.55);
   font-weight: 500;
   flex-shrink: 0;
 }
 
 /* ── Responsive ─────────────────────────────────────────────── */
-@media (max-height: 820px) {
-  .heroContainer  { padding: 24px 36px 18px 36px; }
-  .mainHeading    { font-size: 34px; margin-bottom: 10px; }
-  .isometricStage { min-height: 210px; max-height: 310px; }
+@media (max-height: 860px) {
+  .heroContainer  { padding: 28px 40px 20px 40px; }
+  .mainHeading    { font-size: 32px; }
+  .isometricStage { min-height: 190px; max-height: 270px; margin: 10px 0 8px 0; }
   .featureStrip   { padding: 10px 14px; }
   .featureSub     { display: none; }
 }
 
 @media (max-width: 1200px) {
-  .heroContainer  { padding: 28px 32px 18px 32px; }
-  .mainHeading    { font-size: 36px; }
+  .heroContainer  { padding: 30px 34px 18px 34px; }
+  .mainHeading    { font-size: 34px; }
   .featureStrip   { grid-template-columns: repeat(2,1fr); }
   .featureItem    { border-right: none; padding: 4px 6px; }
 }

@@ -9,6 +9,7 @@ import { useAuthStore } from './features/auth/store/authStore'
 import { useModuleRegistryStore } from './shared/stores/moduleRegistryStore'
 import { useSettingsDrawerStore, type SettingsTab } from './shared/stores/settingsDrawerStore'
 import { RouteFallback } from './shared/components/RouteFallback/RouteFallback'
+import { LoginPageSkeleton } from './pages/LoginPage/LoginPageSkeleton'
 import { lazyWithPreload, preloadWhenIdle } from './shared/utils/lazyWithPreload'
 
 /**
@@ -122,12 +123,17 @@ function LoginRoute() {
   }
 
   return (
-    <LoginPage
-      onSubmit={login}
-      onGoogleCredential={loginWithGoogle}
-      loading={loginLoading}
-      errorMessage={loginError}
-    />
+    // Nested Suspense with a login-shaped fallback: on a cold visit (first thing loaded this
+    // session) the outer Suspense's RouteFallback would otherwise flash — a generic header+body
+    // shape that looks nothing like the real split-panel login screen.
+    <Suspense fallback={<LoginPageSkeleton />}>
+      <LoginPage
+        onSubmit={login}
+        onGoogleCredential={loginWithGoogle}
+        loading={loginLoading}
+        errorMessage={loginError}
+      />
+    </Suspense>
   )
 }
 
@@ -229,6 +235,18 @@ function AppRoutes() {
 
   useEffect(() => {
     void hydrate()
+    /*
+     * Start the Dashboard chunk fetch in parallel with the hydrate() round trip, not after it.
+     *
+     * On a hard refresh landing directly on an authenticated route, LoginRoute never mounts this
+     * session, so its own idle-preload of Dashboard never fires — the chunk was still unfetched by
+     * the time hydrate() resolved. Suspense then had to show RouteFallback (a differently-shaped
+     * skeleton: two header blocks + five text lines) sandwiched between RequireAuth's AppShellSkeleton
+     * and Dashboard's own internal skeleton, a visible "wrong skeleton flashes in the middle" glitch.
+     * Firing this eagerly means the chunk is normally already resolved by the time hydrate() finishes,
+     * so Suspense never needs the fallback at all in the common case.
+     */
+    void preloadDashboard()
   }, [hydrate])
 
   return (
