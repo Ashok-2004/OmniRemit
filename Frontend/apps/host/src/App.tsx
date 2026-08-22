@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react'
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useParams, type Location } from 'react-router-dom'
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams, type Location } from 'react-router-dom'
 import { AppShell } from './layout/AppShell/AppShell'
 import { RequireAuth } from './features/auth/components/RequireAuth'
 import { RequireCapability } from './features/auth/components/RequireCapability'
@@ -10,6 +10,7 @@ import { useModuleRegistryStore } from './shared/stores/moduleRegistryStore'
 import { useSettingsDrawerStore, type SettingsTab } from './shared/stores/settingsDrawerStore'
 import { RouteFallback } from './shared/components/RouteFallback/RouteFallback'
 import { LoginPageSkeleton } from './pages/LoginPage/LoginPageSkeleton'
+import { AppShellSkeleton } from './shared/components/AppShellSkeleton/AppShellSkeleton'
 import { lazyWithPreload, preloadWhenIdle } from './shared/utils/lazyWithPreload'
 
 /**
@@ -126,6 +127,10 @@ function LoginRoute() {
     // Nested Suspense with a login-shaped fallback: on a cold visit (first thing loaded this
     // session) the outer Suspense's RouteFallback would otherwise flash — a generic header+body
     // shape that looks nothing like the real split-panel login screen.
+    //
+    // The LoginPageSkeleton itself has a 200ms CSS animation-delay (animation-fill-mode: both),
+    // so it stays invisible on warm-cache loads where the chunk resolves quickly — no flicker —
+    // and only fades in when the download actually takes noticeable time.
     <Suspense fallback={<LoginPageSkeleton />}>
       <LoginPage
         onSubmit={login}
@@ -229,6 +234,27 @@ function AuthenticatedShell() {
   )
 }
 
+/**
+ * Layout route that wraps all authenticated page outlets in a Suspense boundary.
+ *
+ * React Router v6 requires every child of <Route> to itself be a <Route> — placing
+ * <Suspense> directly inside a <Route>'s children throws "is not a <Route> component".
+ * The layout-route pattern is the idiomatic fix: this component renders
+ * <Suspense><Outlet /></Suspense>, and page <Route>s are nested inside a
+ * <Route element={<AuthenticatedPagesLayout />}> so RR6 sees only valid Route children.
+ *
+ * The AppShellSkeleton fallback matches the shape shown by RequireAuth during hydration
+ * (sidebar + topbar + stat-card grid), so there is no visible layout jump if a page
+ * chunk hasn't resolved by the time hydration finishes.
+ */
+function AuthenticatedPagesLayout() {
+  return (
+    <Suspense fallback={<AppShellSkeleton />}>
+      <Outlet />
+    </Suspense>
+  )
+}
+
 function AppRoutes() {
   const hydrate = useAuthStore((s) => s.hydrate)
   useSilentRefresh()
@@ -263,84 +289,101 @@ function AppRoutes() {
           </RequireAuth>
         }
       >
-        <Route index element={<DashboardPage />} />
-        <Route path="profile" element={<ProfilePage />} />
-        <Route path="apps/:appKey" element={<RemoteAppPage />} />
-
-        <Route
-          path="system/audit-logs"
-          element={
-            <RequireCapability featureKey={FEATURE_KEYS.auditLogs}>
-              <AuditLogsPage />
-            </RequireCapability>
-          }
-        />
-
-        <Route
-          path="system/approvals"
-          element={
-            <RequireCapability featureKey={FEATURE_KEYS.approvals}>
-              <ApprovalCenterPage />
-            </RequireCapability>
-          }
-        />
-
-        {/* No capability gate — every authenticated user tracks their own submitted requests
-            regardless of whether they hold Approval Center access; the backend scopes this to the
-            caller's own id server-side (see GET /api/approvals/mine), so there is nothing to leak. */}
-        <Route path="my-requests" element={<MyRequestsRoute />} />
-
         {/*
-          Settings has no pages of its own — it IS the gear drawer, rendered globally by AppShell.
+          AuthenticatedPagesLayout is a layout Route whose sole job is to wrap the
+          authenticated page outlet in a Suspense boundary.
 
-          These routes exist so every /settings/* URL still resolves: each opens the drawer on the right
-          tab and, for /new or /:id, pushes the matching form layer, then hands the URL back to the
-          dashboard. That keeps bookmarks, the back button and — importantly — global search working,
-          since SearchAppService builds "/settings/users/{id}" style routes server-side.
+          Placing <Suspense> directly as a child of <Route> is invalid in React Router v6 —
+          all children of <Route> must themselves be <Route> components, which is why the
+          previous attempt threw "is not a <Route> component". The layout-route pattern is
+          the correct solution: this Route renders AuthenticatedPagesLayout (which renders
+          <Suspense><Outlet /></Suspense>), and all page routes are nested inside it.
 
-          The routed page components and SetupPanel are gone. They were a second, older implementation
-          of the same CRUD, and every bug reported against these screens came from them rather than the
-          drawer: the user form there had no validation at all (so it accepted "989898989sssss" and
-          "ashok246@gmail.comsssssssss"), and the role form's permission grid still read capabilities off
-          the PARENT feature — which for remote.employee declares none, so every column rendered a dash.
-          Deleting them is what fixes those, not patching them twice.
+          The fallback is AppShellSkeleton — the same shaped skeleton (sidebar + topbar +
+          stat-card grid) shown by RequireAuth during hydration. If a page chunk isn't ready
+          when RequireAuth finishes, the user sees the same visual continuously rather than
+          the bare RouteFallback straight-line boxes that were appearing before.
         */}
-        <Route path="settings">
-          <Route index element={<SettingsDeepLink tab="users" />} />
-          {(
-            [
-              ['users', FEATURE_KEYS.users, 'Create'],
-              ['roles', FEATURE_KEYS.roles, 'Create'],
-              ['applications', FEATURE_KEYS.applications, 'Register'],
-            ] as const
-          ).map(([tab, featureKey, createCapability]) => (
-            <Route key={tab} path={tab}>
-              <Route
-                index
-                element={
-                  <RequireCapability featureKey={featureKey}>
-                    <SettingsDeepLink tab={tab} />
-                  </RequireCapability>
-                }
-              />
-              <Route
-                path="new"
-                element={
-                  <RequireCapability featureKey={featureKey} capability={createCapability}>
-                    <SettingsDeepLink tab={tab} />
-                  </RequireCapability>
-                }
-              />
-              <Route
-                path=":id"
-                element={
-                  <RequireCapability featureKey={featureKey} capability="Edit">
-                    <SettingsDeepLink tab={tab} />
-                  </RequireCapability>
-                }
-              />
-            </Route>
-          ))}
+        <Route element={<AuthenticatedPagesLayout />}>
+          <Route index element={<DashboardPage />} />
+          <Route path="profile" element={<ProfilePage />} />
+          <Route path="apps/:appKey" element={<RemoteAppPage />} />
+
+          <Route
+            path="system/audit-logs"
+            element={
+              <RequireCapability featureKey={FEATURE_KEYS.auditLogs}>
+                <AuditLogsPage />
+              </RequireCapability>
+            }
+          />
+
+          <Route
+            path="system/approvals"
+            element={
+              <RequireCapability featureKey={FEATURE_KEYS.approvals}>
+                <ApprovalCenterPage />
+              </RequireCapability>
+            }
+          />
+
+          {/* No capability gate — every authenticated user tracks their own submitted requests
+              regardless of whether they hold Approval Center access; the backend scopes this to the
+              caller's own id server-side (see GET /api/approvals/mine), so there is nothing to leak. */}
+          <Route path="my-requests" element={<MyRequestsRoute />} />
+
+          {/*
+            Settings has no pages of its own — it IS the gear drawer, rendered globally by AppShell.
+
+            These routes exist so every /settings/* URL still resolves: each opens the drawer on the right
+            tab and, for /new or /:id, pushes the matching form layer, then hands the URL back to the
+            dashboard. That keeps bookmarks, the back button and — importantly — global search working,
+            since SearchAppService builds "/settings/users/{id}" style routes server-side.
+
+            The routed page components and SetupPanel are gone. They were a second, older implementation
+            of the same CRUD, and every bug reported against these screens came from them rather than the
+            drawer: the user form there had no validation at all (so it accepted "989898989sssss" and
+            "ashok246@gmail.comsssssssss"), and the role form's permission grid still read capabilities off
+            the PARENT feature — which for remote.employee declares none, so every column rendered a dash.
+            Deleting them is what fixes those, not patching them twice.
+          */}
+          <Route path="settings">
+            <Route index element={<SettingsDeepLink tab="users" />} />
+            {(
+              [
+                ['users', FEATURE_KEYS.users, 'Create'],
+                ['roles', FEATURE_KEYS.roles, 'Create'],
+                ['applications', FEATURE_KEYS.applications, 'Register'],
+              ] as const
+            ).map(([tab, featureKey, createCapability]) => (
+              <Route key={tab} path={tab}>
+                <Route
+                  index
+                  element={
+                    <RequireCapability featureKey={featureKey}>
+                      <SettingsDeepLink tab={tab} />
+                    </RequireCapability>
+                  }
+                />
+                <Route
+                  path="new"
+                  element={
+                    <RequireCapability featureKey={featureKey} capability={createCapability}>
+                      <SettingsDeepLink tab={tab} />
+                    </RequireCapability>
+                  }
+                />
+                <Route
+                  path=":id"
+                  element={
+                    <RequireCapability featureKey={featureKey} capability="Edit">
+                      <SettingsDeepLink tab={tab} />
+                    </RequireCapability>
+                  }
+                />
+              </Route>
+            ))}
+          </Route>
         </Route>
       </Route>
 

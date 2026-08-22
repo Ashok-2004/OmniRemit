@@ -1,9 +1,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,700&display=swap');
 
 /* ══════════════════════════════════════════════════════════════
-   AUDIT LOGS PAGE — aligned with host app design system
-   Uses the same Inter font, blue brand scale, card patterns,
-   and spacing/radius/shadow tokens as the Dashboard page.
+   AUDIT LOGS PAGE — enterprise design system
+   Uses Inter font, blue brand scale, clean layered cards,
+   micro-interactions, and refined typography.
    ══════════════════════════════════════════════════════════════ */
 
 .page {
@@ -12,17 +12,23 @@
   gap: 22px;
   max-width: 1340px;
   width: 100%;
-  padding-bottom: 32px;
+  padding-bottom: 36px;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  animation: pageFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes pageFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 /* ════════════════════════════════════════════════════
-   HERO HEADER BANNER — gradient, matches dashboard
+   HERO HEADER BANNER — premium gradient with glass pills
    ════════════════════════════════════════════════════ */
 
 .header {
-  border-radius: 18px;
-  padding: 26px 32px;
+  border-radius: 20px;
+  padding: 28px 32px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -30,83 +36,123 @@
   flex-wrap: wrap;
   position: relative;
   overflow: hidden;
-  background: linear-gradient(120deg, #1e40af 0%, #2563eb 45%, #3b82f6 100%);
+  background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #3b82f6 100%);
   border: none;
-  box-shadow: 0 4px 20px rgba(37, 99, 235, 0.25), 0 1px 4px rgba(37, 99, 235, 0.15);
+  box-shadow: 0 8px 30px rgba(37, 99, 235, 0.28), 0 2px 6px rgba(37, 99, 235, 0.15);
 }
 
-/* Decorative circles — same as heroCard on Dashboard */
+/* Ambient glow & decorative background circles */
 .header::before {
   content: '';
   position: absolute;
-  top: -50px;
-  right: -50px;
-  width: 200px;
-  height: 200px;
+  top: -60px;
+  right: -60px;
+  width: 240px;
+  height: 240px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.07);
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0) 70%);
   pointer-events: none;
 }
 
 .header::after {
   content: '';
   position: absolute;
-  bottom: -60px;
-  right: 120px;
-  width: 150px;
-  height: 150px;
+  bottom: -80px;
+  right: 140px;
+  width: 180px;
+  height: 180px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.05);
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 70%);
   pointer-events: none;
 }
 
 .titleGroup {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
   position: relative;
   z-index: 1;
+}
+
+.titleHeaderRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .title {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 800;
   color: #ffffff;
   margin: 0;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.03em;
   line-height: 1.2;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+.liveStreamBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(8px);
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 0.03em;
+}
+
+.liveDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #34d399;
+  box-shadow: 0 0 8px #34d399;
+  animation: pulseDot 2s infinite;
+}
+
+@keyframes pulseDot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.35); opacity: 0.75; }
 }
 
 .subtitle {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.78);
+  font-size: 13.5px;
+  color: rgba(255, 255, 255, 0.85);
   margin: 0;
   font-weight: 400;
+  max-width: 620px;
+  line-height: 1.45;
 }
 
-/* Date Range Pills — white glass style in the header */
+/* Date Range Pills — white glass style in header */
 .dateRangeGroup {
   display: flex;
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1.5px solid rgba(255, 255, 255, 0.28);
+  border-radius: 12px;
   overflow: hidden;
-  backdrop-filter: blur(6px);
+  backdrop-filter: blur(10px);
   position: relative;
   z-index: 1;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
 }
 
 .dateRangeButton,
 .dateRangeActive {
-  padding: 7px 14px;
+  padding: 8px 15px;
   font-size: 12px;
   font-weight: 600;
   border: none;
   border-right: 1px solid rgba(255, 255, 255, 0.2);
   background: transparent;
-  color: rgba(255, 255, 255, 0.82);
+  color: rgba(255, 255, 255, 0.85);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   font-family: inherit;
 }
 
@@ -116,18 +162,19 @@
 }
 
 .dateRangeButton:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.16);
   color: #ffffff;
 }
 
 .dateRangeActive {
-  background: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.28);
   color: #ffffff;
+  font-weight: 700;
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.2);
 }
 
 /* ════════════════════════════════════════════════════
-   STAT CARDS — 4 across, colored top accent bar
-   Matches dashboard .statCard exactly
+   STAT CARDS — 4 across, polished fintech cards
    ════════════════════════════════════════════════════ */
 
 .summaryGrid {
@@ -146,32 +193,33 @@
 
 .summaryCard {
   background: #ffffff;
-  border: 1px solid #eaecf0;
-  border-radius: 14px;
+  border: 1.5px solid #e8edf5;
+  border-radius: 16px;
   padding: 18px 20px 16px;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.03), 0 8px 20px -4px rgba(15, 23, 42, 0.04);
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 15px;
   position: relative;
   overflow: hidden;
-  transition: box-shadow 150ms ease, transform 150ms ease;
+  transition: all 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .summaryCard:hover {
-  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.08);
-  transform: translateY(-1px);
+  border-color: #bfdbfe;
+  box-shadow: 0 12px 28px -4px rgba(37, 99, 235, 0.12);
+  transform: translateY(-2.5px);
 }
 
-/* Colored top accent bar */
+/* Colored top accent gradient bar */
 .summaryCard::before {
   content: '';
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  height: 3px;
-  border-radius: 14px 14px 0 0;
+  height: 3.5px;
+  border-radius: 16px 16px 0 0;
 }
 
 .summaryCard:nth-child(1)::before { background: linear-gradient(90deg, #059669, #34d399); }
@@ -180,19 +228,20 @@
 .summaryCard:nth-child(4)::before { background: linear-gradient(90deg, #7c3aed, #a78bfa); }
 
 .summaryIcon {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
 }
 
-.iconGreen  { background: #ecfdf5; color: #059669; }
-.iconRed    { background: #fee2e2; color: #dc2626; }
-.iconBlue   { background: #eff6ff; color: #2563eb; }
-.iconPurple { background: #ede9fe; color: #7c3aed; }
+.iconGreen  { background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%); color: #059669; border: 1px solid #a7f3d0; }
+.iconRed    { background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); color: #dc2626; border: 1px solid #fca5a5; }
+.iconBlue   { background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); color: #2563eb; border: 1px solid #bfdbfe; }
+.iconPurple { background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%); color: #7c3aed; border: 1px solid #c4b5fd; }
 
 .summaryContent {
   display: flex;
@@ -201,14 +250,15 @@
 }
 
 .summaryLabel {
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 11.5px;
+  font-weight: 700;
   color: #64748b;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 .summaryValue {
-  font-size: 26px;
+  font-size: 27px;
   font-weight: 800;
   color: #0f172a;
   line-height: 1;
@@ -216,7 +266,7 @@
 }
 
 /* ════════════════════════════════════════════════════
-   TABS & TOOLBAR — clean white card, border-bottom tabs
+   TABS & TOOLBAR — clean white card, segmented navigation
    ════════════════════════════════════════════════════ */
 
 .navBar {
@@ -226,21 +276,18 @@
   gap: 16px;
   flex-wrap: wrap;
   background: #ffffff;
-  border: 1px solid #eaecf0;
-  border-radius: 14px;
-  padding: 0 6px 0 20px;
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
-  /* Subtle top accent to tie into the gradient header above */
-  border-top: 3px solid #2563eb;
-  border-radius: 0 0 14px 14px;
+  border: 1.5px solid #e8edf5;
+  border-radius: 16px;
+  padding: 6px 14px 6px 20px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+  border-top: 3.5px solid #2563eb;
 }
-
 
 .tabsList {
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 10px 0;
+  gap: 4px;
+  padding: 6px 0;
 }
 
 .tabBtn {
@@ -250,9 +297,9 @@
   font-size: 13px;
   font-weight: 600;
   color: #64748b;
-  border-radius: 8px;
+  border-radius: 10px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
   font-family: inherit;
   position: relative;
 }
@@ -265,51 +312,16 @@
 .tabActive {
   background: #eff6ff;
   color: #2563eb;
-  box-shadow: inset 0 -2px 0 #2563eb;
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px #dbeafe;
 }
-
 
 .toolbarActions {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 0;
-}
-
-/* Search input — matches host Input component feel */
-.searchBox {
-  position: relative;
-  width: 220px;
-}
-
-.filterInput {
-  width: 100%;
-  padding: 7px 10px 7px 32px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 12.5px;
-  color: #0f172a;
-  outline: none;
-  font-family: inherit;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.filterInput:focus {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-  background: #ffffff;
-}
-
-.filterInput::placeholder { color: #94a3b8; }
-
-.searchIcon {
-  position: absolute;
-  left: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #94a3b8;
-  pointer-events: none;
+  padding: 6px 0;
+  flex-wrap: wrap;
 }
 
 /* Rows-per-page dropdown */
@@ -323,7 +335,7 @@
   font-size: 11.5px;
   font-weight: 700;
   color: #64748b;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   white-space: nowrap;
 }
@@ -337,18 +349,18 @@
 .rowsSelect {
   appearance: none;
   -webkit-appearance: none;
-  padding: 6px 30px 6px 11px;
+  padding: 7px 30px 7px 12px;
   background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
   font-size: 13px;
   font-weight: 600;
   color: #0f172a;
   font-family: inherit;
   cursor: pointer;
   outline: none;
-  transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
-  min-width: 68px;
+  transition: all 140ms ease;
+  min-width: 72px;
 }
 
 .rowsSelect:hover {
@@ -365,7 +377,7 @@
 
 .rowsSelectChevron {
   position: absolute;
-  right: 9px;
+  right: 10px;
   pointer-events: none;
   font-size: 11px;
   color: #94a3b8;
@@ -373,17 +385,17 @@
 }
 
 .rowsCustomInput {
-  width: 68px;
-  padding: 6px 8px;
-  border: 1px solid #93c5fd;
-  border-radius: 8px;
+  width: 72px;
+  padding: 7px 9px;
+  border: 1.5px solid #93c5fd;
+  border-radius: 10px;
   font-size: 13px;
   font-weight: 600;
   font-family: inherit;
   color: #0f172a;
   background: #ffffff;
   outline: none;
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
   animation: customInputFadeIn 0.15s ease;
 }
 
@@ -407,47 +419,46 @@
   to   { opacity: 1; transform: translateX(0); }
 }
 
-
-
-/* Action buttons — matches dashboard headerManageBtn style */
+/* Action buttons */
 .refreshBtn,
 .exportBtn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  border-radius: 8px;
+  gap: 7px;
+  padding: 8px 16px;
+  border-radius: 10px;
   font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
   font-family: inherit;
   white-space: nowrap;
 }
 
 .refreshBtn {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
   color: #475569;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
 }
 
 .refreshBtn:hover {
-  background: #ffffff;
+  background: #f8fafc;
   border-color: #cbd5e1;
   color: #0f172a;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
 }
 
-/* Export button — primary gradient, matches emptyRegisterBtn */
 .exportBtn {
   background: linear-gradient(135deg, #2563eb, #1d4ed8);
   border: none;
   color: #ffffff;
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.28);
 }
 
 .exportBtn:hover {
-  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.4);
+  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
   transform: translateY(-1px);
 }
 
@@ -463,16 +474,17 @@
    ════════════════════════════════════════════════════ */
 
 .errorBanner {
-  padding: 12px 16px;
-  border-radius: 10px;
+  padding: 12px 18px;
+  border-radius: 12px;
   background: #fee2e2;
-  border: 1px solid #fca5a5;
+  border: 1.5px solid #fca5a5;
   color: #991b1b;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.08);
 }
 
 /* ════════════════════════════════════════════════════
@@ -481,14 +493,11 @@
 
 .tableContainer {
   background: #ffffff;
-  border: 1px solid #eaecf0;
-  border-radius: 16px;
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
-  /* overflow-x lets the table scroll horizontally on a narrow viewport instead of forcing the whole
-     page to scroll sideways or crushing columns illegibly; overflow-y stays hidden so the container's
-     own border-radius still clips the table's corners as before. */
+  border: 1.5px solid #e8edf5;
+  border-radius: 18px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
   overflow-x: auto;
-  overflow-y: hidden;
+  min-height: 420px;
 }
 
 .logTable {
@@ -498,20 +507,395 @@
   text-align: left;
 }
 
-/* Thead — subtle surface background, matching dashboard widget rows */
 .logTable thead {
   background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
-  border-bottom: 1px solid #eaecf0;
+  border-bottom: 1.5px solid #e2e8f0;
 }
 
 .logTable th {
-  padding: 13px 18px;
+  padding: 12px 16px;
   font-size: 11px;
   font-weight: 700;
   color: #475569;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   white-space: nowrap;
+}
+
+/* ── Interactive column header filter buttons ── */
+.thFilterable {
+  position: relative;
+  padding: 0 !important;
+}
+
+.thFilterBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 140ms ease;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.thFilterBtn:hover {
+  color: #1e40af;
+  background: rgba(37, 99, 235, 0.06);
+}
+
+.thFilterBtnActive {
+  color: #2563eb !important;
+  background: rgba(37, 99, 235, 0.1) !important;
+  font-weight: 800;
+}
+
+.filterIcon {
+  color: #94a3b8;
+  transition: transform 140ms ease, color 120ms ease;
+  flex-shrink: 0;
+}
+
+.filterIconActive {
+  transform: rotate(180deg);
+  color: #2563eb;
+}
+
+.filterDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #2563eb;
+  box-shadow: 0 0 6px rgba(37, 99, 235, 0.6);
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+/* ── Filter Popover ── */
+.filterPopover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 12px;
+  z-index: 99;
+  min-width: 240px;
+  max-width: 320px;
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.14), 0 2px 8px rgba(15, 23, 42, 0.04);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: normal;
+  animation: popoverFadeIn 140ms ease-out;
+}
+
+.popoverRight {
+  left: auto;
+  right: 12px;
+}
+
+@keyframes popoverFadeIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.popoverHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #f1f5f9;
+  padding-bottom: 8px;
+}
+
+.popoverTitle {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.popoverClearBtn {
+  font-size: 11px;
+  font-weight: 600;
+  color: #dc2626;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-family: inherit;
+  transition: background 120ms ease;
+}
+.popoverClearBtn:hover { background: #fee2e2; }
+
+.popoverList {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.popoverItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #334155;
+  cursor: pointer;
+  transition: all 120ms ease;
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+}
+
+.popoverItem:hover {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.popoverItemActive {
+  background: #eff6ff;
+  color: #2563eb;
+  font-weight: 700;
+}
+
+.popoverInput {
+  width: 100%;
+  padding: 7px 11px;
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #0f172a;
+  outline: none;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+.popoverInput:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  background: #ffffff;
+}
+
+.popoverCheckboxLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+  padding: 4px 2px;
+}
+.popoverCheckboxLabel input {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: #2563eb;
+}
+
+/* ── Custom Date Range section in popover ── */
+.popoverDivider {
+  height: 1px;
+  background: #f1f5f9;
+  margin: 4px 0;
+}
+
+.customDateSection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.customDateLabel {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.customDateRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dateInput {
+  width: 100%;
+  padding: 6px 8px;
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 7px;
+  font-size: 11.5px;
+  color: #0f172a;
+  outline: none;
+  font-family: inherit;
+}
+.dateInput:focus {
+  border-color: #2563eb;
+  background: #ffffff;
+}
+
+.applyDateBtn {
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+  border-radius: 7px;
+  padding: 6px 12px;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 120ms ease;
+  white-space: nowrap;
+}
+.applyDateBtn:hover {
+  background: #1d4ed8;
+}
+
+/* ── Actor picker items ── */
+.userListSection {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.userItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 9px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #334155;
+  cursor: pointer;
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  transition: all 120ms ease;
+}
+.userItem:hover {
+  background: #f8fafc;
+  color: #0f172a;
+}
+.userItemActive {
+  background: #eff6ff;
+  color: #2563eb;
+  font-weight: 700;
+}
+
+.userAvatarSmall {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%);
+  color: #6d28d9;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.emptyHint {
+  padding: 10px;
+  font-size: 12px;
+  color: #94a3b8;
+  text-align: center;
+}
+
+/* ── Active filters bar ── */
+.activeFiltersBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 16px;
+  background: #ffffff;
+  border: 1.5px solid #e8edf5;
+  border-radius: 12px;
+  font-size: 12px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+.activeFiltersLabel {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.filterChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #2563eb;
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.05);
+}
+
+.filterChipRemove {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #60a5fa;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: color 120ms ease;
+}
+.filterChipRemove:hover {
+  color: #1d4ed8;
+}
+
+.clearAllBtn {
+  background: none;
+  border: none;
+  color: #dc2626;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 9px;
+  border-radius: 6px;
+  font-family: inherit;
+  margin-left: auto;
+  transition: background 120ms ease;
+}
+.clearAllBtn:hover {
+  background: #fee2e2;
 }
 
 .logTable td {
@@ -522,20 +906,18 @@
   color: #334155;
 }
 
-/* Remove divider from last row */
 .logTable tbody tr:last-child td {
   border-bottom: none;
 }
 
 .logTable tbody tr {
-  transition: background 120ms ease;
+  transition: background 140ms ease;
 }
 
 .logTable tbody tr:hover {
   background: #f8fafc;
 }
 
-/* Skeleton table row styling */
 .skeletonTableRow td {
   padding: 14px 18px;
 }
@@ -544,27 +926,28 @@
    TABLE CELL STYLES
    ════════════════════════════════════════════════════ */
 
-/* Actor avatar — matches dashboard avatar style */
+/* Actor avatar */
 .actorCell {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 10px;
 }
 
 .actorAvatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
   background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%);
   color: #6d28d9;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   letter-spacing: -0.02em;
-  border: 1px solid #c4b5fd;
+  border: 1.5px solid #c4b5fd;
+  box-shadow: 0 1px 3px rgba(109, 40, 217, 0.1);
 }
 
 .actorName {
@@ -573,10 +956,9 @@
   font-size: 13px;
 }
 
-/* Auth method pill */
 .authPill {
   display: inline-flex;
-  padding: 2px 8px;
+  padding: 3px 9px;
   background: #f8fafc;
   color: #475569;
   border-radius: 999px;
@@ -594,7 +976,6 @@
   letter-spacing: -0.01em;
 }
 
-/* Action code — monospaced, accent color */
 .actionCell {
   font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
   font-size: 11.5px;
@@ -603,51 +984,48 @@
   background: #eff6ff;
   border: 1px solid #dbeafe;
   border-radius: 6px;
-  padding: 2px 7px;
+  padding: 2.5px 8px;
   white-space: nowrap;
   display: inline-block;
   letter-spacing: -0.01em;
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.04);
 }
 
 .monoText {
   font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
   font-size: 12px;
   color: #64748b;
-  /* .wrapText already had this; .monoText didn't, so a long value (a raw IP, a stray long ID) could
-     overflow the "auto 1fr" .detailList grid on a narrow drawer instead of wrapping onto its own line. */
   overflow-wrap: anywhere;
   word-break: break-word;
 }
 
-/* IP address badge */
 .ipBadge {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
   font-size: 11.5px;
-  font-weight: 500;
+  font-weight: 600;
   color: #334155;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
-  padding: 2px 7px;
-  border-radius: 6px;
+  padding: 2.5px 8px;
+  border-radius: 7px;
   letter-spacing: 0.02em;
 }
 
 .ipDot {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: #3b82f6;
-  opacity: 0.8;
+  box-shadow: 0 0 5px rgba(59, 130, 246, 0.6);
 }
 
-/* Entity pill */
 .entityWrap {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   font-size: 12px;
 }
 
@@ -657,21 +1035,18 @@
 }
 
 .entityId {
-  /* Now holds the friendly entity name (e.g. "Lead Management"), not a raw UUID fragment — no longer
-     monospaced, and allowed to wrap/truncate gracefully instead of a fixed-width mono badge. */
   font-size: 11.5px;
   font-weight: 500;
   color: #64748b;
   background: #f1f5f9;
   border: 1px solid #e2e8f0;
-  padding: 1px 6px;
-  border-radius: 4px;
+  padding: 1px 7px;
+  border-radius: 5px;
   max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
 
 .deviceCell {
   color: #64748b;
@@ -703,29 +1078,29 @@
 .browserPill {
   display: inline-flex;
   align-items: center;
-  padding: 2px 7px;
+  padding: 2px 8px;
   background: #f1f5f9;
   color: #1e293b;
-  border-radius: 6px;
+  border-radius: 7px;
   font-size: 11.5px;
   font-weight: 600;
   border: 1px solid #e2e8f0;
   white-space: nowrap;
-  transition: all 120ms ease;
+  transition: all 130ms ease;
 }
 
 .osPill {
   display: inline-flex;
   align-items: center;
-  padding: 2px 6px;
+  padding: 2px 7px;
   background: #f8fafc;
   color: #64748b;
-  border-radius: 6px;
+  border-radius: 7px;
   font-size: 11px;
   font-weight: 500;
   border: 1px solid #eaecf0;
   white-space: nowrap;
-  transition: all 120ms ease;
+  transition: all 130ms ease;
 }
 
 .mutedText {
@@ -733,7 +1108,6 @@
   font-size: 12px;
 }
 
-/* Details cell — truncates in collapsed state, clickable to expand */
 .detailsCell {
   color: #475569;
   font-size: 12.5px;
@@ -760,7 +1134,6 @@
   transition: color 120ms ease;
 }
 
-/* Chevron rotates when expanded */
 .expandChevron {
   flex-shrink: 0;
   font-size: 15px;
@@ -776,7 +1149,6 @@
   color: #2563eb;
 }
 
-/* Highlighted row when expanded */
 .rowExpanded {
   background: #eff6ff !important;
 }
@@ -785,7 +1157,6 @@
   border-bottom: none !important;
 }
 
-/* Expanded detail row that appears directly below the main row */
 .expandedDetailRow {
   animation: expandFadeIn 0.2s ease;
 }
@@ -797,12 +1168,12 @@
 
 .expandedDetailCell {
   padding: 0 !important;
-  border-bottom: 2px solid #e0e7ff !important;
+  border-bottom: 2px solid #dbeafe !important;
 }
 
 .expandedDetailContent {
-  background: linear-gradient(135deg, #eff6ff 0%, #f5f3ff 100%);
-  border-left: 3px solid #2563eb;
+  background: linear-gradient(135deg, #f0f7ff 0%, #f5f3ff 100%);
+  border-left: 3.5px solid #2563eb;
   padding: 14px 22px 14px 20px;
   display: flex;
   flex-direction: column;
@@ -831,10 +1202,10 @@
   word-break: break-word;
   white-space: pre-wrap;
   font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
-  background: rgba(255, 255, 255, 0.7);
-  padding: 6px 10px;
-  border-radius: 6px;
-  border: 1px solid rgba(226, 232, 240, 0.8);
+  background: rgba(255, 255, 255, 0.85);
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
 }
 
 .expandedDangerVal {
@@ -843,8 +1214,8 @@
   font-weight: 600;
   margin: 0;
   background: #fee2e2;
-  padding: 5px 10px;
-  border-radius: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
   border: 1px solid #fca5a5;
   display: inline-block;
   align-self: flex-start;
@@ -855,7 +1226,6 @@
   align-items: center;
   gap: 16px;
   flex-wrap: wrap;
-  padding-top: 4px;
   font-size: 12px;
   color: #475569;
   border-top: 1px dashed rgba(203, 213, 225, 0.8);
@@ -866,10 +1236,11 @@
 .expandedMiniMeta code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   background: rgba(15, 23, 42, 0.06);
-  padding: 1px 6px;
-  border-radius: 4px;
+  padding: 2px 7px;
+  border-radius: 5px;
   font-size: 11.5px;
   color: #0f172a;
+  font-weight: 600;
 }
 
 .collapseBtn {
@@ -880,49 +1251,47 @@
   color: #2563eb;
   background: rgba(37, 99, 235, 0.08);
   border: 1px solid rgba(37, 99, 235, 0.2);
-  border-radius: 6px;
-  padding: 3px 10px;
+  border-radius: 7px;
+  padding: 4px 11px;
   cursor: pointer;
   transition: background 130ms ease;
   font-family: inherit;
 }
-
 .collapseBtn:hover {
-  background: rgba(37, 99, 235, 0.15);
+  background: rgba(37, 99, 235, 0.16);
 }
 
-/* Empty state */
 .emptyCell {
-
   text-align: center;
-  padding: 52px 24px;
+  padding: 56px 24px;
   color: #94a3b8;
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 500;
 }
 
-/* Details button */
 .viewDetailBtn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 7px;
+  gap: 5px;
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
   padding: 5px 12px;
   font-size: 11.5px;
   font-weight: 600;
   color: #475569;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.16s ease;
   font-family: inherit;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .viewDetailBtn:hover {
   background: #eff6ff;
   border-color: #93c5fd;
   color: #2563eb;
-  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.12);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.15);
+  transform: translateY(-0.5px);
 }
 
 /* ════════════════════════════════════════════════════
@@ -934,7 +1303,7 @@
   align-items: center;
   justify-content: center;
   gap: 12px;
-  padding-top: 4px;
+  padding-top: 6px;
 }
 
 .pageBtn {
@@ -942,22 +1311,24 @@
   align-items: center;
   gap: 6px;
   background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 7px 16px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 8px 18px;
   font-size: 12.5px;
   font-weight: 600;
   color: #475569;
   cursor: pointer;
   font-family: inherit;
   transition: all 0.15s ease;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
 }
 
 .pageBtn:hover:not(:disabled) {
   background: #eff6ff;
   border-color: #93c5fd;
   color: #2563eb;
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.1);
+  box-shadow: 0 3px 10px rgba(37, 99, 235, 0.12);
+  transform: translateY(-1px);
 }
 
 .pageBtn:disabled {
@@ -967,83 +1338,262 @@
 
 .pageIndicator {
   font-size: 13px;
-  font-weight: 600;
-  color: #64748b;
+  font-weight: 700;
+  color: #475569;
   min-width: 100px;
   text-align: center;
 }
 
-/* ════════════════════════════════════════════════════
-   RECORD DETAILS DRAWER — grouped sections, badges,
-   matches the host's other enterprise drawer views
-   ════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════
+   DETAIL DRAWER — enterprise card & timeline presentation
+   ══════════════════════════════════════════════════════════════════ */
 
 .drawerSections {
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 0;
 }
 
+/* Each section is a crisp card */
 .drawerSection {
-  padding-bottom: 20px;
-  border-bottom: 1px solid #f1f5f9;
+  background: #ffffff;
+  border: 1.5px solid #e8edf5;
+  border-radius: 14px;
+  padding: 16px 18px 14px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
+  transition: all 180ms ease;
+}
+.drawerSection:last-child { margin-bottom: 0; }
+.drawerSection:hover {
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.07);
+  border-color: #dbeafe;
 }
 
-.drawerSection:last-child {
-  padding-bottom: 0;
-  border-bottom: none;
-}
-
+/* Section title — sleek pill badge */
 .drawerSectionTitle {
-  font-size: 11px;
-  font-weight: 700;
-  color: #2563eb;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  color: #1d4ed8;
   text-transform: uppercase;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.08em;
   margin: 0 0 12px;
+  background: linear-gradient(90deg, #eff6ff 0%, #f0f9ff 100%);
+  border: 1px solid #dbeafe;
+  border-radius: 16px;
+  padding: 3.5px 10px;
+}
+.drawerSectionTitle svg {
+  color: #3b82f6;
+  flex-shrink: 0;
 }
 
-.detailList {
+/* ── Overview + Timeline two-column layout ── */
+.overviewTimelineGrid {
   display: grid;
-  /* minmax(0, ...) instead of a bare auto — a bare auto/1fr track never shrinks below its content's
-     intrinsic width, so a long label or an un-wrappable value could still force the grid (and this
-     narrow side drawer) wider than its container. minmax(0, ...) lets both tracks actually shrink,
-     which is what makes overflow-wrap on the value column effective at all. */
-  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
-  gap: 12px 20px;
-  align-items: baseline;
-  min-width: 0;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  align-items: stretch;
+}
+.overviewTimelineColDivider {
+  padding-left: 18px;
+  border-left: 1.5px dashed #e2e8f0;
 }
 
-.detailList dt {
-  font-size: 11px;
-  font-weight: 700;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  white-space: nowrap;
-  max-width: 140px;
+@media (max-width: 640px) {
+  .overviewTimelineGrid { grid-template-columns: 1fr; gap: 14px; }
+  .overviewTimelineColDivider { padding-left: 0; border-left: none; padding-top: 12px; border-top: 1.5px dashed #e2e8f0; }
+}
+
+/* Overview rows — compact subcards */
+.detailList { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+
+.detailRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  background: #ffffff;
+  border: 1.5px solid #e8edf5;
+  border-radius: 10px;
+  transition: all 180ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  min-width: 0;
+  position: relative;
   overflow: hidden;
-  text-overflow: ellipsis;
+}
+.detailRow::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 20%; bottom: 20%;
+  width: 3.5px;
+  border-radius: 0 3px 3px 0;
+  background: linear-gradient(180deg, #3b82f6, #818cf8);
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+.detailRow:hover {
+  background: #f0f7ff;
+  border-color: #93c5fd;
+  box-shadow: 0 3px 12px rgba(37, 99, 235, 0.08);
+  transform: translateY(-1.5px);
+}
+.detailRow:hover::before { opacity: 1; }
+
+.detailIcon {
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 30px; height: 30px; border-radius: 8px;
+  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+  color: #2563eb;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.12);
+}
+.detailIconNeutral {
+  background: linear-gradient(135deg, #f1f5f9, #e2e8f0);
+  color: #64748b;
+  box-shadow: 0 1px 3px rgba(100, 116, 139, 0.10);
+}
+.detailIconPurple {
+  background: linear-gradient(135deg, #f5f3ff, #ede9fe);
+  color: #7c3aed;
+  box-shadow: 0 1px 3px rgba(124, 58, 237, 0.12);
+}
+.detailIconSuccess {
+  background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+  color: #059669;
+  box-shadow: 0 1px 3px rgba(5, 150, 105, 0.12);
+}
+.detailIconDanger {
+  background: linear-gradient(135deg, #fef2f2, #fee2e2);
+  color: #dc2626;
+  box-shadow: 0 1px 3px rgba(220, 38, 38, 0.12);
 }
 
-.detailList dd {
-  font-size: 13.5px;
-  color: #0f172a;
-  margin: 0;
+.detailRowBody { display: flex; flex-direction: column; gap: 1.5px; min-width: 0; }
+.detailRowLabel {
+  font-size: 9.5px; font-weight: 700; color: #94a3b8;
+  text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap;
+}
+.detailRowValue {
+  font-size: 12.5px; color: #0f172a; margin: 0; font-weight: 600; overflow-wrap: anywhere;
+}
+
+/* ── Timeline styles ── */
+.timeline { display: flex; flex-direction: column; gap: 11px; position: relative; padding-left: 14px; }
+.timeline::before {
+  content: ''; position: absolute; left: 3px; top: 8px; bottom: 8px; width: 2px;
+  background: linear-gradient(180deg, #93c5fd, #e2e8f0); border-radius: 1px;
+}
+.timelineStep { position: relative; display: flex; align-items: flex-start; gap: 10px; }
+.timelineDot {
+  position: absolute; left: -14px; top: 4px; width: 8px; height: 8px;
+  border-radius: 50%; background: #2563eb; border: 2px solid #ffffff;
+  box-shadow: 0 0 0 2px #bfdbfe;
+}
+.timelineDotSuccess { background: #059669; box-shadow: 0 0 0 2px #a7f3d0; }
+.timelineDotDanger { background: #dc2626; box-shadow: 0 0 0 2px #fca5a5; }
+.timelineStepCard {
+  background: #ffffff; border: 1.5px solid #e8edf5; border-radius: 10px;
+  padding: 9px 12px; flex: 1; display: flex; flex-direction: column; gap: 2px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+}
+.timelineLabel { font-size: 12.5px; font-weight: 600; color: #0f172a; }
+.timelineTime {
+  display: inline-flex; align-items: center; gap: 5px; font-size: 11px;
+  font-weight: 500; color: #64748b;
+}
+
+/* ── Failure Reason Alert ── */
+.failureAlert {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  background: #fef2f2;
+  border: 1.5px solid #fca5a5;
+  border-radius: 10px;
+  padding: 9px 13px;
+  color: #991b1b;
+  font-size: 12px;
   font-weight: 500;
-  min-width: 0;
-  overflow-wrap: anywhere;
+  margin-top: 8px;
+}
+.failureAlertIcon {
+  color: #dc2626;
+  flex-shrink: 0;
+  margin-top: 1px;
 }
 
-.detailsText {
-  font-size: 13.5px;
-  color: #1e293b;
-  line-height: 1.6;
-  margin: 0;
-  overflow-wrap: anywhere;
+/* ── Field cards grid ── */
+.fieldCardGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+@media (max-width: 600px) {
+  .fieldCardGrid { grid-template-columns: 1fr; }
+}
+
+.fieldCard {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  background: #ffffff;
+  border: 1.5px solid #e8edf5;
+  border-radius: 10px;
+  transition: all 180ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  min-width: 0;
+  position: relative;
+  overflow: hidden;
+}
+.fieldCard::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 20%; bottom: 20%;
+  width: 3.5px;
+  border-radius: 0 3px 3px 0;
+  background: linear-gradient(180deg, #3b82f6, #818cf8);
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+.fieldCard:hover {
+  background: #f0f7ff;
+  border-color: #93c5fd;
+  box-shadow: 0 3px 12px rgba(37, 99, 235, 0.08);
+  transform: translateY(-1.5px);
+}
+.fieldCard:hover::before { opacity: 1; }
+
+.fieldCardIcon {
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 30px; height: 30px; border-radius: 8px;
+  background: #eff6ff; color: #2563eb;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.12);
+}
+.fieldCardBody { display: flex; flex-direction: column; gap: 1.5px; min-width: 0; }
+.fieldCardLabel {
+  font-size: 9.5px; font-weight: 700; color: #94a3b8;
+  text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap;
+}
+.fieldCardValue {
+  font-size: 12.5px; color: #0f172a; margin: 0; font-weight: 600; overflow-wrap: anywhere;
+}
+
+/* ── Code / Monospace details payload card ── */
+.payloadCodeBox {
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  color: #334155;
+  line-height: 1.55;
   word-break: break-word;
   white-space: pre-wrap;
+  margin: 0;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.03);
 }
 
 .dangerText {
@@ -1077,10 +1627,6 @@
     padding: 0;
     flex-wrap: wrap;
   }
-
-  .searchBox {
-    width: 100%;
-  }
 }
 
 @media (max-width: 768px) {
@@ -1091,14 +1637,10 @@
     gap: 14px;
   }
 
-  /* .tableContainer already scrolls horizontally at any width (see its overflow-x: auto rule above);
-     -webkit-overflow-scrolling adds native momentum scrolling on iOS specifically for that gesture. */
   .tableContainer {
     -webkit-overflow-scrolling: touch;
   }
 
-  /* The side drawer itself narrows on mobile (handled by SettingsDrawer.module.css), so its two-column
-     detail grid no longer has room for a fixed label column — stack label above value instead. */
   .detailList {
     grid-template-columns: 1fr;
     gap: 4px 0;
@@ -1114,7 +1656,6 @@
 }
 
 @media (max-width: 640px) {
-  /* Wrap date range pills below the title when header is already stacked */
   .dateRangeGroup {
     flex-wrap: wrap;
     border-radius: 10px;
@@ -1131,7 +1672,6 @@
   .dateRangeActive:last-child {
     border-bottom: none;
   }
-  /* Hide verbose rows-per-page label on narrow toolbars */
   .rowsDropdownLabel { display: none; }
 }
 

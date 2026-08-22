@@ -20,6 +20,7 @@ import drawerStyles from '../../../layout/SettingsDrawer/SettingsDrawer.module.c
 import styles from './ApprovalCenterPage.module.css'
 
 const DEFAULT_PAGE_SIZE = 10
+const PAGE_SIZE_OPTIONS = [5, 10, 15, 20] as const
 
 const STATUS_TONES: Record<ApprovalStatus, BadgeTone> = {
   Pending: 'warning',
@@ -53,11 +54,85 @@ function requestedChangeEmptyMessage(action: string): string {
   return 'No change details available for this request.'
 }
 
-function formatTimestamp(iso: string | null) {
+const SHORT_MODULE_MAP: Record<string, string> = {
+  'host.settings.users': 'User',
+  'settings.users': 'User',
+  'setup-user': 'User',
+  'setup-users': 'User',
+  'setup_user': 'User',
+  'setup_users': 'User',
+  'users': 'User',
+  'user': 'User',
+  'user management': 'User',
+  'host.settings.roles': 'Role',
+  'settings.roles': 'Role',
+  'setup-role': 'Role',
+  'setup-roles': 'Role',
+  'setup_role': 'Role',
+  'setup_roles': 'Role',
+  'roles': 'Role',
+  'role': 'Role',
+  'roles & permissions': 'Role',
+  'host.settings.applications': 'App',
+  'settings.applications': 'App',
+  'setup-application': 'App',
+  'setup-applications': 'App',
+  'applications': 'App',
+  'application': 'App',
+  'apps': 'App',
+  'app': 'App',
+  'host.settings.fields': 'Field',
+  'settings.fields': 'Field',
+  'setup-field': 'Field',
+  'fields': 'Field',
+  'field': 'Field',
+  'host.settings.security': 'Security',
+  'settings.security': 'Security',
+  'security': 'Security',
+  'host.settings.audit': 'Audit',
+  'settings.audit': 'Audit',
+  'audit': 'Audit',
+  'audit.logs': 'Audit',
+  'system.audit': 'Audit',
+  'lead.management': 'Lead',
+  'lead_management': 'Lead',
+  'lead': 'Lead',
+  'leads': 'Lead',
+  'setup-lead': 'Lead',
+  'setup_lead': 'Lead',
+  'remittance': 'Remittance',
+  'remittance.transactions': 'Transaction',
+  'transactions': 'Transaction',
+  'transaction': 'Transaction',
+  'checker.assignments': 'Checker',
+  'checker': 'Checker',
+}
+
+function formatModuleName(rawModule: string | null | undefined, _customMap?: Map<string, string>): string {
+  if (!rawModule) return '—'
+  const normalized = rawModule.toLowerCase().trim()
+  if (SHORT_MODULE_MAP[normalized]) return SHORT_MODULE_MAP[normalized]
+  
+  let cleaned = rawModule
+    .replace(/^host\.settings\./i, '')
+    .replace(/^settings\./i, '')
+    .replace(/^setup[-_]/i, '')
+
+  if (cleaned.includes('.')) {
+    const parts = cleaned.split('.').filter(Boolean)
+    cleaned = parts[parts.length - 1] ?? cleaned
+  }
+
+  cleaned = cleaned.replace(/[-_]management$/i, '').replace(/[-_]settings$/i, '')
+  const result = humanizeKey(cleaned.replace(/[-_]/g, ' ')).trim()
+  return SHORT_MODULE_MAP[result.toLowerCase()] ?? result
+}
+
+function formatDateOnly(iso: string | null | undefined) {
   if (!iso) return '—'
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return iso
-  return date.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 /** Splits a PascalCase/camelCase key into readable words — "PhoneNumber" -> "Phone Number". */
@@ -319,22 +394,27 @@ const TAB_IDS = { pending: 'pending', processed: 'processed', all: 'all' } as co
 type TabId = (typeof TAB_IDS)[keyof typeof TAB_IDS]
 const TAB_STATUS_FILTER: Record<TabId, ApprovalStatus | undefined> = {
   [TAB_IDS.pending]: 'Pending',
-  [TAB_IDS.processed]: undefined, // handled specially below (Approved OR Rejected)
+  [TAB_IDS.processed]: undefined, // handled specially (Approved OR Rejected)
   [TAB_IDS.all]: undefined,
 }
 
-type DateRangePreset = 'today' | 'yesterday' | 'week' | 'month' | 'all'
+type DateFilterMode = 'all' | 'today' | 'yesterday' | 'week' | 'month' | 'custom'
 
-const DATE_RANGES: { key: DateRangePreset; label: string }[] = [
+const DATE_RANGES: { key: DateFilterMode; label: string }[] = [
+  { key: 'all', label: 'All Time' },
   { key: 'today', label: 'Today' },
   { key: 'yesterday', label: 'Yesterday' },
-  { key: 'week', label: 'Week' },
-  { key: 'month', label: 'Month' },
-  { key: 'all', label: 'All Time' },
+  { key: 'week', label: 'Last 7 Days' },
+  { key: 'month', label: 'Last 30 Days' },
 ]
 
-/** Mirrors AuditLogsPage's own computeRange exactly — same five presets, same semantics. */
-function computeRange(preset: DateRangePreset): { from?: string; to?: string } {
+function computeRangeWithCustom(preset: DateFilterMode, customFrom?: string, customTo?: string): { from?: string; to?: string } {
+  if (preset === 'custom') {
+    return {
+      from: customFrom ? new Date(customFrom + 'T00:00:00.000Z').toISOString() : undefined,
+      to: customTo ? new Date(customTo + 'T23:59:59.999Z').toISOString() : undefined,
+    }
+  }
   const now = new Date()
   switch (preset) {
     case 'today': {
@@ -360,10 +440,42 @@ function computeRange(preset: DateRangePreset): { from?: string; to?: string } {
       start.setDate(start.getDate() - 30)
       return { from: start.toISOString() }
     }
-    case 'all':
     default:
       return {}
   }
+}
+
+function matchesDateRange(dateStr: string | null | undefined, preset: DateFilterMode, customFrom?: string, customTo?: string): boolean {
+  if (preset === 'all') return true
+  if (!dateStr) return false
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return false
+
+  if (preset === 'custom') {
+    if (customFrom && d < new Date(customFrom + 'T00:00:00.000Z')) return false
+    if (customTo && d > new Date(customTo + 'T23:59:59.999Z')) return false
+    return true
+  }
+  const now = new Date()
+  if (preset === 'today') {
+    return d.toDateString() === now.toDateString()
+  }
+  if (preset === 'yesterday') {
+    const y = new Date(now)
+    y.setDate(y.getDate() - 1)
+    return d.toDateString() === y.toDateString()
+  }
+  if (preset === 'week') {
+    const w = new Date(now)
+    w.setDate(w.getDate() - 7)
+    return d >= w
+  }
+  if (preset === 'month') {
+    const m = new Date(now)
+    m.setDate(m.getDate() - 30)
+    return d >= m
+  }
+  return true
 }
 
 /**
@@ -376,18 +488,88 @@ export function ApprovalCenterPage() {
 
   const [activeTab, setActiveTab] = useState<TabId>(TAB_IDS.pending)
   const [page, setPage] = useState(1)
-  const [pageSize] = useState(DEFAULT_PAGE_SIZE)
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
+  const [isCustomPageSize, setIsCustomPageSize] = useState(false)
+  const [customPageSizeInput, setCustomPageSizeInput] = useState('')
+  const [activeHeaderFilter, setActiveHeaderFilter] = useState<string | null>(null)
+
+  // Requested date filter
+  const [dateRange, setDateRange] = useState<DateFilterMode>('all')
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
+  const [customDraftFrom, setCustomDraftFrom] = useState('')
+  const [customDraftTo, setCustomDraftTo] = useState('')
+
+  // Decided date filter
+  const [decidedRange, setDecidedRange] = useState<DateFilterMode>('all')
+  const [decidedCustomFrom, setDecidedCustomFrom] = useState('')
+  const [decidedCustomTo, setDecidedCustomTo] = useState('')
+  const [decidedDraftFrom, setDecidedDraftFrom] = useState('')
+  const [decidedDraftTo, setDecidedDraftTo] = useState('')
+
+  // Module filter with live search
   const [module, setModule] = useState('')
+  const [moduleSearch, setModuleSearch] = useState('')
   const [modules, setModules] = useState<AssignableModuleDto[]>([])
-  const [dateRange, setDateRange] = useState<DateRangePreset>('all')
+
+  // Action filter
+  const [actionFilter, setActionFilter] = useState('')
+
+  // Entity search
+  const [entitySearch, setEntitySearch] = useState('')
+
+  // Maker search & user selection
   const [makerSearch, setMakerSearch] = useState('')
-  const debouncedMaker = useDebouncedValue(makerSearch, 300)
+
+  // Checker search & user selection & assigned to me
+  const [checkerSearch, setCheckerSearch] = useState('')
   const [assignedToMeOnly, setAssignedToMeOnly] = useState(false)
 
-  const range = useMemo(() => computeRange(dateRange), [dateRange])
-  // A request's module can outlive the module itself (a remote app later disabled/removed) — falls
-  // back to the raw key rather than showing nothing.
+  // Status filter ('Pending' | 'Approved' | 'Rejected' | '')
+  const [statusFilter, setStatusFilter] = useState<'' | 'Pending' | 'Approved' | 'Rejected'>('')
+
+  // In-memory cache pool to derive unique makers, checkers, and modules with 0 extra API calls
+  const [cachedPool, setCachedPool] = useState<ApprovalRequestListItemDto[]>([])
+
+  const debouncedMaker = useDebouncedValue(makerSearch, 200)
+  const debouncedEntity = useDebouncedValue(entitySearch, 200)
+  const debouncedChecker = useDebouncedValue(checkerSearch, 200)
+
+  const range = useMemo(() => computeRangeWithCustom(dateRange, customFrom, customTo), [dateRange, customFrom, customTo])
   const moduleLabelsByKey = useMemo(() => new Map(modules.map((m) => [m.key, m.label])), [modules])
+
+  // Zero extra API call: extract unique makers from all loaded items
+  const availableMakers = useMemo(() => {
+    const map = new Map<string, { id: string; name: string }>()
+    for (const r of cachedPool) {
+      if (r.makerName) map.set(r.makerName.toLowerCase(), { id: r.makerId, name: r.makerName })
+    }
+    return Array.from(map.values())
+  }, [cachedPool])
+
+  // Zero extra API call: extract unique checkers from all loaded items
+  const availableCheckers = useMemo(() => {
+    const map = new Map<string, { id: string; name: string }>()
+    for (const r of cachedPool) {
+      if (r.checkerName) map.set(r.checkerName.toLowerCase(), { id: r.checkerId, name: r.checkerName })
+    }
+    return Array.from(map.values())
+  }, [cachedPool])
+
+  // Zero extra API call: combine API modules + modules found in data
+  const availableModules = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const m of modules) map.set(m.key, formatModuleName(m.key || m.label))
+    for (const r of cachedPool) {
+      if (r.module && !map.has(r.module)) {
+        map.set(r.module, formatModuleName(r.module))
+      }
+    }
+    const list = Array.from(map.entries()).map(([key, label]) => ({ key, label }))
+    if (!moduleSearch.trim()) return list
+    const q = moduleSearch.toLowerCase()
+    return list.filter((m) => m.label.toLowerCase().includes(q) || m.key.toLowerCase().includes(q))
+  }, [modules, cachedPool, moduleSearch])
 
   const [summary, setSummary] = useState<ApprovalSummaryDto | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -400,12 +582,31 @@ export function ApprovalCenterPage() {
   const [rejecting, setRejecting] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
 
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      const target = e.target as HTMLElement
+      if (!target.closest(`.${styles.filterPopover}`) && !target.closest(`.${styles.thFilterBtn}`)) {
+        setActiveHeaderFilter(null)
+      }
+    }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setActiveHeaderFilter(null)
+    }
+    if (activeHeaderFilter) {
+      document.addEventListener('mousedown', handleClickOutside)
+      document.addEventListener('keydown', handleKeyDown)
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [activeHeaderFilter])
+
   const loadSummary = useCallback(async () => {
     if (!accessToken) return
     try {
       setSummary(await approvalsApi.summary(accessToken))
     } catch {
-      // Non-critical — the cards just stay blank rather than blocking the table.
     }
   }, [accessToken])
 
@@ -421,9 +622,7 @@ export function ApprovalCenterPage() {
       .then((res) => {
         if (!cancelled) setModules(res)
       })
-      .catch(() => {
-        // Non-critical — the module filter just stays empty rather than blocking the table.
-      })
+      .catch(() => {})
     return () => {
       cancelled = true
     }
@@ -431,46 +630,125 @@ export function ApprovalCenterPage() {
 
   const fetcher = useCallback(
     async (token: string) => {
-      // "Processed" spans both terminal states — two calls, merged, rather than a status filter the
-      // backend doesn't support as an OR. Cheap: this tab is not the default view.
-      if (activeTab === TAB_IDS.processed) {
+      let allItems: ApprovalRequestListItemDto[] = []
+
+      // If statusFilter is explicitly set to 'Approved' or 'Rejected', query that directly:
+      const effectiveStatus = statusFilter || TAB_STATUS_FILTER[activeTab]
+
+      if (effectiveStatus === 'Approved') {
+        const res = await approvalsApi.list(token, {
+          page: 1, pageSize: 200, module: module || undefined, status: 'Approved',
+          assignedToMe: assignedToMeOnly || undefined, from: range.from, to: range.to,
+        })
+        allItems = res.items
+      } else if (effectiveStatus === 'Rejected') {
+        const res = await approvalsApi.list(token, {
+          page: 1, pageSize: 200, module: module || undefined, status: 'Rejected',
+          assignedToMe: assignedToMeOnly || undefined, from: range.from, to: range.to,
+        })
+        allItems = res.items
+      } else if (activeTab === TAB_IDS.processed && !statusFilter) {
         const [approved, rejected] = await Promise.all([
-          approvalsApi.list(token, { page: 1, pageSize: 200, module: module || undefined, status: 'Approved', makerId: undefined, from: range.from, to: range.to }),
-          approvalsApi.list(token, { page: 1, pageSize: 200, module: module || undefined, status: 'Rejected', makerId: undefined, from: range.from, to: range.to }),
+          approvalsApi.list(token, {
+            page: 1, pageSize: 200, module: module || undefined, status: 'Approved',
+            assignedToMe: assignedToMeOnly || undefined, from: range.from, to: range.to,
+          }),
+          approvalsApi.list(token, {
+            page: 1, pageSize: 200, module: module || undefined, status: 'Rejected',
+            assignedToMe: assignedToMeOnly || undefined, from: range.from, to: range.to,
+          }),
         ])
-        const merged = [...approved.items, ...rejected.items].sort(
+        allItems = [...approved.items, ...rejected.items].sort(
           (a, b) => new Date(b.decidedAt ?? b.requestedAt).getTime() - new Date(a.decidedAt ?? a.requestedAt).getTime(),
         )
-        const start = (page - 1) * pageSize
-        return { items: merged.slice(start, start + pageSize), total: merged.length }
+      } else {
+        const res = await approvalsApi.list(token, {
+          page: 1, pageSize: 200, module: module || undefined,
+          status: effectiveStatus,
+          assignedToMe: assignedToMeOnly || undefined,
+          from: range.from, to: range.to,
+        })
+        allItems = res.items
       }
 
-      const result = await approvalsApi.list(token, {
-        page,
-        pageSize,
-        module: module || undefined,
-        status: TAB_STATUS_FILTER[activeTab],
-        assignedToMe: assignedToMeOnly || undefined,
-        from: range.from,
-        to: range.to,
+      // Merge into in-memory cache pool so unique makers, checkers, and modules are always up to date
+      setCachedPool((prev) => {
+        const map = new Map<string, ApprovalRequestListItemDto>()
+        for (const item of prev) map.set(item.id, item)
+        for (const item of allItems) map.set(item.id, item)
+        return Array.from(map.values())
       })
-      // Maker search is applied client-side against the already-fetched page's maker names — the
-      // backend has no free-text maker filter, only an exact makerId one the UI doesn't have a picker
-      // for yet.
-      const filtered = debouncedMaker
-        ? result.items.filter((r) => r.makerName?.toLowerCase().includes(debouncedMaker.toLowerCase()))
-        : result.items
-      return { items: filtered, total: result.total }
+
+      // Client-side precision filtering
+      if (statusFilter) {
+        allItems = allItems.filter((r) => r.status === statusFilter)
+      }
+      if (assignedToMeOnly && currentUserId) {
+        allItems = allItems.filter((r) => r.checkerId === currentUserId)
+      }
+      if (actionFilter) {
+        allItems = allItems.filter((r) => r.action === actionFilter)
+      }
+      if (debouncedMaker) {
+        allItems = allItems.filter((r) => r.makerName?.toLowerCase().includes(debouncedMaker.toLowerCase()))
+      }
+      if (debouncedChecker) {
+        allItems = allItems.filter((r) => r.checkerName?.toLowerCase().includes(debouncedChecker.toLowerCase()))
+      }
+      if (debouncedEntity) {
+        allItems = allItems.filter((r) => r.entityLabel?.toLowerCase().includes(debouncedEntity.toLowerCase()))
+      }
+      if (decidedRange !== 'all') {
+        allItems = allItems.filter((r) => matchesDateRange(r.decidedAt, decidedRange, decidedCustomFrom, decidedCustomTo))
+      }
+
+      const totalCount = allItems.length
+      const start = (page - 1) * pageSize
+      return { items: allItems.slice(start, start + pageSize), total: totalCount }
     },
-    [activeTab, page, pageSize, module, assignedToMeOnly, debouncedMaker, range.from, range.to],
+    [
+      activeTab, page, pageSize, module, actionFilter, assignedToMeOnly,
+      debouncedMaker, debouncedEntity, debouncedChecker, statusFilter,
+      range.from, range.to, decidedRange, decidedCustomFrom, decidedCustomTo, currentUserId,
+    ],
   )
   const { items, total, error } = useApprovalRequests(accessToken, fetcher, [
-    activeTab, page, pageSize, module, assignedToMeOnly, debouncedMaker, refreshKey, range.from, range.to,
+    activeTab, page, pageSize, module, actionFilter, assignedToMeOnly,
+    debouncedMaker, debouncedEntity, debouncedChecker, statusFilter,
+    refreshKey, range.from, range.to, decidedRange, decidedCustomFrom, decidedCustomTo,
   ])
+
+  // Handler for the page-size preset or custom selection
+  function handlePageSizeSelect(value: string) {
+    if (value === 'custom') {
+      setIsCustomPageSize(true)
+      setCustomPageSizeInput(String(pageSize))
+    } else {
+      const size = Number(value)
+      setIsCustomPageSize(false)
+      setCustomPageSizeInput('')
+      setPageSize(size)
+      setPage(1)
+    }
+  }
+
+  function handleCustomPageSizeChange(val: string) {
+    setCustomPageSizeInput(val)
+    const parsed = parseInt(val, 10)
+    if (!Number.isNaN(parsed) && parsed >= 1 && parsed <= 500) {
+      setPageSize(parsed)
+      setPage(1)
+    }
+  }
 
   useEffect(() => {
     setPage(1)
-  }, [activeTab, module, assignedToMeOnly, debouncedMaker, dateRange])
+  }, [
+    activeTab, module, actionFilter, assignedToMeOnly,
+    debouncedMaker, debouncedEntity, debouncedChecker, statusFilter,
+    dateRange, customFrom, customTo, decidedRange, decidedCustomFrom, decidedCustomTo,
+    pageSize,
+  ])
 
   useEffect(() => {
     if (!viewingId || !accessToken) return
@@ -508,9 +786,7 @@ export function ApprovalCenterPage() {
       setDetail(updated)
       setRefreshKey((k) => k + 1)
       void loadSummary()
-      // Tells the Topbar bell (and anything else watching) to refetch now, instead of waiting out
-      // its own 60s poll — same cross-component signal DashboardPage already relies on.
-      useSettingsDrawerStore.getState().notifyMutation()
+      window.dispatchEvent(new Event('omniremit:approval-count-invalidated'))
     } catch (err) {
       setDetailError(err instanceof ApiError ? err.message : 'Could not approve this request.')
     } finally {
@@ -528,7 +804,7 @@ export function ApprovalCenterPage() {
       setRejecting(false)
       setRefreshKey((k) => k + 1)
       void loadSummary()
-      useSettingsDrawerStore.getState().notifyMutation()
+      window.dispatchEvent(new Event('omniremit:approval-count-invalidated'))
     } catch (err) {
       setDetailError(err instanceof ApiError ? err.message : 'Could not reject this request.')
     } finally {
@@ -536,27 +812,78 @@ export function ApprovalCenterPage() {
     }
   }
 
-  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+  const totalPages = total !== null ? Math.max(1, Math.ceil(total / pageSize)) : 1
+
+  function handleRowClick(r: ApprovalRequestListItemDto) {
+    setViewingId(r.id)
+  }
+
+  function handleCloseDetail() {
+    setViewingId(null)
+    setDetail(null)
+    setDetailError(null)
+    setRejecting(false)
+    setRejectReason('')
+  }
+
+  function clearAllFilters() {
+    setModule('')
+    setModuleSearch('')
+    setActionFilter('')
+    setMakerSearch('')
+    setEntitySearch('')
+    setCheckerSearch('')
+    setAssignedToMeOnly(false)
+    setStatusFilter('')
+    setDateRange('all')
+    setCustomFrom('')
+    setCustomTo('')
+    setCustomDraftFrom('')
+    setCustomDraftTo('')
+    setDecidedRange('all')
+    setDecidedCustomFrom('')
+    setDecidedCustomTo('')
+    setDecidedDraftFrom('')
+    setDecidedDraftTo('')
+  }
+
+  const hasActiveFilters = Boolean(
+    module || actionFilter || makerSearch || entitySearch || checkerSearch || assignedToMeOnly ||
+    dateRange !== 'all' || decidedRange !== 'all' || statusFilter
+  )
 
   return (
     <div className={styles.page}>
       {/* Header */}
       <div className={styles.header}>
         <div className={styles.titleGroup}>
-          <h1 className={styles.title}>Approval Center</h1>
+          <div className={styles.titleHeaderRow}>
+            <h1 className={styles.title}>Approval Center</h1>
+            <span className={styles.liveStreamBadge}>
+              <span className={styles.liveDot} />
+              Live Governance
+            </span>
+          </div>
           <p className={styles.subtitle}>
-            Every Maker-Checker request across the platform, in one place — filter by module, status,
-            maker, and date.
+            Review and decide on pending administrative requests across the platform.
           </p>
         </div>
 
-        <div className={styles.dateRangeGroup} role="group" aria-label="Date range">
+        <div className={styles.dateRangeGroup} role="group" aria-label="Quick date range">
           {DATE_RANGES.map((r) => (
             <button
               key={r.key}
               type="button"
               className={r.key === dateRange ? styles.dateRangeActive : styles.dateRangeButton}
-              onClick={() => setDateRange(r.key)}
+              onClick={() => {
+                setDateRange(r.key)
+                if (r.key !== 'custom') {
+                  setCustomFrom('')
+                  setCustomTo('')
+                  setCustomDraftFrom('')
+                  setCustomDraftTo('')
+                }
+              }}
             >
               {r.label}
             </button>
@@ -564,7 +891,7 @@ export function ApprovalCenterPage() {
         </div>
       </div>
 
-      {/* Summary cards */}
+      {/* Summary Metrics */}
       <div className={styles.summaryGrid}>
         <div className={styles.summaryCard}>
           <div className={`${styles.summaryIcon} ${styles.iconAmber}`}>
@@ -610,49 +937,72 @@ export function ApprovalCenterPage() {
           <button
             type="button"
             role="tab"
-            aria-selected={activeTab === TAB_IDS.pending}
-            className={`${styles.tabBtn} ${activeTab === TAB_IDS.pending ? styles.tabActive : ''}`}
-            onClick={() => setActiveTab(TAB_IDS.pending)}
+            aria-selected={activeTab === TAB_IDS.pending && !statusFilter}
+            className={`${styles.tabBtn} ${activeTab === TAB_IDS.pending && !statusFilter ? styles.tabActive : ''}`}
+            onClick={() => { setActiveTab(TAB_IDS.pending); setStatusFilter('') }}
           >
             Pending
           </button>
           <button
             type="button"
             role="tab"
-            aria-selected={activeTab === TAB_IDS.processed}
-            className={`${styles.tabBtn} ${activeTab === TAB_IDS.processed ? styles.tabActive : ''}`}
-            onClick={() => setActiveTab(TAB_IDS.processed)}
+            aria-selected={activeTab === TAB_IDS.processed && !statusFilter}
+            className={`${styles.tabBtn} ${activeTab === TAB_IDS.processed && !statusFilter ? styles.tabActive : ''}`}
+            onClick={() => { setActiveTab(TAB_IDS.processed); setStatusFilter('') }}
           >
             Processed
           </button>
           <button
             type="button"
             role="tab"
-            aria-selected={activeTab === TAB_IDS.all}
-            className={`${styles.tabBtn} ${activeTab === TAB_IDS.all ? styles.tabActive : ''}`}
-            onClick={() => setActiveTab(TAB_IDS.all)}
+            aria-selected={activeTab === TAB_IDS.all && !statusFilter}
+            className={`${styles.tabBtn} ${activeTab === TAB_IDS.all && !statusFilter ? styles.tabActive : ''}`}
+            onClick={() => { setActiveTab(TAB_IDS.all); setStatusFilter('') }}
           >
             All Requests
           </button>
         </div>
 
         <div className={styles.toolbarActions}>
-          <select className={styles.moduleSelect} value={module} onChange={(e) => setModule(e.target.value)} aria-label="Filter by module">
-            <option value="">All Modules</option>
-            {modules.map((m) => (
-              <option key={m.key} value={m.key}>{m.label}</option>
-            ))}
-          </select>
-
-          <div className={styles.searchBox}>
-            <input
-              type="text"
-              className={styles.filterInput}
-              placeholder="Filter by maker..."
-              value={makerSearch}
-              onChange={(e) => setMakerSearch(e.target.value)}
-            />
-            <Icon.Search width={14} height={14} className={styles.searchIcon} />
+          {/* Rows-per-page dropdown */}
+          <div className={styles.rowsDropdownWrap}>
+            <label htmlFor="approvals-rows-select" className={styles.rowsDropdownLabel}>
+              Rows
+            </label>
+            <div className={styles.rowsSelectWrap}>
+              <select
+                id="approvals-rows-select"
+                className={styles.rowsSelect}
+                value={isCustomPageSize ? 'custom' : pageSize}
+                onChange={(e) => handlePageSizeSelect(e.target.value)}
+                aria-label="Rows per page"
+              >
+                {PAGE_SIZE_OPTIONS.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+                <option value="custom">Custom</option>
+              </select>
+              <span className={styles.rowsSelectChevron} aria-hidden="true">▾</span>
+            </div>
+            {isCustomPageSize && (
+              <input
+                type="number"
+                min={1}
+                max={500}
+                className={styles.rowsCustomInput}
+                value={customPageSizeInput}
+                placeholder="e.g. 50"
+                onChange={(e) => handleCustomPageSizeChange(e.target.value)}
+                onBlur={() => {
+                  const parsed = parseInt(customPageSizeInput, 10)
+                  if (Number.isNaN(parsed) || parsed < 1 || parsed > 500) {
+                    setCustomPageSizeInput(String(pageSize))
+                  }
+                }}
+                aria-label="Custom row count"
+                autoFocus
+              />
+            )}
           </div>
 
           <label className={styles.assignedToMeToggle}>
@@ -667,6 +1017,96 @@ export function ApprovalCenterPage() {
         </div>
       </div>
 
+      {/* Active filters chip banner */}
+      {hasActiveFilters && (
+        <div className={styles.activeFiltersBar}>
+          <span className={styles.activeFiltersLabel}>Filters:</span>
+          {dateRange !== 'all' && (
+            <span className={styles.filterChip}>
+              <span>
+                Requested: {dateRange === 'custom' ? `${customFrom || '…'} to ${customTo || '…'}` : (DATE_RANGES.find((d) => d.key === dateRange)?.label ?? dateRange)}
+              </span>
+              <button type="button" className={styles.filterChipRemove} onClick={() => { setDateRange('all'); setCustomFrom(''); setCustomTo('') }} aria-label="Remove requested date filter">
+                <Icon.X width={12} height={12} />
+              </button>
+            </span>
+          )}
+          {decidedRange !== 'all' && (
+            <span className={styles.filterChip}>
+              <span>
+                Decided: {decidedRange === 'custom' ? `${decidedCustomFrom || '…'} to ${decidedCustomTo || '…'}` : (DATE_RANGES.find((d) => d.key === decidedRange)?.label ?? decidedRange)}
+              </span>
+              <button type="button" className={styles.filterChipRemove} onClick={() => { setDecidedRange('all'); setDecidedCustomFrom(''); setDecidedCustomTo('') }} aria-label="Remove decided date filter">
+                <Icon.X width={12} height={12} />
+              </button>
+            </span>
+          )}
+          {statusFilter && (
+            <span className={styles.filterChip}>
+              <span>Status: {statusFilter}</span>
+              <button type="button" className={styles.filterChipRemove} onClick={() => setStatusFilter('')} aria-label="Remove status filter">
+                <Icon.X width={12} height={12} />
+              </button>
+            </span>
+          )}
+          {module && (
+            <span className={styles.filterChip}>
+              <span>Module: {formatModuleName(module, moduleLabelsByKey)}</span>
+              <button type="button" className={styles.filterChipRemove} onClick={() => setModule('')} aria-label="Remove module filter">
+                <Icon.X width={12} height={12} />
+              </button>
+            </span>
+          )}
+          {actionFilter && (
+            <span className={styles.filterChip}>
+              <span>Action: {ACTION_LABELS[actionFilter] ?? actionFilter}</span>
+              <button type="button" className={styles.filterChipRemove} onClick={() => setActionFilter('')} aria-label="Remove action filter">
+                <Icon.X width={12} height={12} />
+              </button>
+            </span>
+          )}
+          {entitySearch && (
+            <span className={styles.filterChip}>
+              <span>Entity: "{entitySearch}"</span>
+              <button type="button" className={styles.filterChipRemove} onClick={() => setEntitySearch('')} aria-label="Remove entity filter">
+                <Icon.X width={12} height={12} />
+              </button>
+            </span>
+          )}
+          {makerSearch && (
+            <span className={styles.filterChip}>
+              <span>Maker: "{makerSearch}"</span>
+              <button type="button" className={styles.filterChipRemove} onClick={() => setMakerSearch('')} aria-label="Remove maker filter">
+                <Icon.X width={12} height={12} />
+              </button>
+            </span>
+          )}
+          {checkerSearch && (
+            <span className={styles.filterChip}>
+              <span>Checker: "{checkerSearch}"</span>
+              <button type="button" className={styles.filterChipRemove} onClick={() => setCheckerSearch('')} aria-label="Remove checker filter">
+                <Icon.X width={12} height={12} />
+              </button>
+            </span>
+          )}
+          {assignedToMeOnly && (
+            <span className={styles.filterChip}>
+              <span>Assigned to me</span>
+              <button type="button" className={styles.filterChipRemove} onClick={() => setAssignedToMeOnly(false)} aria-label="Remove assigned to me filter">
+                <Icon.X width={12} height={12} />
+              </button>
+            </span>
+          )}
+          <button
+            type="button"
+            className={styles.clearAllBtn}
+            onClick={clearAllFilters}
+          >
+            Clear all
+          </button>
+        </div>
+      )}
+
       {error && <div className={styles.errorBanner}>{error}</div>}
 
       {/* Table */}
@@ -674,19 +1114,443 @@ export function ApprovalCenterPage() {
         <table className={styles.logTable}>
           <thead>
             <tr>
-              <th>REQUESTED</th>
-              <th>MODULE</th>
-              <th>ACTION</th>
-              <th>ENTITY</th>
-              <th>MAKER</th>
-              <th>CHECKER</th>
-              <th>STATUS</th>
-              {/* Processed sorts by decision time, not request time (see the fetcher above) — this
-                  column makes that sort key visible on screen instead of silently differing from
-                  what REQUESTED shows. Present in every tab (not just Processed) so the table
-                  doesn't gain or lose a column when switching tabs, and Pending rows honestly show
-                  "—" rather than nothing having decided them yet. */}
-              <th>DECIDED</th>
+              {/* REQUESTED */}
+              <th className={styles.thFilterable}>
+                <button
+                  type="button"
+                  className={`${styles.thFilterBtn} ${dateRange !== 'all' ? styles.thFilterBtnActive : ''}`}
+                  onClick={() => setActiveHeaderFilter((c) => (c === 'requested' ? null : 'requested'))}
+                >
+                  <span>REQUESTED</span>
+                  <Icon.ChevronDown width={12} height={12} className={`${styles.filterIcon} ${activeHeaderFilter === 'requested' ? styles.filterIconActive : ''}`} />
+                  {dateRange !== 'all' && <span className={styles.filterDot} />}
+                </button>
+                {activeHeaderFilter === 'requested' && (
+                  <div className={styles.filterPopover}>
+                    <div className={styles.popoverHeader}>
+                      <span className={styles.popoverTitle}>Requested Date</span>
+                      {dateRange !== 'all' && (
+                        <button type="button" className={styles.popoverClearBtn} onClick={() => { setDateRange('all'); setCustomFrom(''); setCustomTo(''); setCustomDraftFrom(''); setCustomDraftTo('') }}>
+                          Reset
+                        </button>
+                      )}
+                    </div>
+                    <div className={styles.popoverList}>
+                      {DATE_RANGES.map((r) => (
+                        <button
+                          key={r.key}
+                          type="button"
+                          className={`${styles.popoverItem} ${dateRange === r.key ? styles.popoverItemActive : ''}`}
+                          onClick={() => { setDateRange(r.key); setActiveHeaderFilter(null) }}
+                        >
+                          <span>{r.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <div className={styles.popoverDivider} />
+                    <div className={styles.customDateSection}>
+                      <span className={styles.customDateLabel}>Custom Range</span>
+                      <div className={styles.customDateRow}>
+                        <input
+                          type="date"
+                          className={styles.dateInput}
+                          value={customDraftFrom || customFrom}
+                          onChange={(e) => setCustomDraftFrom(e.target.value)}
+                        />
+                        <span style={{ fontSize: '11px', color: '#94a3b8' }}>to</span>
+                        <input
+                          type="date"
+                          className={styles.dateInput}
+                          value={customDraftTo || customTo}
+                          onChange={(e) => setCustomDraftTo(e.target.value)}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className={styles.applyDateBtn}
+                        onClick={() => {
+                          setCustomFrom(customDraftFrom)
+                          setCustomTo(customDraftTo)
+                          setDateRange('custom')
+                          setActiveHeaderFilter(null)
+                        }}
+                      >
+                        Apply Custom Range
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </th>
+
+              {/* MODULE */}
+              <th className={styles.thFilterable}>
+                <button
+                  type="button"
+                  className={`${styles.thFilterBtn} ${module ? styles.thFilterBtnActive : ''}`}
+                  onClick={() => setActiveHeaderFilter((c) => (c === 'module' ? null : 'module'))}
+                >
+                  <span>MODULE</span>
+                  <Icon.ChevronDown width={12} height={12} className={`${styles.filterIcon} ${activeHeaderFilter === 'module' ? styles.filterIconActive : ''}`} />
+                  {module && <span className={styles.filterDot} />}
+                </button>
+                {activeHeaderFilter === 'module' && (
+                  <div className={styles.filterPopover}>
+                    <div className={styles.popoverHeader}>
+                      <span className={styles.popoverTitle}>Filter Module</span>
+                      {module && <button type="button" className={styles.popoverClearBtn} onClick={() => { setModule(''); setModuleSearch('') }}>Reset</button>}
+                    </div>
+                    <input
+                      type="text"
+                      className={styles.popoverInput}
+                      placeholder="Type to search module..."
+                      value={moduleSearch}
+                      onChange={(e) => setModuleSearch(e.target.value)}
+                      autoFocus
+                    />
+                    <div className={styles.popoverList}>
+                      <button
+                        type="button"
+                        className={`${styles.popoverItem} ${!module ? styles.popoverItemActive : ''}`}
+                        onClick={() => { setModule(''); setActiveHeaderFilter(null) }}
+                      >
+                        <span>All Modules</span>
+                      </button>
+                      {availableModules.length === 0 ? (
+                        <div className={styles.emptyHint}>No modules matching "{moduleSearch}"</div>
+                      ) : (
+                        availableModules.map((m) => (
+                          <button
+                            key={m.key}
+                            type="button"
+                            className={`${styles.popoverItem} ${module === m.key ? styles.popoverItemActive : ''}`}
+                            onClick={() => { setModule(m.key); setActiveHeaderFilter(null) }}
+                          >
+                            <span>{m.label}</span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </th>
+
+              {/* ACTION */}
+              <th className={styles.thFilterable}>
+                <button
+                  type="button"
+                  className={`${styles.thFilterBtn} ${actionFilter ? styles.thFilterBtnActive : ''}`}
+                  onClick={() => setActiveHeaderFilter((c) => (c === 'action' ? null : 'action'))}
+                >
+                  <span>ACTION</span>
+                  <Icon.ChevronDown width={12} height={12} className={`${styles.filterIcon} ${activeHeaderFilter === 'action' ? styles.filterIconActive : ''}`} />
+                  {actionFilter && <span className={styles.filterDot} />}
+                </button>
+                {activeHeaderFilter === 'action' && (
+                  <div className={styles.filterPopover}>
+                    <div className={styles.popoverHeader}>
+                      <span className={styles.popoverTitle}>Filter Action</span>
+                      {actionFilter && <button type="button" className={styles.popoverClearBtn} onClick={() => setActionFilter('')}>Reset</button>}
+                    </div>
+                    <div className={styles.popoverList}>
+                      <button
+                        type="button"
+                        className={`${styles.popoverItem} ${!actionFilter ? styles.popoverItemActive : ''}`}
+                        onClick={() => { setActionFilter(''); setActiveHeaderFilter(null) }}
+                      >
+                        <span>All Actions</span>
+                      </button>
+                      {Object.keys(ACTION_LABELS).map((act) => {
+                        const ActIcon = ACTION_ICONS[act] ?? Icon.Edit
+                        return (
+                          <button
+                            key={act}
+                            type="button"
+                            className={`${styles.popoverItem} ${actionFilter === act ? styles.popoverItemActive : ''}`}
+                            onClick={() => { setActionFilter(act); setActiveHeaderFilter(null) }}
+                          >
+                            <span className={`${styles.actionCell} ${styles[`action_${act}`] ?? ''}`}>
+                              <ActIcon width={13} height={13} />
+                              <span>{ACTION_LABELS[act]}</span>
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </th>
+
+              {/* ENTITY */}
+              <th className={styles.thFilterable}>
+                <button
+                  type="button"
+                  className={`${styles.thFilterBtn} ${entitySearch ? styles.thFilterBtnActive : ''}`}
+                  onClick={() => setActiveHeaderFilter((c) => (c === 'entity' ? null : 'entity'))}
+                >
+                  <span>ENTITY</span>
+                  <Icon.ChevronDown width={12} height={12} className={`${styles.filterIcon} ${activeHeaderFilter === 'entity' ? styles.filterIconActive : ''}`} />
+                  {entitySearch && <span className={styles.filterDot} />}
+                </button>
+                {activeHeaderFilter === 'entity' && (
+                  <div className={styles.filterPopover}>
+                    <div className={styles.popoverHeader}>
+                      <span className={styles.popoverTitle}>Search Entity</span>
+                      {entitySearch && <button type="button" className={styles.popoverClearBtn} onClick={() => setEntitySearch('')}>Reset</button>}
+                    </div>
+                    <input
+                      type="text"
+                      className={styles.popoverInput}
+                      placeholder="Filter by entity name/ID..."
+                      value={entitySearch}
+                      onChange={(e) => setEntitySearch(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                )}
+              </th>
+
+              {/* MAKER */}
+              <th className={styles.thFilterable}>
+                <button
+                  type="button"
+                  className={`${styles.thFilterBtn} ${makerSearch ? styles.thFilterBtnActive : ''}`}
+                  onClick={() => setActiveHeaderFilter((c) => (c === 'maker' ? null : 'maker'))}
+                >
+                  <span>MAKER</span>
+                  <Icon.ChevronDown width={12} height={12} className={`${styles.filterIcon} ${activeHeaderFilter === 'maker' ? styles.filterIconActive : ''}`} />
+                  {makerSearch && <span className={styles.filterDot} />}
+                </button>
+                {activeHeaderFilter === 'maker' && (
+                  <div className={styles.filterPopover}>
+                    <div className={styles.popoverHeader}>
+                      <span className={styles.popoverTitle}>Filter Maker</span>
+                      {makerSearch && <button type="button" className={styles.popoverClearBtn} onClick={() => setMakerSearch('')}>Reset</button>}
+                    </div>
+                    <input
+                      type="text"
+                      className={styles.popoverInput}
+                      placeholder="Search maker name..."
+                      value={makerSearch}
+                      onChange={(e) => setMakerSearch(e.target.value)}
+                      autoFocus
+                    />
+                    {availableMakers.length > 0 && (
+                      <>
+                        <div className={styles.popoverDivider} />
+                        <span className={styles.customDateLabel}>Known Makers:</span>
+                        <div className={styles.userListSection}>
+                          {availableMakers.map((m) => (
+                            <button
+                              key={m.id || m.name}
+                              type="button"
+                              className={`${styles.userItem} ${makerSearch.toLowerCase() === m.name.toLowerCase() ? styles.userItemActive : ''}`}
+                              onClick={() => { setMakerSearch(m.name); setActiveHeaderFilter(null) }}
+                            >
+                              <div className={styles.userAvatarSmall}>
+                                {m.name.charAt(0).toUpperCase()}
+                              </div>
+                              <span>{m.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </th>
+
+              {/* CHECKER */}
+              <th className={styles.thFilterable}>
+                <button
+                  type="button"
+                  className={`${styles.thFilterBtn} ${assignedToMeOnly || checkerSearch ? styles.thFilterBtnActive : ''}`}
+                  onClick={() => setActiveHeaderFilter((c) => (c === 'checker' ? null : 'checker'))}
+                >
+                  <span>CHECKER</span>
+                  <Icon.ChevronDown width={12} height={12} className={`${styles.filterIcon} ${activeHeaderFilter === 'checker' ? styles.filterIconActive : ''}`} />
+                  {(assignedToMeOnly || checkerSearch) && <span className={styles.filterDot} />}
+                </button>
+                {activeHeaderFilter === 'checker' && (
+                  <div className={`${styles.filterPopover} ${styles.popoverRight}`}>
+                    <div className={styles.popoverHeader}>
+                      <span className={styles.popoverTitle}>Filter Checker</span>
+                      {(assignedToMeOnly || checkerSearch) && (
+                        <button
+                          type="button"
+                          className={styles.popoverClearBtn}
+                          onClick={() => { setAssignedToMeOnly(false); setCheckerSearch('') }}
+                        >
+                          Reset
+                        </button>
+                      )}
+                    </div>
+                    <label className={styles.popoverCheckboxLabel}>
+                      <input
+                        type="checkbox"
+                        checked={assignedToMeOnly}
+                        onChange={(e) => setAssignedToMeOnly(e.target.checked)}
+                      />
+                      <span>Assigned to me</span>
+                    </label>
+                    <input
+                      type="text"
+                      className={styles.popoverInput}
+                      placeholder="Search checker name..."
+                      value={checkerSearch}
+                      onChange={(e) => setCheckerSearch(e.target.value)}
+                    />
+                    {availableCheckers.length > 0 && (
+                      <>
+                        <div className={styles.popoverDivider} />
+                        <span className={styles.customDateLabel}>Known Checkers:</span>
+                        <div className={styles.userListSection}>
+                          {availableCheckers.map((c) => (
+                            <button
+                              key={c.id || c.name}
+                              type="button"
+                              className={`${styles.userItem} ${checkerSearch.toLowerCase() === c.name.toLowerCase() ? styles.userItemActive : ''}`}
+                              onClick={() => { setCheckerSearch(c.name); setActiveHeaderFilter(null) }}
+                            >
+                              <div className={`${styles.userAvatarSmall} ${styles.checkerAvatarSmall}`}>
+                                {c.name.charAt(0).toUpperCase()}
+                              </div>
+                              <span>{c.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </th>
+
+              {/* STATUS */}
+              <th className={styles.thFilterable}>
+                <button
+                  type="button"
+                  className={`${styles.thFilterBtn} ${statusFilter || activeTab !== TAB_IDS.all ? styles.thFilterBtnActive : ''}`}
+                  onClick={() => setActiveHeaderFilter((c) => (c === 'status' ? null : 'status'))}
+                >
+                  <span>STATUS</span>
+                  <Icon.ChevronDown width={12} height={12} className={`${styles.filterIcon} ${activeHeaderFilter === 'status' ? styles.filterIconActive : ''}`} />
+                  {(statusFilter || activeTab !== TAB_IDS.all) && <span className={styles.filterDot} />}
+                </button>
+                {activeHeaderFilter === 'status' && (
+                  <div className={`${styles.filterPopover} ${styles.popoverRight}`}>
+                    <div className={styles.popoverHeader}>
+                      <span className={styles.popoverTitle}>Filter Status</span>
+                      {(statusFilter || activeTab !== TAB_IDS.all) && (
+                        <button
+                          type="button"
+                          className={styles.popoverClearBtn}
+                          onClick={() => { setStatusFilter(''); setActiveTab(TAB_IDS.all) }}
+                        >
+                          Reset
+                        </button>
+                      )}
+                    </div>
+                    <div className={styles.popoverList}>
+                      <button
+                        type="button"
+                        className={`${styles.popoverItem} ${!statusFilter && activeTab === TAB_IDS.all ? styles.popoverItemActive : ''}`}
+                        onClick={() => { setStatusFilter(''); setActiveTab(TAB_IDS.all); setActiveHeaderFilter(null) }}
+                      >
+                        <span>All Statuses</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`${styles.popoverItem} ${statusFilter === 'Pending' || (activeTab === TAB_IDS.pending && !statusFilter) ? styles.popoverItemActive : ''}`}
+                        onClick={() => { setStatusFilter('Pending'); setActiveHeaderFilter(null) }}
+                      >
+                        <Badge tone="warning" dot>Pending</Badge>
+                      </button>
+                      <button
+                        type="button"
+                        className={`${styles.popoverItem} ${statusFilter === 'Approved' ? styles.popoverItemActive : ''}`}
+                        onClick={() => { setStatusFilter('Approved'); setActiveHeaderFilter(null) }}
+                      >
+                        <Badge tone="success" dot>Approved</Badge>
+                      </button>
+                      <button
+                        type="button"
+                        className={`${styles.popoverItem} ${statusFilter === 'Rejected' ? styles.popoverItemActive : ''}`}
+                        onClick={() => { setStatusFilter('Rejected'); setActiveHeaderFilter(null) }}
+                      >
+                        <Badge tone="danger" dot>Rejected</Badge>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </th>
+
+              {/* DECIDED */}
+              <th className={styles.thFilterable}>
+                <button
+                  type="button"
+                  className={`${styles.thFilterBtn} ${decidedRange !== 'all' ? styles.thFilterBtnActive : ''}`}
+                  onClick={() => setActiveHeaderFilter((c) => (c === 'decided' ? null : 'decided'))}
+                >
+                  <span>DECIDED</span>
+                  <Icon.ChevronDown width={12} height={12} className={`${styles.filterIcon} ${activeHeaderFilter === 'decided' ? styles.filterIconActive : ''}`} />
+                  {decidedRange !== 'all' && <span className={styles.filterDot} />}
+                </button>
+                {activeHeaderFilter === 'decided' && (
+                  <div className={`${styles.filterPopover} ${styles.popoverRight}`}>
+                    <div className={styles.popoverHeader}>
+                      <span className={styles.popoverTitle}>Decided Date</span>
+                      {decidedRange !== 'all' && (
+                        <button type="button" className={styles.popoverClearBtn} onClick={() => { setDecidedRange('all'); setDecidedCustomFrom(''); setDecidedCustomTo(''); setDecidedDraftFrom(''); setDecidedDraftTo('') }}>
+                          Reset
+                        </button>
+                      )}
+                    </div>
+                    <div className={styles.popoverList}>
+                      {DATE_RANGES.map((r) => (
+                        <button
+                          key={r.key}
+                          type="button"
+                          className={`${styles.popoverItem} ${decidedRange === r.key ? styles.popoverItemActive : ''}`}
+                          onClick={() => { setDecidedRange(r.key); setActiveHeaderFilter(null) }}
+                        >
+                          <span>{r.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <div className={styles.popoverDivider} />
+                    <div className={styles.customDateSection}>
+                      <span className={styles.customDateLabel}>Custom Range</span>
+                      <div className={styles.customDateRow}>
+                        <input
+                          type="date"
+                          className={styles.dateInput}
+                          value={decidedDraftFrom || decidedCustomFrom}
+                          onChange={(e) => setDecidedDraftFrom(e.target.value)}
+                        />
+                        <span style={{ fontSize: '11px', color: '#94a3b8' }}>to</span>
+                        <input
+                          type="date"
+                          className={styles.dateInput}
+                          value={decidedDraftTo || decidedCustomTo}
+                          onChange={(e) => setDecidedDraftTo(e.target.value)}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className={styles.applyDateBtn}
+                        onClick={() => {
+                          setDecidedCustomFrom(decidedDraftFrom)
+                          setDecidedCustomTo(decidedDraftTo)
+                          setDecidedRange('custom')
+                          setActiveHeaderFilter(null)
+                        }}
+                      >
+                        Apply Custom Range
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </th>
+
               <th></th>
             </tr>
           </thead>
@@ -696,25 +1560,25 @@ export function ApprovalCenterPage() {
               // the whole row read as noticeably less finished next to that page's per-cell shapes.
               Array.from({ length: pageSize }).map((_, i) => (
                 <tr key={i}>
-                  <td><SkeletonBlock width={130} height={16} radius="4px" /></td>
-                  <td><SkeletonBlock width={90} height={22} radius="999px" /></td>
-                  <td><SkeletonBlock width={95} height={22} radius="6px" /></td>
-                  <td><SkeletonBlock width={110} height={22} radius="6px" /></td>
+                  <td><SkeletonBlock width={85} height={15} radius="4px" /></td>
+                  <td><SkeletonBlock width={100} height={20} radius="999px" /></td>
+                  <td><SkeletonBlock width={75} height={20} radius="6px" /></td>
+                  <td><SkeletonBlock width={95} height={15} radius="4px" /></td>
                   <td>
                     <div className={styles.actorCell}>
-                      <SkeletonBlock width={26} height={26} radius="8px" />
-                      <SkeletonBlock width={100} height={16} radius="4px" />
+                      <SkeletonBlock width={28} height={28} radius="8px" />
+                      <SkeletonBlock width={80} height={15} radius="4px" />
                     </div>
                   </td>
                   <td>
                     <div className={styles.actorCell}>
-                      <SkeletonBlock width={26} height={26} radius="8px" />
-                      <SkeletonBlock width={90} height={16} radius="4px" />
+                      <SkeletonBlock width={28} height={28} radius="8px" />
+                      <SkeletonBlock width={80} height={15} radius="4px" />
                     </div>
                   </td>
-                  <td><SkeletonBlock width={70} height={22} radius="999px" /></td>
-                  <td><SkeletonBlock width={100} height={16} radius="4px" /></td>
-                  <td><SkeletonBlock width={52} height={26} radius="7px" /></td>
+                  <td><SkeletonBlock width={70} height={20} radius="999px" /></td>
+                  <td><SkeletonBlock width={85} height={15} radius="4px" /></td>
+                  <td><SkeletonBlock width={56} height={26} radius="7px" /></td>
                 </tr>
               ))
             ) : items.length === 0 ? (
@@ -722,49 +1586,58 @@ export function ApprovalCenterPage() {
                 <td colSpan={9} className={styles.emptyCell}>No approval requests found matching the selected filters.</td>
               </tr>
             ) : (
-              items.map((r) => (
-                <tr key={r.id}>
-                  <td className={styles.timeCell}>{formatTimestamp(r.requestedAt)}</td>
-                  <td><Badge tone="info">{moduleLabelsByKey.get(r.module) ?? r.module}</Badge></td>
-                  <td><span className={styles.actionCell}>{ACTION_LABELS[r.action] ?? r.action}</span></td>
-                  <td>
-                    {r.entityLabel ? (
-                      <span className={styles.entityLabel}>{r.entityLabel}</span>
-                    ) : (
-                      <span className={styles.mutedText}>—</span>
-                    )}
-                  </td>
-                  <td>
-                    {r.makerName ? (
-                      <div className={styles.actorCell}>
-                        <span className={styles.actorAvatar}>{r.makerName.charAt(0).toUpperCase()}</span>
-                        <span className={styles.actorName}>{r.makerName}</span>
-                      </div>
-                    ) : (
-                      <span className={styles.mutedText}>Unknown</span>
-                    )}
-                  </td>
-                  <td>
-                    {r.checkerName ? (
-                      <div className={styles.actorCell}>
-                        <span className={styles.actorAvatar}>{r.checkerName.charAt(0).toUpperCase()}</span>
-                        <span className={styles.actorName}>{r.checkerName}</span>
-                      </div>
-                    ) : (
-                      <span className={styles.mutedText}>Unassigned</span>
-                    )}
-                  </td>
-                  <td><Badge tone={STATUS_TONES[r.status]} dot>{r.status}</Badge></td>
-                  <td className={styles.timeCell}>
-                    {r.decidedAt ? formatTimestamp(r.decidedAt) : <span className={styles.mutedText}>—</span>}
-                  </td>
-                  <td>
-                    <button type="button" className={styles.viewDetailBtn} onClick={() => setViewingId(r.id)}>
-                      View
-                    </button>
-                  </td>
-                </tr>
-              ))
+              items.map((r) => {
+                const ActionIcon = ACTION_ICONS[r.action] ?? Icon.Edit
+                return (
+                  <tr key={r.id}>
+                    <td className={styles.timeCell}>{formatDateOnly(r.requestedAt)}</td>
+                    <td><Badge tone="info">{formatModuleName(r.module, moduleLabelsByKey)}</Badge></td>
+                    <td>
+                      <span className={`${styles.actionCell} ${styles[`action_${r.action}`] ?? ''}`}>
+                        <ActionIcon width={12} height={12} />
+                        <span>{ACTION_LABELS[r.action] ?? r.action}</span>
+                      </span>
+                    </td>
+                    <td>
+                      {r.entityLabel ? (
+                        <span className={styles.entityLabel}>{r.entityLabel}</span>
+                      ) : (
+                        <span className={styles.mutedText}>—</span>
+                      )}
+                    </td>
+                    <td>
+                      {r.makerName ? (
+                        <div className={styles.actorCell}>
+                          <span className={styles.actorAvatar}>{r.makerName.charAt(0).toUpperCase()}</span>
+                          <span className={styles.actorName}>{r.makerName}</span>
+                        </div>
+                      ) : (
+                        <span className={styles.mutedText}>Unknown</span>
+                      )}
+                    </td>
+                    <td>
+                      {r.checkerName ? (
+                        <div className={styles.actorCell}>
+                          <span className={`${styles.actorAvatar} ${styles.checkerAvatar}`}>{r.checkerName.charAt(0).toUpperCase()}</span>
+                          <span className={styles.actorName}>{r.checkerName}</span>
+                        </div>
+                      ) : (
+                        <span className={styles.unassignedChip}>Unassigned</span>
+                      )}
+                    </td>
+                    <td><Badge tone={STATUS_TONES[r.status]} dot>{r.status}</Badge></td>
+                    <td className={styles.timeCell}>
+                      {r.decidedAt ? formatDateOnly(r.decidedAt) : <span className={styles.mutedText}>—</span>}
+                    </td>
+                    <td>
+                      <button type="button" className={styles.viewDetailBtn} onClick={() => setViewingId(r.id)}>
+                        <span>View</span>
+                        <Icon.ChevronRight width={12} height={12} />
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })
             )}
           </tbody>
         </table>
@@ -819,15 +1692,15 @@ export function ApprovalCenterPage() {
                           <h3 className={styles.drawerSectionTitle}>Overview</h3>
                           <dl className={styles.detailList}>
                             <div className={styles.detailRow}>
-                              <span className={styles.detailIcon}><Icon.Grid width={14} height={14} /></span>
+                              <span className={styles.detailIcon}><Icon.Grid width={15} height={15} /></span>
                               <div className={styles.detailRowBody}>
                                 <dt>Module</dt>
-                                <dd><Badge tone="info">{detail.module}</Badge></dd>
+                                <dd><Badge tone="info">{formatModuleName(detail.module, moduleLabelsByKey)}</Badge></dd>
                               </div>
                             </div>
                             <div className={styles.detailRow}>
                               <span className={`${styles.detailIcon} ${styles.detailIconNeutral}`}>
-                                {(() => { const ActionIcon = ACTION_ICONS[detail.action] ?? Icon.Edit; return <ActionIcon width={14} height={14} /> })()}
+                                {(() => { const ActionIcon = ACTION_ICONS[detail.action] ?? Icon.Edit; return <ActionIcon width={15} height={15} /> })()}
                               </span>
                               <div className={styles.detailRowBody}>
                                 <dt>Action</dt>
@@ -836,15 +1709,15 @@ export function ApprovalCenterPage() {
                             </div>
                             {detail.entityType && (
                               <div className={styles.detailRow}>
-                                <span className={styles.detailIcon}><Icon.User width={14} height={14} /></span>
+                                <span className={styles.detailIcon}><Icon.User width={15} height={15} /></span>
                                 <div className={styles.detailRowBody}>
-                                  <dt>Entity</dt>
+                                   <dt>Entity</dt>
                                   <dd>{detail.entityType}{detail.entityLabel ? ` — ${detail.entityLabel}` : ''}</dd>
                                 </div>
                               </div>
                             )}
                             <div className={styles.detailRow}>
-                              <span className={`${styles.detailIcon} ${styles.detailIconPurple}`}><Icon.Info width={14} height={14} /></span>
+                              <span className={`${styles.detailIcon} ${styles.detailIconPurple}`}><Icon.Info width={15} height={15} /></span>
                               <div className={styles.detailRowBody}>
                                 <dt>Status</dt>
                                 <dd><Badge tone={STATUS_TONES[detail.status]} dot>{detail.status}</Badge></dd>
@@ -858,20 +1731,20 @@ export function ApprovalCenterPage() {
                           <div className={styles.timeline}>
                             <div className={styles.timelineStep}>
                               <span className={styles.timelineDot} />
-                              <div>
+                              <div className={styles.timelineStepCard}>
                                 <span className={styles.timelineLabel}>Requested by {detail.makerName ?? 'Unknown'}</span>
-                                <span className={styles.timelineTime}><Icon.Clock width={11} height={11} />{formatTimestamp(detail.requestedAt)}</span>
+                                <span className={styles.timelineTime}><Icon.Clock width={12} height={12} />{formatDateOnly(detail.requestedAt)}</span>
                               </div>
                             </div>
                             <div className={styles.timelineStep}>
                               <span className={`${styles.timelineDot} ${detail.status === 'Pending' ? styles.timelineDotPending : styles.timelineDotDone}`} />
-                              <div>
+                              <div className={styles.timelineStepCard}>
                                 <span className={styles.timelineLabel}>
                                   {detail.status === 'Pending'
                                     ? `Awaiting ${detail.checkerName ?? 'an assigned checker'}`
                                     : `${detail.status} by ${detail.checkerName ?? 'checker'}`}
                                 </span>
-                                {detail.decidedAt && <span className={styles.timelineTime}><Icon.Clock width={11} height={11} />{formatTimestamp(detail.decidedAt)}</span>}
+                                {detail.decidedAt && <span className={styles.timelineTime}><Icon.Clock width={12} height={12} />{formatDateOnly(detail.decidedAt)}</span>}
                               </div>
                             </div>
                           </div>
@@ -912,84 +1785,111 @@ export function ApprovalCenterPage() {
                           {permissionDiff.unchanged ? (
                             <p className={styles.mutedText}>No permission changes in this request.</p>
                           ) : (
-                            <dl className={styles.dataFieldList}>
+                            <div className={styles.permissionDiffList}>
                               {permissionDiff.added.map((o) => (
-                                <div key={`add-${overrideKey(o)}`} className={styles.dataFieldRow}>
-                                  <dt>+ {o.featureKey}</dt>
-                                  <dd>{o.capability} ({o.effect})</dd>
+                                <div key={`add-${overrideKey(o)}`} className={`${styles.permissionDiffCard} ${styles.permissionDiffCardAdd}`}>
+                                  <span className={styles.permissionDiffBadgeAdd}>+ Add</span>
+                                  <div className={styles.permissionDiffBody}>
+                                    <span className={styles.permissionDiffFeature}>{o.featureKey}</span>
+                                    <span className={styles.permissionDiffCapability}>{o.capability} ({o.effect})</span>
+                                  </div>
                                 </div>
                               ))}
                               {permissionDiff.removed.map((o) => (
-                                <div key={`rem-${overrideKey(o)}`} className={styles.dataFieldRow}>
-                                  <dt>− {o.featureKey}</dt>
-                                  <dd>{o.capability} ({o.effect})</dd>
+                                <div key={`rem-${overrideKey(o)}`} className={`${styles.permissionDiffCard} ${styles.permissionDiffCardRem}`}>
+                                  <span className={styles.permissionDiffBadgeRem}>− Remove</span>
+                                  <div className={styles.permissionDiffBody}>
+                                    <span className={styles.permissionDiffFeature}>{o.featureKey}</span>
+                                    <span className={styles.permissionDiffCapability}>{o.capability} ({o.effect})</span>
+                                  </div>
                                 </div>
                               ))}
                               {permissionDiff.changed.map(({ key, from, to }) => (
-                                <div key={`chg-${key}`} className={styles.dataFieldRow}>
-                                  <dt>{to.featureKey}</dt>
-                                  <dd>{to.capability}: {from.effect} → {to.effect}</dd>
+                                <div key={`chg-${key}`} className={`${styles.permissionDiffCard} ${styles.permissionDiffCardMod}`}>
+                                  <span className={styles.permissionDiffBadgeMod}>~ Modify</span>
+                                  <div className={styles.permissionDiffBody}>
+                                    <span className={styles.permissionDiffFeature}>{to.featureKey}</span>
+                                    <span className={styles.permissionDiffCapability}>{to.capability}: {from.effect} → {to.effect}</span>
+                                  </div>
                                 </div>
                               ))}
-                            </dl>
+                            </div>
                           )}
                         </section>
                       )
                     })()}
 
                     {detailError && <div className={styles.errorBanner}>{detailError}</div>}
-
-                    {/*
-                      Row-level Approve/Reject visibility deliberately does NOT use PermissionGate —
-                      PermissionGate/isAdministrator both bypass for admins, which is correct for
-                      reaching this PAGE but wrong here: an admin who isn't the specific assigned
-                      checker on THIS request must not see actionable buttons on someone else's
-                      request. This is a custom, per-row identity check instead.
-                    */}
-                    {isMyDecisionToMake && (
-                      <section className={styles.drawerSection}>
-                        {!rejecting ? (
-                          <div className={styles.decisionActions}>
-                            <button type="button" className={styles.rejectBtn} onClick={() => setRejecting(true)} disabled={deciding}>
-                              <Icon.X width={16} height={16} />
-                              <span>Reject</span>
-                            </button>
-                            <button type="button" className={styles.approveBtn} onClick={() => void handleApprove()} disabled={deciding}>
-                              <Icon.CheckCircle width={16} height={16} />
-                              <span>{deciding ? 'Approving…' : 'Approve'}</span>
-                            </button>
-                          </div>
-                        ) : (
-                          <div className={styles.rejectForm}>
-                            <label className={styles.label}>Rejection reason</label>
-                            <textarea
-                              className={styles.rejectTextarea}
-                              rows={3}
-                              value={rejectReason}
-                              onChange={(e) => setRejectReason(e.target.value)}
-                              placeholder="Explain why this request is being rejected..."
-                              autoFocus
-                            />
-                            <div className={styles.decisionActions}>
-                              <button type="button" className={styles.cancelRejectBtn} onClick={() => setRejecting(false)} disabled={deciding}>
-                                Cancel
-                              </button>
-                              <button
-                                type="button"
-                                className={styles.rejectBtn}
-                                onClick={() => void handleReject()}
-                                disabled={deciding || !rejectReason.trim()}
-                              >
-                                {deciding ? 'Rejecting…' : 'Confirm Reject'}
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </section>
-                    )}
                   </div>
                 ) : null}
               </div>
+
+              {/*
+                Sticky action footer — outside the scrollable tabBody so Approve/Reject are
+                always visible at the bottom of the drawer regardless of scroll position.
+                Layout mirrors the screenshot: "Edit" chip on the left, Reject + Approve on the right.
+                Row-level check (isMyDecisionToMake) instead of PermissionGate — an admin who isn't
+                the specific assigned checker must not see actionable buttons on someone else's request.
+              */}
+              {isMyDecisionToMake && detail && (
+                <div className={styles.detailFooter}>
+                  {!rejecting ? (
+                    <div className={styles.footerActions}>
+                      <span className={styles.footerEditLabel}>Edit</span>
+                      <div className={styles.footerBtns}>
+                        <button
+                          type="button"
+                          className={styles.rejectBtn}
+                          onClick={() => setRejecting(true)}
+                          disabled={deciding}
+                        >
+                          <Icon.X width={15} height={15} />
+                          <span>Reject</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.approveBtn}
+                          onClick={() => void handleApprove()}
+                          disabled={deciding}
+                        >
+                          <Icon.CheckCircle width={15} height={15} />
+                          <span>{deciding ? 'Approving…' : 'Approve'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className={styles.rejectFormFooter}>
+                      <label className={styles.label}>Rejection reason</label>
+                      <textarea
+                        className={styles.rejectTextarea}
+                        rows={3}
+                        value={rejectReason}
+                        onChange={(e) => setRejectReason(e.target.value)}
+                        placeholder="Explain why this request is being rejected..."
+                        autoFocus
+                      />
+                      <div className={styles.footerBtns}>
+                        <button
+                          type="button"
+                          className={styles.cancelRejectBtn}
+                          onClick={() => setRejecting(false)}
+                          disabled={deciding}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.rejectBtn}
+                          onClick={() => void handleReject()}
+                          disabled={deciding || !rejectReason.trim()}
+                        >
+                          {deciding ? 'Rejecting…' : 'Confirm Reject'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

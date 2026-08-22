@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useAuthStore } from '../../features/auth/store/authStore'
 import {
   usersApi,
@@ -10,6 +10,7 @@ import { isApprovalPending, type ApprovalPendingDto } from '../../features/appro
 import { remoteAppsApi, type RemoteAppDto } from '../../features/settings-applications/api/remoteAppsApi'
 import { permissionsApi, type PermissionFeatureDto } from '../../shared/api/permissionsApi'
 import { useSettingsDrawerStore } from '../../shared/stores/settingsDrawerStore'
+import { useClickOutside } from '../../shared/hooks/useClickOutside'
 import { Icon } from '../../shared/components/Icon/Icon'
 import { Switch } from '../../shared/components/Switch/Switch'
 import { SkeletonBlock } from '../../shared/components/Skeleton'
@@ -32,6 +33,94 @@ import {
   pairId,
 } from '../../shared/permissions/catalog'
 import styles from './UserFormLayer.module.css'
+
+export interface CountryPhoneConfig {
+  code: string
+  name: string
+  dialCode: string
+  flag: string
+  placeholder: string
+  minDigits: number
+  maxDigits: number
+}
+
+export const COUNTRY_PHONE_LIST: CountryPhoneConfig[] = [
+  { code: 'IN', name: 'India', dialCode: '+91', flag: '🇮🇳', placeholder: '98765 43210', minDigits: 10, maxDigits: 10 },
+  { code: 'US', name: 'United States', dialCode: '+1', flag: '🇺🇸', placeholder: '(555) 000-0000', minDigits: 10, maxDigits: 10 },
+  { code: 'GB', name: 'United Kingdom', dialCode: '+44', flag: '🇬🇧', placeholder: '7911 123456', minDigits: 10, maxDigits: 11 },
+  { code: 'AE', name: 'United Arab Emirates', dialCode: '+971', flag: '🇦🇪', placeholder: '50 123 4567', minDigits: 9, maxDigits: 9 },
+  { code: 'CA', name: 'Canada', dialCode: '+1', flag: '🇨🇦', placeholder: '(555) 000-0000', minDigits: 10, maxDigits: 10 },
+  { code: 'AU', name: 'Australia', dialCode: '+61', flag: '🇦🇺', placeholder: '412 345 678', minDigits: 9, maxDigits: 9 },
+  { code: 'SG', name: 'Singapore', dialCode: '+65', flag: '🇸🇬', placeholder: '8123 4567', minDigits: 8, maxDigits: 8 },
+  { code: 'DE', name: 'Germany', dialCode: '+49', flag: '🇩🇪', placeholder: '151 23456789', minDigits: 10, maxDigits: 11 },
+  { code: 'FR', name: 'France', dialCode: '+33', flag: '🇫🇷', placeholder: '6 12 34 56 78', minDigits: 9, maxDigits: 9 },
+  { code: 'SA', name: 'Saudi Arabia', dialCode: '+966', flag: '🇸🇦', placeholder: '50 123 4567', minDigits: 9, maxDigits: 9 },
+  { code: 'QA', name: 'Qatar', dialCode: '+974', flag: '🇶🇦', placeholder: '3312 3456', minDigits: 8, maxDigits: 8 },
+  { code: 'PH', name: 'Philippines', dialCode: '+63', flag: '🇵🇭', placeholder: '917 123 4567', minDigits: 10, maxDigits: 10 },
+  { code: 'NP', name: 'Nepal', dialCode: '+977', flag: '🇳🇵', placeholder: '9812345678', minDigits: 10, maxDigits: 10 },
+  { code: 'BD', name: 'Bangladesh', dialCode: '+880', flag: '🇧🇩', placeholder: '1712 345678', minDigits: 10, maxDigits: 10 },
+  { code: 'MY', name: 'Malaysia', dialCode: '+60', flag: '🇲🇾', placeholder: '12 345 6789', minDigits: 9, maxDigits: 10 },
+  { code: 'JP', name: 'Japan', dialCode: '+81', flag: '🇯🇵', placeholder: '90 1234 5678', minDigits: 10, maxDigits: 10 },
+  { code: 'NG', name: 'Nigeria', dialCode: '+234', flag: '🇳🇬', placeholder: '802 123 4567', minDigits: 10, maxDigits: 10 },
+  { code: 'KE', name: 'Kenya', dialCode: '+254', flag: '🇰🇪', placeholder: '712 345678', minDigits: 9, maxDigits: 9 },
+  { code: 'ZA', name: 'South Africa', dialCode: '+27', flag: '🇿🇦', placeholder: '82 123 4567', minDigits: 9, maxDigits: 9 },
+  { code: 'BR', name: 'Brazil', dialCode: '+55', flag: '🇧🇷', placeholder: '11 91234-5678', minDigits: 10, maxDigits: 11 },
+  { code: 'MX', name: 'Mexico', dialCode: '+52', flag: '🇲🇽', placeholder: '55 1234 5678', minDigits: 10, maxDigits: 10 },
+  { code: 'CN', name: 'China', dialCode: '+86', flag: '🇨🇳', placeholder: '138 0013 8000', minDigits: 11, maxDigits: 11 },
+  { code: 'HK', name: 'Hong Kong', dialCode: '+852', flag: '🇭🇰', placeholder: '9123 4567', minDigits: 8, maxDigits: 8 },
+  { code: 'ID', name: 'Indonesia', dialCode: '+62', flag: '🇮🇩', placeholder: '812 3456 7890', minDigits: 9, maxDigits: 12 },
+  { code: 'PK', name: 'Pakistan', dialCode: '+92', flag: '🇵🇰', placeholder: '300 1234567', minDigits: 10, maxDigits: 10 },
+  { code: 'LK', name: 'Sri Lanka', dialCode: '+94', flag: '🇱🇰', placeholder: '71 234 5678', minDigits: 9, maxDigits: 9 },
+  { code: 'CH', name: 'Switzerland', dialCode: '+41', flag: '🇨🇭', placeholder: '78 123 45 67', minDigits: 9, maxDigits: 9 },
+  { code: 'NL', name: 'Netherlands', dialCode: '+31', flag: '🇳🇱', placeholder: '6 12345678', minDigits: 9, maxDigits: 9 },
+  { code: 'SE', name: 'Sweden', dialCode: '+46', flag: '🇸🇪', placeholder: '70 123 45 67', minDigits: 9, maxDigits: 9 },
+  { code: 'IE', name: 'Ireland', dialCode: '+353', flag: '🇮🇪', placeholder: '85 123 4567', minDigits: 9, maxDigits: 9 },
+  { code: 'NZ', name: 'New Zealand', dialCode: '+64', flag: '🇳🇿', placeholder: '21 123 4567', minDigits: 8, maxDigits: 10 },
+  { code: 'ES', name: 'Spain', dialCode: '+34', flag: '🇪🇸', placeholder: '612 345 678', minDigits: 9, maxDigits: 9 },
+  { code: 'IT', name: 'Italy', dialCode: '+39', flag: '🇮🇹', placeholder: '312 345 6789', minDigits: 10, maxDigits: 10 },
+  { code: 'PT', name: 'Portugal', dialCode: '+351', flag: '🇵🇹', placeholder: '912 345 678', minDigits: 9, maxDigits: 9 },
+  { code: 'PL', name: 'Poland', dialCode: '+48', flag: '🇵🇱', placeholder: '512 345 678', minDigits: 9, maxDigits: 9 },
+]
+
+function parsePhoneNumber(rawPhone: string): { countryCode: string; nationalNumber: string } {
+  if (!rawPhone) return { countryCode: 'IN', nationalNumber: '' }
+  const trimmed = rawPhone.trim()
+  const sorted = [...COUNTRY_PHONE_LIST].sort((a, b) => b.dialCode.length - a.dialCode.length)
+  for (const c of sorted) {
+    if (trimmed.startsWith(c.dialCode)) {
+      const num = trimmed.slice(c.dialCode.length).trim()
+      return { countryCode: c.code, nationalNumber: num }
+    }
+  }
+  return { countryCode: 'IN', nationalNumber: trimmed.replace(/^\+91\s*/, '') }
+}
+
+function validateCountryPhone(
+  national: string | null | undefined,
+  country: CountryPhoneConfig,
+): string | undefined {
+  if (national == null || national.trim() === '') {
+    return 'Phone number is required.'
+  }
+  const trimmed = national.trim()
+  if (!/^[0-9\s()\-.]+$/.test(trimmed)) {
+    return 'Phone number may contain only digits and formatting characters.'
+  }
+  const digits = trimmed.replace(/\D/g, '').length
+  if (digits === 0) {
+    return 'Phone number is required.'
+  }
+  if (country.minDigits === country.maxDigits) {
+    if (digits !== country.minDigits) {
+      return `${country.name} phone number requires exactly ${country.minDigits} digits (${digits} entered).`
+    }
+  } else {
+    if (digits < country.minDigits || digits > country.maxDigits) {
+      return `${country.name} phone number must be between ${country.minDigits} and ${country.maxDigits} digits (${digits} entered).`
+    }
+  }
+  return undefined
+}
 
 interface UserFormLayerProps {
   userId?: string
@@ -59,9 +148,45 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
   // Step 1: Basic Fields
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
-  const [phoneNumber, setPhoneNumber] = useState('')
+  const [selectedCountryCode, setSelectedCountryCode] = useState('IN')
+  const [countryDropdownOpen, setCountryDropdownOpen] = useState(false)
+  const [countrySearch, setCountrySearch] = useState('')
+  const [nationalPhone, setNationalPhone] = useState('')
   const [roleId, setRoleId] = useState<string>('')
   const [isActive, setIsActive] = useState(true)
+
+  const [roleDropdownOpen, setRoleDropdownOpen] = useState(false)
+  const [roleSearch, setRoleSearch] = useState('')
+  const [customerType, setCustomerType] = useState<'individual' | 'corporate' | 'staff'>('individual')
+
+  const countryDropdownRef = useRef<HTMLDivElement>(null)
+  useClickOutside([countryDropdownRef], () => setCountryDropdownOpen(false), countryDropdownOpen)
+
+  const roleDropdownRef = useRef<HTMLDivElement>(null)
+  useClickOutside([roleDropdownRef], () => setRoleDropdownOpen(false), roleDropdownOpen)
+
+  const filteredCountries = useMemo(() => {
+    if (!countrySearch.trim()) return COUNTRY_PHONE_LIST
+    const q = countrySearch.toLowerCase().trim()
+    return COUNTRY_PHONE_LIST.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        c.code.toLowerCase().includes(q) ||
+        c.dialCode.toLowerCase().includes(q) ||
+        c.dialCode.replace('+', '').includes(q),
+    )
+  }, [countrySearch])
+
+  const filteredRoles = useMemo(() => {
+    if (!roleSearch.trim()) return roles
+    const q = roleSearch.toLowerCase().trim()
+    return roles.filter(
+      (r) =>
+        r.name.toLowerCase().includes(q) ||
+        (r.description && r.description.toLowerCase().includes(q)) ||
+        (r.isAdministrator && 'administrator admin'.includes(q)),
+    )
+  }, [roles, roleSearch])
 
   // Step 2: Permissions state
   const [rolePermissions, setRolePermissions] = useState<Set<string>>(new Set())
@@ -178,7 +303,9 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
           if (cancelled) return
           setName(userRes.name)
           setEmail(userRes.email)
-          setPhoneNumber(userRes.phoneNumber ?? '')
+          const parsed = parsePhoneNumber(userRes.phoneNumber ?? '')
+          setSelectedCountryCode(parsed.countryCode)
+          setNationalPhone(parsed.nationalNumber)
           setRoleId(userRes.roleId ?? '')
           setIsActive(userRes.isActive)
 
@@ -216,6 +343,15 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
   const selectedRole = useMemo(() => {
     return roles.find((r) => r.id === roleId)
   }, [roles, roleId])
+
+  const selectedCountry = useMemo(() => {
+    return COUNTRY_PHONE_LIST.find((c) => c.code === selectedCountryCode) || COUNTRY_PHONE_LIST[0]
+  }, [selectedCountryCode])
+
+  const fullPhoneNumber = useMemo(() => {
+    if (!nationalPhone.trim()) return ''
+    return `${selectedCountry.dialCode} ${nationalPhone.trim()}`
+  }, [selectedCountry.dialCode, nationalPhone])
 
   // When changing role, pre-populate with the newly selected role's permissions
   const handleRoleChange = async (newRoleId: string) => {
@@ -322,9 +458,9 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
    * it while the cursor is still in it.
    */
   const fieldErrors: FieldErrors<'name' | 'email' | 'phoneNumber'> = {
-    name: firstError(required(name, 'Name'), maxLength(name, LIMITS.userName, 'Name')),
-    email: firstError(required(email, 'Email'), emailRule(email), maxLength(email, LIMITS.email, 'Email')),
-    phoneNumber: firstError(phoneRule(phoneNumber), maxLength(phoneNumber, LIMITS.phone, 'Phone number')),
+    name: firstError(required(name, 'Full name'), maxLength(name, LIMITS.userName, 'Full name')),
+    email: firstError(required(email, 'Email address'), emailRule(email), maxLength(email, LIMITS.email, 'Email address')),
+    phoneNumber: firstError(validateCountryPhone(nationalPhone, selectedCountry)),
   }
 
   // Shown once a field is visited or a submit attempted, so the form does not greet the user in red.
@@ -371,6 +507,10 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
 
     try {
       const token = await ensureFreshAccessToken()
+      const payloadPhoneNumber = nationalPhone.trim()
+        ? `${selectedCountry.dialCode} ${nationalPhone.trim()}`
+        : null
+
       if (isEdit && userId) {
         // Core fields and Extra Permissions travel in ONE call now — a checker reviews and approves
         // both together, and approval actually applies both (previously the overrides half was a
@@ -379,9 +519,9 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
           token,
           userId,
           {
-            name,
-            email,
-            phoneNumber: phoneNumber || null,
+            name: name.trim(),
+            email: email.trim(),
+            phoneNumber: payloadPhoneNumber,
             roleId: roleId || null,
             // The toggle's value now actually reaches the server; it was previously dropped here.
             isActive,
@@ -406,9 +546,9 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
         const res = await usersApi.create(
           token,
           {
-            name,
-            email,
-            phoneNumber: phoneNumber || null,
+            name: name.trim(),
+            email: email.trim(),
+            phoneNumber: payloadPhoneNumber,
             roleId: roleId || null,
             isActive,
           },
@@ -514,7 +654,7 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
       <div className={styles.header}>
         <div className={styles.headerTitleWrap}>
           <div className={styles.headerIconBox}>
-            <Icon.Users width={20} height={20} />
+            <Icon.Users width={17} height={17} />
           </div>
           <div>
             <h2 className={styles.title}>{isEdit ? 'Edit User Account' : 'Create New User'}</h2>
@@ -531,40 +671,46 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
           onClick={popLayer}
           aria-label="Close"
         >
-          <Icon.X width={20} height={20} />
+          <Icon.X width={16} height={16} />
         </button>
       </div>
 
       {/* Modern Stepper Progress Navigation */}
       {!createdResult && !pendingApproval && (
         <div className={styles.stepperContainer}>
+          {/* Step 1: Basic */}
           <button
             type="button"
-            className={`${styles.stepTab} ${currentStep === 'basic' ? styles.stepTabActive : ''} ${name && email ? styles.stepTabDone : ''}`}
+            className={`${styles.stepTab} ${currentStep === 'basic' ? styles.stepTabActive : ''} ${currentStep !== 'basic' ? styles.stepTabDone : ''}`}
             onClick={() => setCurrentStep('basic')}
           >
             <div className={styles.stepBadge}>
-              {name && email && currentStep !== 'basic' ? (
-                <Icon.CheckCircle width={14} height={14} className={styles.stepCheckIcon} />
+              {currentStep !== 'basic' ? (
+                <Icon.CheckCircle width={13} height={13} className={styles.stepCheckIcon} />
               ) : (
                 <span>1</span>
               )}
             </div>
             <div className={styles.stepTabText}>
               <span className={styles.stepTitle}>Basic Details</span>
-              <span className={styles.stepDesc}>Name, Email & Role</span>
+              <span className={styles.stepDesc}>Name, Email &amp; Role</span>
             </div>
           </button>
 
-          <div className={styles.stepperLine} />
+          <div className={`${styles.stepperLine} ${currentStep !== 'basic' ? styles.stepperLineDone : ''}`} />
 
+          {/* Step 2: Permissions */}
           <button
             type="button"
-            className={`${styles.stepTab} ${currentStep === 'permissions' ? styles.stepTabActive : ''}`}
+            className={`${styles.stepTab} ${currentStep === 'permissions' ? styles.stepTabActive : ''} ${currentStep === 'review' ? styles.stepTabDone : ''}`}
             onClick={() => attemptJumpTo('permissions')}
           >
             <div className={styles.stepBadge}>
-              <span>2</span>
+              {currentStep === 'review' ? (
+                <Icon.CheckCircle width={13} height={13} className={styles.stepCheckIcon} />
+              ) : (
+                <span>2</span>
+              )}
             </div>
             <div className={styles.stepTabText}>
               <span className={styles.stepTitle}>Extra Permissions</span>
@@ -576,8 +722,9 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
             </div>
           </button>
 
-          <div className={styles.stepperLine} />
+          <div className={`${styles.stepperLine} ${currentStep === 'review' ? styles.stepperLineDone : ''}`} />
 
+          {/* Step 3: Review */}
           <button
             type="button"
             className={`${styles.stepTab} ${currentStep === 'review' ? styles.stepTabActive : ''}`}
@@ -587,7 +734,7 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
               <span>3</span>
             </div>
             <div className={styles.stepTabText}>
-              <span className={styles.stepTitle}>Review & Save</span>
+              <span className={styles.stepTitle}>Review &amp; Save</span>
               <span className={styles.stepDesc}>Final Confirmation</span>
             </div>
           </button>
@@ -659,7 +806,7 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
                         <input
                           type="text"
                           className={`${styles.inputWithIcon} ${showError('name') ? styles.inputInvalid : ''}`}
-                          placeholder="e.g. Uday Chauhan"
+                          placeholder="e.g. Jane Smith"
                           value={name}
                           maxLength={LIMITS.userName}
                           aria-invalid={Boolean(showError('name'))}
@@ -684,7 +831,7 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
                         <input
                           type="email"
                           className={`${styles.inputWithIcon} ${showError('email') ? styles.inputInvalid : ''}`}
-                          placeholder="e.g. uday@example.com"
+                          placeholder="e.g. jane.smith@example.com"
                           value={email}
                           maxLength={LIMITS.email}
                           aria-invalid={Boolean(showError('email'))}
@@ -705,19 +852,94 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
                       <label className={styles.label}>
                         Phone Number <span className={styles.req}>*</span>
                       </label>
-                      <div className={styles.inputIconWrap}>
-                        <input
-                          type="tel"
-                          className={`${styles.inputWithIcon} ${showError('phoneNumber') ? styles.inputInvalid : ''}`}
-                          placeholder="e.g. +91 98765 43210"
-                          value={phoneNumber}
-                          maxLength={LIMITS.phone}
-                          aria-invalid={Boolean(showError('phoneNumber'))}
-                          aria-describedby={showError('phoneNumber') ? 'user-phone-error' : undefined}
-                          onChange={(e) => setPhoneNumber(e.target.value)}
-                          onBlur={() => setTouched((t) => ({ ...t, phoneNumber: true }))}
-                        />
-                        <Icon.Activity width={16} height={16} className={styles.fieldLeftIcon} />
+                      <div className={styles.phoneInputRow}>
+                        {/* Custom Searchable Country Code Dropdown */}
+                        <div className={styles.countryPickerWrap} ref={countryDropdownRef}>
+                          <button
+                            type="button"
+                            className={`${styles.countryPickerTrigger} ${countryDropdownOpen ? styles.countryPickerTriggerOpen : ''}`}
+                            onClick={() => {
+                              setCountryDropdownOpen(!countryDropdownOpen)
+                              if (!countryDropdownOpen) setCountrySearch('')
+                            }}
+                            aria-haspopup="listbox"
+                            aria-expanded={countryDropdownOpen}
+                            aria-label={`Selected country: ${selectedCountry.name}, code ${selectedCountry.dialCode}`}
+                          >
+                            <div className={styles.countryTriggerLeft}>
+                              <span>{selectedCountry.flag}</span>
+                              <span className={styles.countryTriggerDial}>{selectedCountry.dialCode}</span>
+                            </div>
+                            <Icon.ChevronDown
+                              width={12}
+                              height={12}
+                              className={`${styles.triggerChevron} ${countryDropdownOpen ? styles.triggerChevronOpen : ''}`}
+                            />
+                          </button>
+
+                          {countryDropdownOpen && (
+                            <div className={styles.countryDropdownMenu} role="listbox">
+                              <div className={styles.dropdownSearchWrap}>
+                                <input
+                                  type="text"
+                                  className={styles.dropdownSearchInput}
+                                  placeholder="Search country or code..."
+                                  value={countrySearch}
+                                  onChange={(e) => setCountrySearch(e.target.value)}
+                                  autoFocus
+                                />
+                                <Icon.Search width={12} height={12} className={styles.dropdownSearchIcon} />
+                              </div>
+
+                              <div className={styles.dropdownItemsList}>
+                                {filteredCountries.length === 0 ? (
+                                  <div className={styles.dropdownEmpty}>No countries match &quot;{countrySearch}&quot;</div>
+                                ) : (
+                                  filteredCountries.map((c) => {
+                                    const isSelected = c.code === selectedCountryCode
+                                    return (
+                                      <div
+                                        key={c.code}
+                                        className={`${styles.dropdownItem} ${isSelected ? styles.dropdownItemSelected : ''}`}
+                                        role="option"
+                                        aria-selected={isSelected}
+                                        onClick={() => {
+                                          setSelectedCountryCode(c.code)
+                                          setCountryDropdownOpen(false)
+                                          setCountrySearch('')
+                                          setTouched((t) => ({ ...t, phoneNumber: true }))
+                                        }}
+                                      >
+                                        <div className={styles.dropdownItemLeft}>
+                                          <span>{c.flag}</span>
+                                          <span className={styles.dropdownItemName} title={c.name}>
+                                            {c.name}
+                                          </span>
+                                        </div>
+                                        <span className={styles.dropdownItemDial}>{c.dialCode}</span>
+                                      </div>
+                                    )
+                                  })
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className={styles.nationalPhoneWrap}>
+                          <input
+                            type="tel"
+                            className={`${styles.inputWithIcon} ${showError('phoneNumber') ? styles.inputInvalid : ''}`}
+                            placeholder={`e.g. ${selectedCountry.placeholder}`}
+                            value={nationalPhone}
+                            maxLength={LIMITS.phone}
+                            aria-invalid={Boolean(showError('phoneNumber'))}
+                            aria-describedby={showError('phoneNumber') ? 'user-phone-error' : undefined}
+                            onChange={(e) => setNationalPhone(e.target.value)}
+                            onBlur={() => setTouched((t) => ({ ...t, phoneNumber: true }))}
+                          />
+                          <Icon.Activity width={16} height={16} className={styles.fieldLeftIcon} />
+                        </div>
                       </div>
                       {showError('phoneNumber') && (
                         <span id="user-phone-error" className={styles.fieldError} role="alert">
@@ -729,24 +951,165 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
                 </div>
 
                 <div className={styles.formCard}>
-                  <h4 className={styles.formCardTitle}>Role & Account Status</h4>
+                  <h4 className={styles.formCardTitle}>Role & Customer Classification</h4>
                   <div className={styles.fieldsGrid}>
+                    {/* Customer / Account Type Picker */}
+                    <div className={styles.inputGroupFull}>
+                      <label className={styles.label}>Customer / Account Classification</label>
+                      <div className={styles.customerTypeGrid}>
+                        <div
+                          className={`${styles.customerTypeCard} ${customerType === 'individual' ? styles.customerTypeCardActive : ''}`}
+                          onClick={() => setCustomerType('individual')}
+                          role="button"
+                          tabIndex={0}
+                        >
+                          <div className={styles.customerTypeIconBox}>
+                            <Icon.Users width={14} height={14} />
+                          </div>
+                          <span className={styles.customerTypeTitle}>Individual</span>
+                          <span className={styles.customerTypeSubtitle}>Retail / Personal</span>
+                        </div>
+
+                        <div
+                          className={`${styles.customerTypeCard} ${customerType === 'corporate' ? styles.customerTypeCardActive : ''}`}
+                          onClick={() => setCustomerType('corporate')}
+                          role="button"
+                          tabIndex={0}
+                        >
+                          <div className={styles.customerTypeIconBox}>
+                            <Icon.FileText width={14} height={14} />
+                          </div>
+                          <span className={styles.customerTypeTitle}>Corporate</span>
+                          <span className={styles.customerTypeSubtitle}>Non-Individual / Org</span>
+                        </div>
+
+                        <div
+                          className={`${styles.customerTypeCard} ${customerType === 'staff' ? styles.customerTypeCardActive : ''}`}
+                          onClick={() => setCustomerType('staff')}
+                          role="button"
+                          tabIndex={0}
+                        >
+                          <div className={styles.customerTypeIconBox}>
+                            <Icon.Shield width={14} height={14} />
+                          </div>
+                          <span className={styles.customerTypeTitle}>Internal Staff</span>
+                          <span className={styles.customerTypeSubtitle}>Platform Operator</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Searchable Role Dropdown */}
                     <div className={styles.inputGroupFull}>
                       <label className={styles.label}>Assigned System Role</label>
-                      <select
-                        className={styles.select}
-                        value={roleId}
-                        onChange={(e) => void handleRoleChange(e.target.value)}
-                      >
-                        <option value="">-- No Role (Inherit Standard Access) --</option>
-                        {roles.map((r) => (
-                          <option key={r.id} value={r.id}>
-                            {r.name} {r.isAdministrator ? '(Full Administrator)' : ''}
-                          </option>
-                        ))}
-                      </select>
+                      <div className={styles.roleDropdownWrap} ref={roleDropdownRef}>
+                        <button
+                          type="button"
+                          className={`${styles.rolePickerTrigger} ${roleDropdownOpen ? styles.rolePickerTriggerOpen : ''}`}
+                          onClick={() => {
+                            setRoleDropdownOpen(!roleDropdownOpen)
+                            if (!roleDropdownOpen) setRoleSearch('')
+                          }}
+                          aria-haspopup="listbox"
+                          aria-expanded={roleDropdownOpen}
+                        >
+                          <div className={styles.roleTriggerLeft}>
+                            {selectedRole ? (
+                              <>
+                                <Icon.ShieldCheck width={15} height={15} style={{ color: '#2563eb', flexShrink: 0 }} />
+                                <span className={styles.roleTriggerName}>{selectedRole.name}</span>
+                                {selectedRole.isAdministrator && (
+                                  <span className={styles.roleTriggerBadge}>Full Admin</span>
+                                )}
+                              </>
+                            ) : (
+                              <span className={styles.triggerPlaceholder}>-- No Role (Inherit Standard Access) --</span>
+                            )}
+                          </div>
+                          <Icon.ChevronDown
+                            width={13}
+                            height={13}
+                            className={`${styles.triggerChevron} ${roleDropdownOpen ? styles.triggerChevronOpen : ''}`}
+                          />
+                        </button>
+
+                        {roleDropdownOpen && (
+                          <div className={styles.roleDropdownMenu} role="listbox">
+                            <div className={styles.dropdownSearchWrap}>
+                              <input
+                                type="text"
+                                className={styles.dropdownSearchInput}
+                                placeholder="Type to search roles..."
+                                value={roleSearch}
+                                onChange={(e) => setRoleSearch(e.target.value)}
+                                autoFocus
+                              />
+                              <Icon.Search width={12} height={12} className={styles.dropdownSearchIcon} />
+                            </div>
+
+                            <div className={styles.dropdownItemsList}>
+                              {/* Option for No Role */}
+                              <div
+                                className={`${styles.dropdownItem} ${!roleId ? styles.dropdownItemSelected : ''}`}
+                                role="option"
+                                aria-selected={!roleId}
+                                onClick={() => {
+                                  void handleRoleChange('')
+                                  setRoleDropdownOpen(false)
+                                  setRoleSearch('')
+                                }}
+                              >
+                                <div className={styles.dropdownItemLeft}>
+                                  <span className={styles.dropdownName}>-- No Role (Inherit Standard Access) --</span>
+                                </div>
+                                {!roleId && (
+                                  <Icon.CheckCircle width={14} height={14} className={styles.dropdownCheckIcon} />
+                                )}
+                              </div>
+
+                              {filteredRoles.length === 0 ? (
+                                <div className={styles.dropdownEmpty}>No roles match &quot;{roleSearch}&quot;</div>
+                              ) : (
+                                filteredRoles.map((r) => {
+                                  const isSelected = r.id === roleId
+                                  return (
+                                    <div
+                                      key={r.id}
+                                      className={`${styles.dropdownItem} ${isSelected ? styles.dropdownItemSelected : ''}`}
+                                      role="option"
+                                      aria-selected={isSelected}
+                                      onClick={() => {
+                                        void handleRoleChange(r.id)
+                                        setRoleDropdownOpen(false)
+                                        setRoleSearch('')
+                                      }}
+                                    >
+                                      <div className={styles.roleItemInfo}>
+                                        <div className={styles.roleItemHeader}>
+                                          <span className={styles.roleItemName}>{r.name}</span>
+                                          {r.isAdministrator && (
+                                            <span className={styles.roleTriggerBadge}>Full Admin</span>
+                                          )}
+                                        </div>
+                                        {r.description && (
+                                          <span className={styles.roleItemDesc} title={r.description}>
+                                            {r.description}
+                                          </span>
+                                        )}
+                                      </div>
+                                      {isSelected && (
+                                        <Icon.CheckCircle width={14} height={14} className={styles.dropdownCheckIcon} />
+                                      )}
+                                    </div>
+                                  )
+                                })
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
                       {selectedRole?.isAdministrator && (
-                        <div className={styles.adminRoleNotice}>
+                        <div className={styles.adminRoleNotice} style={{ marginTop: '8px' }}>
                           <Icon.ShieldCheck width={16} height={16} />
                           <span>This user will have full unrestricted Administrator capabilities across all applications.</span>
                         </div>
@@ -1095,8 +1458,18 @@ export function UserFormLayer({ userId }: UserFormLayerProps) {
 
                   <div className={styles.reviewMetaList}>
                     <div className={styles.reviewMetaItem}>
+                      <span className={styles.reviewMetaLabel}>Customer / Account Type</span>
+                      <span className={styles.reviewMetaVal}>
+                        {customerType === 'individual'
+                          ? 'Individual (Retail)'
+                          : customerType === 'corporate'
+                            ? 'Corporate (Non-Individual)'
+                            : 'Internal Staff'}
+                      </span>
+                    </div>
+                    <div className={styles.reviewMetaItem}>
                       <span className={styles.reviewMetaLabel}>Phone Number</span>
-                      <span className={styles.reviewMetaVal}>{phoneNumber || 'None provided'}</span>
+                      <span className={styles.reviewMetaVal}>{fullPhoneNumber || 'None provided'}</span>
                     </div>
                     <div className={styles.reviewMetaItem}>
                       <span className={styles.reviewMetaLabel}>Administrator Privileges</span>

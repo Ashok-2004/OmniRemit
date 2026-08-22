@@ -25,11 +25,97 @@ const ACTION_LABELS: Record<string, string> = {
   Disable: 'Disable',
 }
 
-function formatTimestamp(iso: string | null) {
+const ACTION_ICONS: Record<string, typeof Icon.User> = {
+  Create: Icon.Plus,
+  Update: Icon.Edit,
+  Delete: Icon.Trash,
+  Enable: Icon.CheckCircle,
+  Disable: Icon.X,
+}
+
+const SHORT_MODULE_MAP: Record<string, string> = {
+  'host.settings.users': 'User',
+  'settings.users': 'User',
+  'setup-user': 'User',
+  'setup-users': 'User',
+  'setup_user': 'User',
+  'setup_users': 'User',
+  'users': 'User',
+  'user': 'User',
+  'user management': 'User',
+  'host.settings.roles': 'Role',
+  'settings.roles': 'Role',
+  'setup-role': 'Role',
+  'setup-roles': 'Role',
+  'setup_role': 'Role',
+  'setup_roles': 'Role',
+  'roles': 'Role',
+  'role': 'Role',
+  'roles & permissions': 'Role',
+  'host.settings.applications': 'App',
+  'settings.applications': 'App',
+  'setup-application': 'App',
+  'setup-applications': 'App',
+  'applications': 'App',
+  'application': 'App',
+  'apps': 'App',
+  'app': 'App',
+  'host.settings.fields': 'Field',
+  'settings.fields': 'Field',
+  'setup-field': 'Field',
+  'fields': 'Field',
+  'field': 'Field',
+  'host.settings.security': 'Security',
+  'settings.security': 'Security',
+  'security': 'Security',
+  'host.settings.audit': 'Audit',
+  'settings.audit': 'Audit',
+  'audit': 'Audit',
+  'audit.logs': 'Audit',
+  'system.audit': 'Audit',
+  'lead.management': 'Lead',
+  'lead_management': 'Lead',
+  'lead': 'Lead',
+  'leads': 'Lead',
+  'setup-lead': 'Lead',
+  'setup_lead': 'Lead',
+  'remittance': 'Remittance',
+  'remittance.transactions': 'Transaction',
+  'transactions': 'Transaction',
+  'transaction': 'Transaction',
+  'checker.assignments': 'Checker',
+  'checker': 'Checker',
+}
+
+function humanizeKey(key: string): string {
+  return key.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/^./, (c) => c.toUpperCase())
+}
+
+function formatModuleName(rawModule: string | null | undefined): string {
+  if (!rawModule) return '—'
+  const normalized = rawModule.toLowerCase().trim()
+  if (SHORT_MODULE_MAP[normalized]) return SHORT_MODULE_MAP[normalized]
+  
+  let cleaned = rawModule
+    .replace(/^host\.settings\./i, '')
+    .replace(/^settings\./i, '')
+    .replace(/^setup[-_]/i, '')
+
+  if (cleaned.includes('.')) {
+    const parts = cleaned.split('.').filter(Boolean)
+    cleaned = parts[parts.length - 1] ?? cleaned
+  }
+
+  cleaned = cleaned.replace(/[-_]management$/i, '').replace(/[-_]settings$/i, '')
+  const result = humanizeKey(cleaned.replace(/[-_]/g, ' ')).trim()
+  return SHORT_MODULE_MAP[result.toLowerCase()] ?? result
+}
+
+function formatDateOnly(iso: string | null | undefined) {
   if (!iso) return '—'
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return iso
-  return date.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 const FILTERS: { key: ApprovalStatus | 'all'; label: string }[] = [
@@ -154,34 +240,51 @@ export function MyRequestsPage() {
                 </td>
               </tr>
             ) : (
-              items.map((r) => (
-                <tr key={r.id}>
-                  <td className={styles.timeCell}>{formatTimestamp(r.requestedAt)}</td>
-                  <td><Badge tone="info">{r.module}</Badge></td>
-                  <td>{ACTION_LABELS[r.action] ?? r.action}</td>
-                  <td>{r.entityLabel ?? <span className={styles.mutedText}>—</span>}</td>
-                  <td>{r.checkerName ?? <span className={styles.mutedText}>Unassigned</span>}</td>
-                  <td><Badge tone={STATUS_TONES[r.status]} dot>{r.status}</Badge></td>
-                  <td>
-                    {r.hasTempPassword && !collectedIds.has(r.id) ? (
-                      <button
-                        type="button"
-                        className={styles.revealBtn}
-                        disabled={revealing === r.id}
-                        onClick={() => handleReveal(r.id)}
-                      >
-                        <Icon.Lock width={13} height={13} />
-                        <span>{revealing === r.id ? 'Retrieving…' : 'Get password'}</span>
-                      </button>
-                    ) : (
-                      <span className={styles.mutedText}>—</span>
-                    )}
-                  </td>
-                  <td className={styles.reasonCell}>
-                    {r.rejectionReason ?? <span className={styles.mutedText}>—</span>}
-                  </td>
-                </tr>
-              ))
+              items.map((r) => {
+                const ActionIcon = ACTION_ICONS[r.action] ?? Icon.Edit
+                return (
+                  <tr key={r.id}>
+                    <td className={styles.timeCell}>{formatDateOnly(r.requestedAt)}</td>
+                    <td><Badge tone="info">{formatModuleName(r.module)}</Badge></td>
+                    <td>
+                      <span className={`${styles.actionCell} ${styles[`action_${r.action}`] ?? ''}`}>
+                        <ActionIcon width={12} height={12} />
+                        <span>{ACTION_LABELS[r.action] ?? r.action}</span>
+                      </span>
+                    </td>
+                    <td>{r.entityLabel ? <span className={styles.entityLabel}>{r.entityLabel}</span> : <span className={styles.mutedText}>—</span>}</td>
+                    <td>
+                      {r.checkerName ? (
+                        <div className={styles.actorCell}>
+                          <span className={styles.checkerAvatar}>{r.checkerName.charAt(0).toUpperCase()}</span>
+                          <span className={styles.actorName}>{r.checkerName}</span>
+                        </div>
+                      ) : (
+                        <span className={styles.unassignedChip}>Unassigned</span>
+                      )}
+                    </td>
+                    <td><Badge tone={STATUS_TONES[r.status]} dot>{r.status}</Badge></td>
+                    <td>
+                      {r.hasTempPassword && !collectedIds.has(r.id) ? (
+                        <button
+                          type="button"
+                          className={styles.revealBtn}
+                          disabled={revealing === r.id}
+                          onClick={() => handleReveal(r.id)}
+                        >
+                          <Icon.Key width={13} height={13} />
+                          <span>{revealing === r.id ? 'Retrieving…' : 'Get password'}</span>
+                        </button>
+                      ) : (
+                        <span className={styles.mutedText}>—</span>
+                      )}
+                    </td>
+                    <td className={styles.reasonCell}>
+                      {r.rejectionReason ?? <span className={styles.mutedText}>—</span>}
+                    </td>
+                  </tr>
+                )
+              })
             )}
           </tbody>
         </table>

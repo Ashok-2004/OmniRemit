@@ -1,33 +1,72 @@
 /* ══════════════════════════════════════════════════════════
-   SETTINGS CHECKER ASSIGNMENT TAB — mirrors SettingsRolesTab design system
+   SETTINGS CHECKER ASSIGNMENT TAB — App-Grouped Collapsible Flow
    ══════════════════════════════════════════════════════════ */
 
-.container { display: flex; flex-direction: column; gap: 18px; }
-
-.header {
+.container {
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ── Section Header ───────────────────────────────────────── */
+.header {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
   background: linear-gradient(120deg, #1e40af 0%, #2563eb 50%, #3b82f6 100%);
-  border: 1px solid #eaecf0;
-  border-radius: 13px;
+  border: none;
+  border-radius: 14px;
   padding: 16px 20px;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
-  position: relative;
-  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(37, 99, 235, 0.2), 0 1px 4px rgba(37, 99, 235, 0.12);
 }
 
 .header::before {
-  content: "";
+  content: '';
   position: absolute;
-  width: 150px;
-  height: 150px;
-  background: rgba(255, 255, 255, 0.1);
+  top: -40px;
+  right: -40px;
+  width: 160px;
+  height: 160px;
   border-radius: 50%;
-  top: -50px;
-  right: -30px;
+  background: rgba(255, 255, 255, 0.07);
   pointer-events: none;
+}
+
+.header::after {
+  content: '';
+  position: absolute;
+  bottom: -50px;
+  right: 100px;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.04);
+  pointer-events: none;
+}
+
+.headerTitleWrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: relative;
+  z-index: 1;
+}
+
+.headerIconBox {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  backdrop-filter: blur(4px);
 }
 
 .title {
@@ -36,126 +75,856 @@
   color: #ffffff;
   margin: 0;
   letter-spacing: -0.02em;
-  position: relative;
-  z-index: 1;
 }
 
 .subtitle {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.78);
-  margin: 3px 0 0;
-  position: relative;
-  z-index: 1;
-  max-width: 480px;
-  line-height: 1.5;
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, 0.82);
+  margin: 2px 0 0;
+  line-height: 1.4;
 }
 
-.moduleList { display: flex; flex-direction: column; gap: 10px; }
+/* ── Primary Action Button (in header) ───────────────────── */
+.createButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 9px;
+  padding: 8px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  backdrop-filter: blur(4px);
+  transition: all 140ms ease;
+  position: relative;
+  z-index: 1;
+  font-family: inherit;
+}
 
-.moduleCard {
-  background: #ffffff;
-  border: 1px solid #eaecf0;
-  border-radius: 14px;
-  padding: 14px 18px;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.02);
+.createButton:hover {
+  background: rgba(255, 255, 255, 0.28);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-1px);
+}
+
+.createButton:active {
+  transform: translateY(0);
+}
+
+/* ── Top Bar: Searchable App Dropdown & Toolbar ──────────── */
+.topControlsWrap {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.moduleHeader {
+.appSelectorRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  position: relative;
+}
+
+.appSelectorWrap {
+  position: relative;
+  flex: 1;
+}
+
+.appSelectorTrigger {
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
+  gap: 10px;
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 9px;
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  text-align: left;
 }
 
-.moduleTitleRow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.appSelectorTrigger:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
 
-.moduleName {
-  font-size: 13.5px;
+.appSelectorTriggerOpen {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12) !important;
+}
+
+.triggerLeft {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  overflow: hidden;
+  flex: 1;
+}
+
+.triggerAppIcon {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.iconBoxHost {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.iconBoxRemote {
+  background: #f5f3ff;
+  color: #7c3aed;
+}
+
+.triggerDetails {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.triggerLabel {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.triggerAppName {
+  font-size: 12.5px;
   font-weight: 700;
   color: #0f172a;
-  letter-spacing: -0.01em;
+  white-space: nowrap;
 }
 
-.enforcedBadge {
+.triggerGatedBadge {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 1.5px 7px;
+  border-radius: 999px;
   background: #ecfdf5;
   color: #059669;
   border: 1px solid #a7f3d0;
-  border-radius: 999px;
-  padding: 2px 8px;
-  font-size: 10.5px;
-  font-weight: 600;
+  white-space: nowrap;
 }
 
-.notEnforcedBadge {
-  background: #f1f5f9;
-  color: #64748b;
-  border: 1px solid #e2e8f0;
-  border-radius: 999px;
-  padding: 2px 8px;
-  font-size: 10.5px;
-  font-weight: 500;
-  cursor: help;
+.triggerChevron {
+  color: #94a3b8;
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
 }
 
-.addBtn {
-  display: inline-flex;
-  align-items: center;
+.triggerChevronOpen {
+  transform: rotate(180deg);
+}
+
+/* ── App Dropdown Menu ── */
+.appSelectorMenu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.14);
+  z-index: 60;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
   gap: 6px;
-  background: #eff6ff;
-  color: #2563eb;
-  border: 1px solid #bfdbfe;
-  border-radius: 8px;
-  padding: 6px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 120ms ease;
+  max-height: 280px;
 }
 
-.addBtn:hover { background: #dbeafe; }
+.appSelectorSearchWrap {
+  position: relative;
+  width: 100%;
+}
 
-.chipRow { display: flex; flex-wrap: wrap; gap: 8px; }
-
-.checkerChip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+.appSelectorSearchInput {
+  width: 100%;
+  padding: 6px 10px 6px 28px;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
-  border-radius: 999px;
-  padding: 5px 6px 5px 10px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #334155;
+  border-radius: 6px;
+  font-size: 11.5px;
+  color: #0f172a;
+  outline: none;
+  font-family: inherit;
 }
 
-.chipRemoveBtn {
+.appSelectorSearchInput:focus {
+  background: #ffffff;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+.appSelectorSearchIcon {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+.appSelectorList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  max-height: 210px;
+}
+
+.appSelectorItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
   background: none;
   border: none;
-  padding: 2px;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: all 0.12s ease;
+  font-family: inherit;
+}
+
+.appSelectorItem:hover {
+  background: #f1f5f9;
+}
+
+.appSelectorItemSelected {
+  background: #eff6ff !important;
+}
+
+.appSelectorItemLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.appSelectorItemIcon {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.appSelectorItemName {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.appSelectorItemSelected .appSelectorItemName {
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
+.appSelectorItemRight {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.appSelectorItemBadge {
+  font-size: 10px;
+  color: #059669;
+  font-weight: 700;
+  background: #ecfdf5;
+  padding: 1px 6px;
   border-radius: 999px;
+}
+
+.appSelectorItemEmpty {
+  padding: 12px;
+  text-align: center;
+  font-size: 11.5px;
+  color: #94a3b8;
+}
+
+/* ── Expand / Collapse All Button ───────────────────────── */
+.expandAllBtn {
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  transition: all 0.12s ease;
+  font-family: inherit;
+}
+
+.expandAllBtn:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+/* ── Filter & Search Toolbar ─────────────────────────────── */
+.filterToolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.searchWrap {
+  position: relative;
+  flex: 1;
+  min-width: 200px;
+}
+
+.searchInput {
+  width: 100%;
+  padding: 7px 12px 7px 32px;
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #0f172a;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.searchInput:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.searchIcon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+.clearSearchBtn {
+  position: absolute;
+  right: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
   color: #94a3b8;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 120ms ease, color 120ms ease;
+  padding: 2px;
 }
 
-.chipRemoveBtn:hover { background: #fef2f2; color: #ef4444; }
+.clearSearchBtn:hover {
+  color: #0f172a;
+}
 
-.mutedText { font-size: 12px; color: #94a3b8; margin: 0; }
+.filterPills {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  background: #f1f5f9;
+  padding: 3px;
+  border-radius: 8px;
+}
 
+.filterPill {
+  background: none;
+  border: none;
+  padding: 4px 9px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.filterPill:hover {
+  color: #0f172a;
+}
+
+.filterPillActive {
+  background: #ffffff;
+  color: #2563eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.countBadge {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* ── Error Banner ────────────────────────────────────────── */
 .errorBanner {
-  padding: 10px 12px;
-  border: 1px solid var(--omni-color-danger-200, #fecaca);
-  border-left: 3px solid #ef4444;
-  border-radius: 10px;
-  background: var(--omni-color-danger-50, #fef2f2);
-  color: var(--omni-color-danger-700, #b91c1c);
-  font-size: 13px;
+  padding: 10px 14px;
+  border: 1px solid #fecaca;
+  border-left: 3.5px solid #ef4444;
+  border-radius: 9px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 12px;
 }
+
+/* ── Hierarchical Collapsible App Sections List ───────────── */
+.appSectionsList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.appSection {
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 11px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.02);
+  transition: border-color 0.15s ease;
+}
+
+.appSection:hover {
+  border-color: #cbd5e1;
+}
+
+.appSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease;
+}
+
+.appSectionHeader:hover {
+  background: #f1f5f9;
+}
+
+.appSectionHeaderCollapsed {
+  border-bottom: none;
+}
+
+.appSectionHeaderHost {
+  background: linear-gradient(90deg, #eff6ff 0%, #f8fafc 100%);
+  border-bottom-color: #dbeafe;
+}
+
+.appSectionHeaderRemote {
+  background: linear-gradient(90deg, #f5f3ff 0%, #f8fafc 100%);
+  border-bottom-color: #ede9fe;
+}
+
+.appSectionLeft {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.accordionChevron {
+  color: #64748b;
+  transition: transform 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.accordionChevronCollapsed {
+  transform: rotate(-90deg);
+}
+
+.appSectionIcon {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.appSectionTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+}
+
+.appSectionKey {
+  font-size: 10px;
+  color: #64748b;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: rgba(0, 0, 0, 0.04);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.appSectionSummaryBadge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1.5px 7px;
+  border-radius: 999px;
+}
+
+.badgeGatedApp {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.badgeUngatedApp {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+
+.appSectionRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.appSectionAddBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #ffffff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.appSectionAddBtn:hover {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #ffffff;
+}
+
+/* ── App Modules Grid ────────────────────────────────────── */
+.appModulesGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px;
+}
+
+.moduleCard {
+  background: #ffffff;
+  border: 1px solid #eaecf0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.moduleCard:hover {
+  border-color: #cbd5e1;
+  background: #fbfcfe;
+}
+
+.moduleTopRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.moduleHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.moduleIconBox {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: #f1f5f9;
+  color: #2563eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.moduleTitleBlock {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.moduleName {
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.moduleKeyTag {
+  font-size: 9.5px;
+  color: #64748b;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: #f8fafc;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+}
+
+.badgeGated {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+  border-radius: 999px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.badgeUngated {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #f8fafc;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.badgeDotGreen {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #10b981;
+}
+
+.badgeDotGray {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+
+.cardAddBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.cardAddBtn:hover {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #ffffff;
+}
+
+.checkersSection {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 5px;
+  border-top: 1px solid #f1f5f9;
+  flex-wrap: wrap;
+}
+
+.checkerChipsWrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.checkerCardChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 2.5px 5px 2.5px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #1e293b;
+  transition: all 0.15s ease;
+}
+
+.checkerCardChip:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.checkerAvatarSmall {
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #ffffff;
+  font-size: 8px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.chipDeleteBtn {
+  background: none;
+  border: none;
+  padding: 1px 3px;
+  border-radius: 3px;
+  color: #94a3b8;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 120ms ease;
+  margin-left: 2px;
+}
+
+.chipDeleteBtn:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.ungatedNotice {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: #94a3b8;
+  margin: 0;
+}
+
+/* ── Empty State ─────────────────────────────────────────── */
+.emptyState {
+  background: #ffffff;
+  border: 1.5px dashed #e2e8f0;
+  border-radius: 12px;
+  padding: 32px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 8px;
+}
+
+.emptyIconBox {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #2563eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 2px;
+}
+
+.emptyTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.emptyDesc {
+  font-size: 11.5px;
+  color: #64748b;
+  margin: 0;
+  max-width: 300px;
+}
+
+.clearFiltersBtn {
+  margin-top: 4px;
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.clearFiltersBtn:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+/* ── Skeleton Placeholder Cards ──────────────────────────── */
+.skeletonCard {
+  background: #ffffff;
+  border: 1px solid #eaecf0;
+  border-radius: 11px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+

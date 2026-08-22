@@ -495,7 +495,9 @@ export const ViewLeadPage: React.FC = () => {
                       style={{
                         borderBottom: '1px solid #f1f5f9',
                         transition: 'background 0.12s ease',
+                        cursor: 'pointer',
                       }}
+                      onClick={() => openDetailsDrawer(lead)}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.background = '#f8fafc';
                       }}
@@ -596,14 +598,16 @@ export const ViewLeadPage: React.FC = () => {
                         {lead.createdDate}
                       </td>
 
-                      {/* Action Buttons — View has text label; Edit & Delete are icon-only with explicit
-                          width/height so they never collapse to 0 on narrow viewports */}
+                      {/* Action Buttons */}
                       <td style={{ padding: '13px 18px', textAlign: 'right', verticalAlign: 'middle' }}>
                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
                           {/* View — text + icon */}
                           <button
                             type="button"
-                            onClick={() => openDetailsDrawer(lead)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openDetailsDrawer(lead);
+                            }}
                             id={`view-lead-${lead.id}`}
                             title="View Lead Details"
                             style={{
@@ -630,11 +634,14 @@ export const ViewLeadPage: React.FC = () => {
                             <span>View</span>
                           </button>
 
-                          {/* Edit — icon-only with explicit 30×30 so it never collapses */}
+                          {/* Edit */}
                           {canEditLead() && (
                             <button
                               type="button"
-                              onClick={() => openEditWorkflow(lead)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openEditWorkflow(lead);
+                              }}
                               id={`edit-lead-${lead.id}`}
                               title="Edit Lead"
                               style={{
@@ -658,11 +665,14 @@ export const ViewLeadPage: React.FC = () => {
                             </button>
                           )}
 
-                          {/* Delete — icon-only with explicit 30×30 */}
+                          {/* Delete */}
                           {canDeleteLead() && (
                             <button
                               type="button"
-                              onClick={() => openDeleteWorkflow(lead)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openDeleteWorkflow(lead);
+                              }}
                               id={`delete-lead-${lead.id}`}
                               title="Delete Lead"
                               style={{
@@ -671,7 +681,7 @@ export const ViewLeadPage: React.FC = () => {
                                 borderRadius: '8px',
                                 background: '#fff1f2',
                                 border: '1px solid #fecdd3',
-                                color: '#be123c',
+                                color: '#be185d',
                                 cursor: 'pointer',
                                 display: 'inline-flex',
                                 alignItems: 'center',

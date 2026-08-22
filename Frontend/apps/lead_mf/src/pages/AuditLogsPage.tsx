@@ -501,7 +501,9 @@ export const AuditLogsPage: React.FC = () => {
                       style={{
                         borderBottom: '1px solid #f1f5f9',
                         transition: 'background 0.12s ease',
+                        cursor: 'pointer',
                       }}
+                      onClick={() => openAuditDetails(log)}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.background = '#f8fafc';
                       }}
@@ -514,12 +516,7 @@ export const AuditLogsPage: React.FC = () => {
                         {formatTimestamp(log.timestamp)}
                       </td>
 
-                      {/* Action code — rectangular monospace pill, matching the host's AuditLogsPage
-                          .actionCell convention, so this reads as an action code rather than a status
-                          (which is what a fully-rounded pill with a dot means everywhere else in the
-                          app — Action and Status were both 999px pills here, indistinguishable at a
-                          glance). Keeps this table's own per-category color coding, just a different
-                          shape family than the Status pill below. */}
+                      {/* Action code */}
                       <td style={{ padding: '13px 18px' }}>
                         <span
                           style={{
@@ -538,9 +535,7 @@ export const AuditLogsPage: React.FC = () => {
                         </span>
                       </td>
 
-                      {/* Actor & Role — avatar-initial chip, same pattern as host's AuditLogsPage
-                          .actorCell/.actorAvatar, so a person's name reads the same way in every
-                          audit table across the app. */}
+                      {/* Actor & Role */}
                       <td style={{ padding: '13px 18px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
                           <span
@@ -579,14 +574,9 @@ export const AuditLogsPage: React.FC = () => {
                         )}
                       </td>
 
-                      {/* Status & IP — a real bordered/tinted badge instead of naked colored text, so
-                          this is visually a "status" the same way every Badge elsewhere in the app is. */}
+                      {/* Status & IP */}
                       <td style={{ padding: '13px 18px' }}>
                         {(() => {
-                          // The backend only ever writes "Success" (capitalized, not all-caps) —
-                          // LeadService has no failure-audit path yet — so a strict === 'SUCCESS'
-                          // comparison never matched anything and every row rendered red/danger
-                          // regardless of outcome. Compare case-insensitively instead.
                           const isSuccess = log.status?.toUpperCase() === 'SUCCESS';
                           return (
                             <span
@@ -625,7 +615,10 @@ export const AuditLogsPage: React.FC = () => {
                       <td style={{ padding: '13px 18px', textAlign: 'right' }}>
                         <button
                           type="button"
-                          onClick={() => openAuditDetails(log)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openAuditDetails(log);
+                          }}
                           style={{
                             display: 'inline-flex',
                             alignItems: 'center',

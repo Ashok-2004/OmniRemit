@@ -111,17 +111,38 @@ function parseUserAgent(ua?: string | null): ParsedUserAgent | null {
   return { browser, os }
 }
 
-type DateRangePreset = 'today' | 'yesterday' | 'week' | 'month' | 'all'
+function formatIpv4(ip?: string | null): string {
+  if (!ip) return '—'
+  let trimmed = ip.trim()
+  if (trimmed === '::1' || trimmed === 'localhost') {
+    return '127.0.0.1'
+  }
+  if (trimmed.startsWith('::ffff:')) {
+    trimmed = trimmed.substring(7)
+  }
+  if (trimmed === '::') {
+    return '127.0.0.1'
+  }
+  return trimmed
+}
 
-const DATE_RANGES: { key: DateRangePreset; label: string }[] = [
+type DateFilterMode = 'all' | 'today' | 'yesterday' | 'week' | 'month' | 'custom'
+
+const DATE_RANGES: { key: DateFilterMode; label: string }[] = [
+  { key: 'all', label: 'All Time' },
   { key: 'today', label: 'Today' },
   { key: 'yesterday', label: 'Yesterday' },
-  { key: 'week', label: 'Week' },
-  { key: 'month', label: 'Month' },
-  { key: 'all', label: 'All Time' },
+  { key: 'week', label: 'Last 7 Days' },
+  { key: 'month', label: 'Last 30 Days' },
 ]
 
-function computeRange(preset: DateRangePreset): { from?: string; to?: string } {
+function computeRangeWithCustom(preset: DateFilterMode, customFrom?: string, customTo?: string): { from?: string; to?: string } {
+  if (preset === 'custom') {
+    return {
+      from: customFrom ? new Date(customFrom + 'T00:00:00.000Z').toISOString() : undefined,
+      to: customTo ? new Date(customTo + 'T23:59:59.999Z').toISOString() : undefined,
+    }
+  }
   const now = new Date()
   switch (preset) {
     case 'today': {
@@ -147,10 +168,42 @@ function computeRange(preset: DateRangePreset): { from?: string; to?: string } {
       start.setDate(start.getDate() - 30)
       return { from: start.toISOString() }
     }
-    case 'all':
     default:
       return {}
   }
+}
+
+function matchesDateRange(dateStr: string | null | undefined, preset: DateFilterMode, customFrom?: string, customTo?: string): boolean {
+  if (preset === 'all') return true
+  if (!dateStr) return false
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return false
+
+  if (preset === 'custom') {
+    if (customFrom && d < new Date(customFrom + 'T00:00:00.000Z')) return false
+    if (customTo && d > new Date(customTo + 'T23:59:59.999Z')) return false
+    return true
+  }
+  const now = new Date()
+  if (preset === 'today') {
+    return d.toDateString() === now.toDateString()
+  }
+  if (preset === 'yesterday') {
+    const y = new Date(now)
+    y.setDate(y.getDate() - 1)
+    return d.toDateString() === y.toDateString()
+  }
+  if (preset === 'week') {
+    const w = new Date(now)
+    w.setDate(w.getDate() - 7)
+    return d >= w
+  }
+  if (preset === 'month') {
+    const m = new Date(now)
+    m.setDate(m.getDate() - 30)
+    return d >= m
+  }
+  return true
 }
 
 const TAB_IDS = {
@@ -167,41 +220,178 @@ const TAB_ACTION_FILTER: Record<TabId, string | undefined> = {
   [TAB_IDS.auditEvents]: undefined,
 }
 
+const KNOWN_SERVICES = ['AuthService', 'ModuleRegistry', 'EmployeeService', 'Customer360Service', 'LeadService']
+
 export function AuditLogsPage() {
   const accessToken = useAuthStore((s) => s.accessToken)
 
   // Defaults to all activity, not to failures. See the tablist below for why.
   const [activeTab, setActiveTab] = useState<TabId>(TAB_IDS.auditEvents)
-  const [dateRange, setDateRange] = useState<DateRangePreset>('week')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [isCustomPageSize, setIsCustomPageSize] = useState(false)
   const [customPageSizeInput, setCustomPageSizeInput] = useState('')
+
+  // Popover state
+  const [activeHeaderFilter, setActiveHeaderFilter] = useState<string | null>(null)
+
+  // Date Filter
+  const [dateRange, setDateRange] = useState<DateFilterMode>('all')
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
+  const [customDraftFrom, setCustomDraftFrom] = useState('')
+  const [customDraftTo, setCustomDraftTo] = useState('')
+
+  // Service filter & search
   const [service, setService] = useState('')
-  // Debounced so typing a service name does not fire one audit-log query per keystroke. The audit
-  // table is the largest in the platform, so this is the query least worth running on every letter.
-  const debouncedService = useDebouncedValue(service, 300)
+  const [serviceSearch, setServiceSearch] = useState('')
+
+  // Actor search
+  const [actorSearch, setActorSearch] = useState('')
+
+  // Action filter & search
+  const [actionFilter, setActionFilter] = useState('')
+  const [actionSearch, setActionSearch] = useState('')
+
+  // Entity search
+  const [entitySearch, setEntitySearch] = useState('')
+
+  // Sign-in specific filters
+  const [authMethodFilter, setAuthMethodFilter] = useState('')
+  const [ipSearch, setIpSearch] = useState('')
+  const [deviceSearch, setDeviceSearch] = useState('')
+  const [resultFilter, setResultFilter] = useState<'' | 'Success' | 'Failure'>('')
+
+  // In-memory cached pool to extract available unique options with 0 extra API calls
+  const [cachedPool, setCachedPool] = useState<AuditLogDto[]>([])
+
+  const debouncedService = useDebouncedValue(service, 200)
+  const debouncedActor = useDebouncedValue(actorSearch, 200)
+  const debouncedEntity = useDebouncedValue(entitySearch, 200)
+  const debouncedIp = useDebouncedValue(ipSearch, 200)
+  const debouncedDevice = useDebouncedValue(deviceSearch, 200)
 
   const [summary, setSummary] = useState<AuditLogSummaryDto | null>(null)
   const [logs, setLogs] = useState<AuditLogDto[] | null>(null)
   const [total, setTotal] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
-  /**
-   * The row whose full details are open in the right-side drawer, or null when the drawer is closed.
-   * One record at a time — clicking "View" on another row just swaps which record the same drawer
-   * shows. Previously this was an inline expand-in-place row (and a separate, never-actually-opened
-   * "Login Failure Details" Modal); both are replaced by this single drawer so every "view details"
-   * action on this page opens the same right-side panel the rest of the host uses.
-   */
   const [viewingLog, setViewingLog] = useState<AuditLogDto | null>(null)
-
-  // Bumped by the Refresh button to force a refetch of the current query. A counter rather than calling
-  // a loader directly, so refreshing goes through exactly the same effect — and therefore the same
-  // cancellation and loading-state handling — as any other change.
   const [refreshKey, setRefreshKey] = useState(0)
 
-  const range = useMemo(() => computeRange(dateRange), [dateRange])
+  const range = useMemo(() => computeRangeWithCustom(dateRange, customFrom, customTo), [dateRange, customFrom, customTo])
+
+  // Zero extra API call: extract unique actors from loaded items
+  const availableActors = useMemo(() => {
+    const map = new Map<string, { id: string; name: string }>()
+    for (const r of cachedPool) {
+      const name = r.actorName || r.actorUserId
+      if (name) map.set(name.toLowerCase(), { id: r.actorUserId || r.id, name })
+    }
+    return Array.from(map.values())
+  }, [cachedPool])
+
+  // Zero extra API call: extract unique services
+  const availableServices = useMemo(() => {
+    const set = new Set<string>(KNOWN_SERVICES)
+    for (const r of cachedPool) {
+      if (r.serviceName) set.add(r.serviceName)
+    }
+    const list = Array.from(set)
+    if (!serviceSearch.trim()) return list
+    const q = serviceSearch.toLowerCase()
+    return list.filter((s) => s.toLowerCase().includes(q))
+  }, [cachedPool, serviceSearch])
+
+  // Zero extra API call: extract unique actions
+  const availableActions = useMemo(() => {
+    const set = new Set<string>(Object.keys(ACTION_LABELS))
+    for (const r of cachedPool) {
+      if (r.action) set.add(r.action)
+    }
+    const list = Array.from(set).map((a) => ({ raw: a, label: formatActionLabel(a) }))
+    if (!actionSearch.trim()) return list
+    const q = actionSearch.toLowerCase()
+    return list.filter((a) => a.label.toLowerCase().includes(q) || a.raw.toLowerCase().includes(q))
+  }, [cachedPool, actionSearch])
+
+  // Zero extra API call: extract unique auth methods
+  const availableAuthMethods = useMemo(() => {
+    const set = new Set<string>(['Local', 'Google', 'AzureAD', 'OAuth', 'ApiKey', 'Bearer'])
+    for (const r of cachedPool) {
+      if (r.authMethod) set.add(r.authMethod)
+    }
+    return Array.from(set)
+  }, [cachedPool])
+
+  // Zero extra API call: extract unique IPv4 addresses
+  const availableIps = useMemo(() => {
+    const set = new Set<string>()
+    for (const r of cachedPool) {
+      if (r.sourceIp) {
+        const clean = formatIpv4(r.sourceIp)
+        if (clean && clean !== '—') set.add(clean)
+      }
+    }
+    const list = Array.from(set)
+    if (!ipSearch.trim()) return list
+    const q = ipSearch.toLowerCase()
+    return list.filter((ip) => ip.toLowerCase().includes(q))
+  }, [cachedPool, ipSearch])
+
+  // Zero extra API call: extract unique browser and OS / device options
+  const availableDevices = useMemo(() => {
+    const browserSet = new Set<string>()
+    const osSet = new Set<string>()
+    for (const r of cachedPool) {
+      if (r.userAgent) {
+        const parsed = parseUserAgent(r.userAgent)
+        if (parsed) {
+          if (parsed.browser && parsed.browser !== 'Browser') browserSet.add(parsed.browser)
+          if (parsed.os && parsed.os !== 'Device') osSet.add(parsed.os)
+        }
+      }
+    }
+    if (browserSet.size === 0) {
+      ;['Chrome', 'Edge', 'Firefox', 'Safari'].forEach((b) => browserSet.add(b))
+    }
+    if (osSet.size === 0) {
+      ;['Windows', 'macOS', 'Linux', 'iOS', 'Android'].forEach((o) => osSet.add(o))
+    }
+    const browsers = Array.from(browserSet)
+    const oses = Array.from(osSet)
+
+    const filterList = (arr: string[]) => {
+      if (!deviceSearch.trim()) return arr
+      const q = deviceSearch.toLowerCase()
+      return arr.filter((item) => item.toLowerCase().includes(q))
+    }
+
+    return {
+      browsers: filterList(browsers),
+      oses: filterList(oses),
+    }
+  }, [cachedPool, deviceSearch])
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      const target = e.target as HTMLElement
+      if (!target.closest(`.${styles.filterPopover}`) && !target.closest(`.${styles.thFilterBtn}`)) {
+        setActiveHeaderFilter(null)
+      }
+    }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setActiveHeaderFilter(null)
+    }
+    if (activeHeaderFilter) {
+      document.addEventListener('mousedown', handleClickOutside)
+      document.addEventListener('keydown', handleKeyDown)
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [activeHeaderFilter])
 
   useEffect(() => {
     if (!viewingLog) return
@@ -226,44 +416,87 @@ export function AuditLogsPage() {
     void loadSummary()
   }, [loadSummary])
 
-  /*
-   * Loading the rows, with two problems fixed that together produced the reported symptom: switching
-   * from the Login Errors tab to Login Successes showed the FAILURE rows under the success heading for
-   * a moment before the correct data appeared.
-   *
-   * 1. Stale rows across a query change. The previous version never cleared `logs` before fetching, so
-   *    while the new request was in flight the table kept rendering the previous tab's rows under the
-   *    newly-selected tab. Setting `logs` back to null puts the table in its loading state instead, so
-   *    it never displays data that belongs to a filter the user has already moved off.
-   *
-   * 2. An unguarded race. There was no cancellation, so switching tabs quickly left two requests in
-   *    flight; if the first resolved last, its rows won and the tab showed permanently wrong data. The
-   *    `cancelled` flag means a superseded response is discarded rather than applied.
-   *
-   * The page reset is folded in here as well. It used to live in its own effect that ran after this one
-   * had already fetched with the stale page number, costing an extra request per filter change.
-   */
   useEffect(() => {
     if (!accessToken) return
     let cancelled = false
 
-    // Reset to the first page whenever the query itself changes — page 4 of one filter is rarely a
-    // valid page of another. Skipped when only `page` changed, which is what the guard below checks.
     setLogs(null)
     setError(null)
 
     async function load() {
       try {
+        const effectiveAction = actionFilter || TAB_ACTION_FILTER[activeTab]
+        const effectiveResult = resultFilter || (activeTab === TAB_IDS.loginErrors ? 'Failure' : activeTab === TAB_IDS.loginSuccesses ? 'Success' : undefined)
+
         const result = await auditLogsApi.list(accessToken!, {
-          page,
-          pageSize,
+          page: 1,
+          pageSize: 200,
           service: debouncedService || undefined,
-          action: TAB_ACTION_FILTER[activeTab],
+          action: effectiveAction,
+          result: effectiveResult,
           ...range,
         })
         if (cancelled) return
-        setLogs(result.items)
-        setTotal(result.total)
+
+        let allItems = result.items
+
+        // Update cached pool
+        setCachedPool((prev) => {
+          const map = new Map<string, AuditLogDto>()
+          for (const item of prev) map.set(item.id, item)
+          for (const item of allItems) map.set(item.id, item)
+          return Array.from(map.values())
+        })
+
+        // Client-side precision filtering
+        if (dateRange === 'custom') {
+          allItems = allItems.filter((r) => matchesDateRange(r.occurredAt, dateRange, customFrom, customTo))
+        }
+        if (debouncedActor) {
+          const q = debouncedActor.toLowerCase()
+          allItems = allItems.filter((r) =>
+            (r.actorName && r.actorName.toLowerCase().includes(q)) ||
+            (r.actorUserId && r.actorUserId.toLowerCase().includes(q))
+          )
+        }
+        if (debouncedEntity) {
+          const q = debouncedEntity.toLowerCase()
+          allItems = allItems.filter((r) =>
+            (r.entityType && r.entityType.toLowerCase().includes(q)) ||
+            (r.entityLabel && r.entityLabel.toLowerCase().includes(q)) ||
+            (r.entityId && r.entityId.toLowerCase().includes(q))
+          )
+        }
+        if (authMethodFilter) {
+          allItems = allItems.filter((r) => r.authMethod?.toLowerCase() === authMethodFilter.toLowerCase())
+        }
+        if (debouncedIp) {
+          const q = debouncedIp.toLowerCase()
+          allItems = allItems.filter((r) => {
+            const raw = r.sourceIp?.toLowerCase() || ''
+            const formatted = formatIpv4(r.sourceIp).toLowerCase()
+            return raw.includes(q) || formatted.includes(q)
+          })
+        }
+        if (debouncedDevice) {
+          const q = debouncedDevice.toLowerCase()
+          allItems = allItems.filter((r) => {
+            if (!r.userAgent) return false
+            const raw = r.userAgent.toLowerCase()
+            const parsed = parseUserAgent(r.userAgent)
+            const browser = parsed?.browser.toLowerCase() || ''
+            const os = parsed?.os.toLowerCase() || ''
+            return raw.includes(q) || browser.includes(q) || os.includes(q)
+          })
+        }
+        if (resultFilter) {
+          allItems = allItems.filter((r) => r.result === resultFilter)
+        }
+
+        const totalCount = allItems.length
+        const start = (page - 1) * pageSize
+        setLogs(allItems.slice(start, start + pageSize))
+        setTotal(totalCount)
       } catch (err) {
         if (cancelled) return
         setError(err instanceof ApiError ? err.message : 'Could not load audit logs.')
@@ -276,12 +509,20 @@ export function AuditLogsPage() {
     return () => {
       cancelled = true
     }
-  }, [accessToken, page, pageSize, debouncedService, activeTab, range, refreshKey])
+  }, [
+    accessToken, page, pageSize, debouncedService, activeTab, actionFilter,
+    resultFilter, authMethodFilter, debouncedActor, debouncedEntity,
+    debouncedIp, debouncedDevice, range, dateRange, customFrom, customTo, refreshKey,
+  ])
 
   // Changing the filter or page size invalidates the page number.
   useEffect(() => {
     setPage(1)
-  }, [activeTab, dateRange, debouncedService, pageSize])
+  }, [
+    activeTab, dateRange, customFrom, customTo, debouncedService,
+    actionFilter, resultFilter, authMethodFilter, debouncedActor,
+    debouncedEntity, debouncedIp, debouncedDevice, pageSize,
+  ])
 
   async function handleExport() {
     if (!accessToken) return
@@ -290,7 +531,8 @@ export function AuditLogsPage() {
     try {
       await auditLogsApi.exportCsv(accessToken, {
         service: debouncedService || undefined,
-        action: TAB_ACTION_FILTER[activeTab],
+        action: actionFilter || TAB_ACTION_FILTER[activeTab],
+        result: resultFilter || (activeTab === TAB_IDS.loginErrors ? 'Failure' : activeTab === TAB_IDS.loginSuccesses ? 'Success' : undefined),
         ...range,
       })
     } catch (err) {
@@ -323,6 +565,29 @@ export function AuditLogsPage() {
     }
   }
 
+  function clearAllFilters() {
+    setService('')
+    setServiceSearch('')
+    setActorSearch('')
+    setActionFilter('')
+    setActionSearch('')
+    setEntitySearch('')
+    setAuthMethodFilter('')
+    setIpSearch('')
+    setDeviceSearch('')
+    setResultFilter('')
+    setDateRange('all')
+    setCustomFrom('')
+    setCustomTo('')
+    setCustomDraftFrom('')
+    setCustomDraftTo('')
+  }
+
+  const hasActiveFilters = Boolean(
+    service || actorSearch || actionFilter || entitySearch || authMethodFilter ||
+    ipSearch || deviceSearch || resultFilter || dateRange !== 'all'
+  )
+
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const isLoginTab = activeTab === TAB_IDS.loginErrors || activeTab === TAB_IDS.loginSuccesses
 
@@ -331,9 +596,15 @@ export function AuditLogsPage() {
       {/* Header */}
       <div className={styles.header}>
         <div className={styles.titleGroup}>
-          <h1 className={styles.title}>Audit Logs</h1>
+          <div className={styles.titleHeaderRow}>
+            <h1 className={styles.title}>Audit Logs</h1>
+            <span className={styles.liveStreamBadge}>
+              <span className={styles.liveDot} />
+              Live Stream
+            </span>
+          </div>
           <p className={styles.subtitle}>
-            Comprehensive log of authentication events and administrative platform activities.
+            Comprehensive real-time log of authentication events and administrative platform activities.
           </p>
         </div>
 
@@ -344,7 +615,15 @@ export function AuditLogsPage() {
               key={r.key}
               type="button"
               className={r.key === dateRange ? styles.dateRangeActive : styles.dateRangeButton}
-              onClick={() => setDateRange(r.key)}
+              onClick={() => {
+                setDateRange(r.key)
+                if (r.key !== 'custom') {
+                  setCustomFrom('')
+                  setCustomTo('')
+                  setCustomDraftFrom('')
+                  setCustomDraftTo('')
+                }
+              }}
             >
               {r.label}
             </button>
@@ -397,21 +676,13 @@ export function AuditLogsPage() {
 
       {/* Tabs & Filter Bar */}
       <div className={styles.navBar}>
-        {/*
-          Broadest view first, and it is the default. The page used to open on Login Errors, so an
-          administrator's first sight of the audit log was a list of failures — alarming out of context,
-          and the wrong starting point for "what has been happening on this platform".
-
-          role="tablist" and aria-selected are what let a screen reader announce these as tabs rather
-          than as three unrelated buttons.
-        */}
         <div className={styles.tabsList} role="tablist" aria-label="Audit log views">
           <button
             type="button"
             role="tab"
             aria-selected={activeTab === TAB_IDS.auditEvents}
             className={`${styles.tabBtn} ${activeTab === TAB_IDS.auditEvents ? styles.tabActive : ''}`}
-            onClick={() => setActiveTab(TAB_IDS.auditEvents)}
+            onClick={() => { setActiveTab(TAB_IDS.auditEvents); setResultFilter('') }}
           >
             All Activity
           </button>
@@ -420,7 +691,7 @@ export function AuditLogsPage() {
             role="tab"
             aria-selected={activeTab === TAB_IDS.loginSuccesses}
             className={`${styles.tabBtn} ${activeTab === TAB_IDS.loginSuccesses ? styles.tabActive : ''}`}
-            onClick={() => setActiveTab(TAB_IDS.loginSuccesses)}
+            onClick={() => { setActiveTab(TAB_IDS.loginSuccesses); setResultFilter('') }}
           >
             Sign-ins
           </button>
@@ -429,7 +700,7 @@ export function AuditLogsPage() {
             role="tab"
             aria-selected={activeTab === TAB_IDS.loginErrors}
             className={`${styles.tabBtn} ${activeTab === TAB_IDS.loginErrors ? styles.tabActive : ''}`}
-            onClick={() => setActiveTab(TAB_IDS.loginErrors)}
+            onClick={() => { setActiveTab(TAB_IDS.loginErrors); setResultFilter('') }}
           >
             Failed Sign-ins
           </button>
@@ -477,17 +748,6 @@ export function AuditLogsPage() {
             )}
           </div>
 
-          <div className={styles.searchBox}>
-            <input
-              type="text"
-              className={styles.filterInput}
-              placeholder="Filter by service..."
-              value={service}
-              onChange={(e) => setService(e.target.value)}
-            />
-            <Icon.Search width={14} height={14} className={styles.searchIcon} />
-          </div>
-
           <button
             type="button"
             className={styles.refreshBtn}
@@ -515,6 +775,90 @@ export function AuditLogsPage() {
         </div>
       </div>
 
+      {/* Active filters chip banner */}
+      {hasActiveFilters && (
+        <div className={styles.activeFiltersBar}>
+          <span className={styles.activeFiltersLabel}>Filters:</span>
+          {dateRange !== 'all' && (
+            <span className={styles.filterChip}>
+              <span>
+                Time: {dateRange === 'custom' ? `${customFrom || '…'} to ${customTo || '…'}` : (DATE_RANGES.find((d) => d.key === dateRange)?.label ?? dateRange)}
+              </span>
+              <button type="button" className={styles.filterChipRemove} onClick={() => { setDateRange('all'); setCustomFrom(''); setCustomTo('') }} aria-label="Remove date filter">
+                <Icon.X width={12} height={12} />
+              </button>
+            </span>
+          )}
+          {service && (
+            <span className={styles.filterChip}>
+              <span>Service: {service}</span>
+              <button type="button" className={styles.filterChipRemove} onClick={() => setService('')} aria-label="Remove service filter">
+                <Icon.X width={12} height={12} />
+              </button>
+            </span>
+          )}
+          {actorSearch && (
+            <span className={styles.filterChip}>
+              <span>Actor: "{actorSearch}"</span>
+              <button type="button" className={styles.filterChipRemove} onClick={() => setActorSearch('')} aria-label="Remove actor filter">
+                <Icon.X width={12} height={12} />
+              </button>
+            </span>
+          )}
+          {actionFilter && (
+            <span className={styles.filterChip}>
+              <span>Action: {formatActionLabel(actionFilter)}</span>
+              <button type="button" className={styles.filterChipRemove} onClick={() => setActionFilter('')} aria-label="Remove action filter">
+                <Icon.X width={12} height={12} />
+              </button>
+            </span>
+          )}
+          {entitySearch && (
+            <span className={styles.filterChip}>
+              <span>Entity: "{entitySearch}"</span>
+              <button type="button" className={styles.filterChipRemove} onClick={() => setEntitySearch('')} aria-label="Remove entity filter">
+                <Icon.X width={12} height={12} />
+              </button>
+            </span>
+          )}
+          {authMethodFilter && (
+            <span className={styles.filterChip}>
+              <span>Auth: {authMethodFilter}</span>
+              <button type="button" className={styles.filterChipRemove} onClick={() => setAuthMethodFilter('')} aria-label="Remove auth filter">
+                <Icon.X width={12} height={12} />
+              </button>
+            </span>
+          )}
+          {ipSearch && (
+            <span className={styles.filterChip}>
+              <span>IP: "{ipSearch}"</span>
+              <button type="button" className={styles.filterChipRemove} onClick={() => setIpSearch('')} aria-label="Remove IP filter">
+                <Icon.X width={12} height={12} />
+              </button>
+            </span>
+          )}
+          {deviceSearch && (
+            <span className={styles.filterChip}>
+              <span>Device: "{deviceSearch}"</span>
+              <button type="button" className={styles.filterChipRemove} onClick={() => setDeviceSearch('')} aria-label="Remove device filter">
+                <Icon.X width={12} height={12} />
+              </button>
+            </span>
+          )}
+          {resultFilter && (
+            <span className={styles.filterChip}>
+              <span>Result: {resultFilter}</span>
+              <button type="button" className={styles.filterChipRemove} onClick={() => setResultFilter('')} aria-label="Remove result filter">
+                <Icon.X width={12} height={12} />
+              </button>
+            </span>
+          )}
+          <button type="button" className={styles.clearAllBtn} onClick={clearAllFilters}>
+            Clear all
+          </button>
+        </div>
+      )}
+
       {error && <div className={styles.errorBanner}>{error}</div>}
 
       {/* Logs Table Container */}
@@ -523,21 +867,575 @@ export function AuditLogsPage() {
           <thead>
             {isLoginTab ? (
               <tr>
-                <th>TIME</th>
-                <th>ACTOR / EMAIL</th>
-                <th>AUTH METHOD</th>
-                <th>IP ADDRESS</th>
-                <th>BROWSER / DEVICE</th>
-                <th>RESULT</th>
+                {/* TIME */}
+                <th className={styles.thFilterable}>
+                  <button
+                    type="button"
+                    className={`${styles.thFilterBtn} ${dateRange !== 'all' ? styles.thFilterBtnActive : ''}`}
+                    onClick={() => setActiveHeaderFilter((c) => (c === 'time' ? null : 'time'))}
+                  >
+                    <span>TIME</span>
+                    <Icon.ChevronDown width={12} height={12} className={`${styles.filterIcon} ${activeHeaderFilter === 'time' ? styles.filterIconActive : ''}`} />
+                    {dateRange !== 'all' && <span className={styles.filterDot} />}
+                  </button>
+                  {activeHeaderFilter === 'time' && (
+                    <div className={styles.filterPopover}>
+                      <div className={styles.popoverHeader}>
+                        <span className={styles.popoverTitle}>Filter Time</span>
+                        {dateRange !== 'all' && (
+                          <button
+                            type="button"
+                            className={styles.popoverClearBtn}
+                            onClick={() => { setDateRange('all'); setCustomFrom(''); setCustomTo(''); setCustomDraftFrom(''); setCustomDraftTo('') }}
+                          >
+                            Reset
+                          </button>
+                        )}
+                      </div>
+                      <div className={styles.popoverList}>
+                        {DATE_RANGES.map((r) => (
+                          <button
+                            key={r.key}
+                            type="button"
+                            className={`${styles.popoverItem} ${dateRange === r.key ? styles.popoverItemActive : ''}`}
+                            onClick={() => { setDateRange(r.key); setActiveHeaderFilter(null) }}
+                          >
+                            <span>{r.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                      <div className={styles.popoverDivider} />
+                      <div className={styles.customDateSection}>
+                        <span className={styles.customDateLabel}>Custom Range</span>
+                        <div className={styles.customDateRow}>
+                          <input
+                            type="date"
+                            className={styles.dateInput}
+                            value={customDraftFrom || customFrom}
+                            onChange={(e) => setCustomDraftFrom(e.target.value)}
+                          />
+                          <span style={{ fontSize: '11px', color: '#94a3b8' }}>to</span>
+                          <input
+                            type="date"
+                            className={styles.dateInput}
+                            value={customDraftTo || customTo}
+                            onChange={(e) => setCustomDraftTo(e.target.value)}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          className={styles.applyDateBtn}
+                          onClick={() => {
+                            setCustomFrom(customDraftFrom)
+                            setCustomTo(customDraftTo)
+                            setDateRange('custom')
+                            setActiveHeaderFilter(null)
+                          }}
+                        >
+                          Apply Custom Range
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </th>
+
+                {/* ACTOR / EMAIL */}
+                <th className={styles.thFilterable}>
+                  <button
+                    type="button"
+                    className={`${styles.thFilterBtn} ${actorSearch ? styles.thFilterBtnActive : ''}`}
+                    onClick={() => setActiveHeaderFilter((c) => (c === 'actor' ? null : 'actor'))}
+                  >
+                    <span>ACTOR / EMAIL</span>
+                    <Icon.ChevronDown width={12} height={12} className={`${styles.filterIcon} ${activeHeaderFilter === 'actor' ? styles.filterIconActive : ''}`} />
+                    {actorSearch && <span className={styles.filterDot} />}
+                  </button>
+                  {activeHeaderFilter === 'actor' && (
+                    <div className={styles.filterPopover}>
+                      <div className={styles.popoverHeader}>
+                        <span className={styles.popoverTitle}>Filter Actor / Email</span>
+                        {actorSearch && <button type="button" className={styles.popoverClearBtn} onClick={() => setActorSearch('')}>Reset</button>}
+                      </div>
+                      <input
+                        type="text"
+                        className={styles.popoverInput}
+                        placeholder="Search name or email..."
+                        value={actorSearch}
+                        onChange={(e) => setActorSearch(e.target.value)}
+                        autoFocus
+                      />
+                      {availableActors.length > 0 && (
+                        <>
+                          <div className={styles.popoverDivider} />
+                          <span className={styles.customDateLabel}>Known Actors:</span>
+                          <div className={styles.userListSection}>
+                            {availableActors.map((a) => (
+                              <button
+                                key={a.id || a.name}
+                                type="button"
+                                className={`${styles.userItem} ${actorSearch.toLowerCase() === a.name.toLowerCase() ? styles.userItemActive : ''}`}
+                                onClick={() => { setActorSearch(a.name); setActiveHeaderFilter(null) }}
+                              >
+                                <div className={styles.userAvatarSmall}>
+                                  {a.name.charAt(0).toUpperCase()}
+                                </div>
+                                <span>{a.name}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </th>
+
+                {/* AUTH METHOD */}
+                <th className={styles.thFilterable}>
+                  <button
+                    type="button"
+                    className={`${styles.thFilterBtn} ${authMethodFilter ? styles.thFilterBtnActive : ''}`}
+                    onClick={() => setActiveHeaderFilter((c) => (c === 'authMethod' ? null : 'authMethod'))}
+                  >
+                    <span>AUTH METHOD</span>
+                    <Icon.ChevronDown width={12} height={12} className={`${styles.filterIcon} ${activeHeaderFilter === 'authMethod' ? styles.filterIconActive : ''}`} />
+                    {authMethodFilter && <span className={styles.filterDot} />}
+                  </button>
+                  {activeHeaderFilter === 'authMethod' && (
+                    <div className={styles.filterPopover}>
+                      <div className={styles.popoverHeader}>
+                        <span className={styles.popoverTitle}>Filter Auth Method</span>
+                        {authMethodFilter && <button type="button" className={styles.popoverClearBtn} onClick={() => setAuthMethodFilter('')}>Reset</button>}
+                      </div>
+                      <div className={styles.popoverList}>
+                        <button
+                          type="button"
+                          className={`${styles.popoverItem} ${!authMethodFilter ? styles.popoverItemActive : ''}`}
+                          onClick={() => { setAuthMethodFilter(''); setActiveHeaderFilter(null) }}
+                        >
+                          <span>All Methods</span>
+                        </button>
+                        {availableAuthMethods.map((m) => (
+                          <button
+                            key={m}
+                            type="button"
+                            className={`${styles.popoverItem} ${authMethodFilter.toLowerCase() === m.toLowerCase() ? styles.popoverItemActive : ''}`}
+                            onClick={() => { setAuthMethodFilter(m); setActiveHeaderFilter(null) }}
+                          >
+                            <span>{m}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </th>
+
+                {/* IP ADDRESS */}
+                <th className={styles.thFilterable}>
+                  <button
+                    type="button"
+                    className={`${styles.thFilterBtn} ${ipSearch ? styles.thFilterBtnActive : ''}`}
+                    onClick={() => setActiveHeaderFilter((c) => (c === 'ip' ? null : 'ip'))}
+                  >
+                    <span>IP ADDRESS</span>
+                    <Icon.ChevronDown width={12} height={12} className={`${styles.filterIcon} ${activeHeaderFilter === 'ip' ? styles.filterIconActive : ''}`} />
+                    {ipSearch && <span className={styles.filterDot} />}
+                  </button>
+                  {activeHeaderFilter === 'ip' && (
+                    <div className={styles.filterPopover}>
+                      <div className={styles.popoverHeader}>
+                        <span className={styles.popoverTitle}>Filter IP Address</span>
+                        {ipSearch && <button type="button" className={styles.popoverClearBtn} onClick={() => setIpSearch('')}>Reset</button>}
+                      </div>
+                      <input
+                        type="text"
+                        className={styles.popoverInput}
+                        placeholder="Search IP address..."
+                        value={ipSearch}
+                        onChange={(e) => setIpSearch(e.target.value)}
+                        autoFocus
+                      />
+                      {availableIps.length > 0 && (
+                        <>
+                          <div className={styles.popoverDivider} />
+                          <span className={styles.customDateLabel}>Known IPs:</span>
+                          <div className={styles.popoverList}>
+                            {availableIps.map((ip) => (
+                              <button
+                                key={ip}
+                                type="button"
+                                className={`${styles.popoverItem} ${ipSearch === ip ? styles.popoverItemActive : ''}`}
+                                onClick={() => { setIpSearch(ip); setActiveHeaderFilter(null) }}
+                              >
+                                <span>{ip}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </th>
+
+                {/* BROWSER / DEVICE */}
+                <th className={styles.thFilterable}>
+                  <button
+                    type="button"
+                    className={`${styles.thFilterBtn} ${deviceSearch ? styles.thFilterBtnActive : ''}`}
+                    onClick={() => setActiveHeaderFilter((c) => (c === 'device' ? null : 'device'))}
+                  >
+                    <span>BROWSER / DEVICE</span>
+                    <Icon.ChevronDown width={12} height={12} className={`${styles.filterIcon} ${activeHeaderFilter === 'device' ? styles.filterIconActive : ''}`} />
+                    {deviceSearch && <span className={styles.filterDot} />}
+                  </button>
+                  {activeHeaderFilter === 'device' && (
+                    <div className={`${styles.filterPopover} ${styles.popoverRight}`}>
+                      <div className={styles.popoverHeader}>
+                        <span className={styles.popoverTitle}>Filter Browser / Device</span>
+                        {deviceSearch && <button type="button" className={styles.popoverClearBtn} onClick={() => setDeviceSearch('')}>Reset</button>}
+                      </div>
+                      <input
+                        type="text"
+                        className={styles.popoverInput}
+                        placeholder="Search browser or OS..."
+                        value={deviceSearch}
+                        onChange={(e) => setDeviceSearch(e.target.value)}
+                        autoFocus
+                      />
+                      {(availableDevices.browsers.length > 0 || availableDevices.oses.length > 0) && (
+                        <div className={styles.popoverList}>
+                          {availableDevices.browsers.length > 0 && (
+                            <>
+                              <div className={styles.popoverDivider} />
+                              <span className={styles.customDateLabel}>Browsers:</span>
+                              {availableDevices.browsers.map((b) => (
+                                <button
+                                  key={b}
+                                  type="button"
+                                  className={`${styles.popoverItem} ${deviceSearch.toLowerCase() === b.toLowerCase() ? styles.popoverItemActive : ''}`}
+                                  onClick={() => { setDeviceSearch(b); setActiveHeaderFilter(null) }}
+                                >
+                                  <span>{b}</span>
+                                </button>
+                              ))}
+                            </>
+                          )}
+                          {availableDevices.oses.length > 0 && (
+                            <>
+                              <div className={styles.popoverDivider} />
+                              <span className={styles.customDateLabel}>Operating Systems:</span>
+                              {availableDevices.oses.map((os) => (
+                                <button
+                                  key={os}
+                                  type="button"
+                                  className={`${styles.popoverItem} ${deviceSearch.toLowerCase() === os.toLowerCase() ? styles.popoverItemActive : ''}`}
+                                  onClick={() => { setDeviceSearch(os); setActiveHeaderFilter(null) }}
+                                >
+                                  <span>{os}</span>
+                                </button>
+                              ))}
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </th>
+
+                {/* RESULT */}
+                <th className={styles.thFilterable}>
+                  <button
+                    type="button"
+                    className={`${styles.thFilterBtn} ${resultFilter ? styles.thFilterBtnActive : ''}`}
+                    onClick={() => setActiveHeaderFilter((c) => (c === 'result' ? null : 'result'))}
+                  >
+                    <span>RESULT</span>
+                    <Icon.ChevronDown width={12} height={12} className={`${styles.filterIcon} ${activeHeaderFilter === 'result' ? styles.filterIconActive : ''}`} />
+                    {resultFilter && <span className={styles.filterDot} />}
+                  </button>
+                  {activeHeaderFilter === 'result' && (
+                    <div className={`${styles.filterPopover} ${styles.popoverRight}`}>
+                      <div className={styles.popoverHeader}>
+                        <span className={styles.popoverTitle}>Filter Result</span>
+                        {resultFilter && <button type="button" className={styles.popoverClearBtn} onClick={() => setResultFilter('')}>Reset</button>}
+                      </div>
+                      <div className={styles.popoverList}>
+                        <button
+                          type="button"
+                          className={`${styles.popoverItem} ${!resultFilter ? styles.popoverItemActive : ''}`}
+                          onClick={() => { setResultFilter(''); setActiveHeaderFilter(null) }}
+                        >
+                          <span>All Results</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`${styles.popoverItem} ${resultFilter === 'Success' ? styles.popoverItemActive : ''}`}
+                          onClick={() => { setResultFilter('Success'); setActiveHeaderFilter(null) }}
+                        >
+                          <Badge tone="success" dot>Success</Badge>
+                        </button>
+                        <button
+                          type="button"
+                          className={`${styles.popoverItem} ${resultFilter === 'Failure' ? styles.popoverItemActive : ''}`}
+                          onClick={() => { setResultFilter('Failure'); setActiveHeaderFilter(null) }}
+                        >
+                          <Badge tone="danger" dot>Failure</Badge>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </th>
+
                 <th>DETAILS</th>
               </tr>
             ) : (
               <tr>
-                <th>TIME</th>
-                <th>SERVICE</th>
-                <th>ACTOR</th>
-                <th>ACTION</th>
-                <th>ENTITY</th>
+                {/* TIME */}
+                <th className={styles.thFilterable}>
+                  <button
+                    type="button"
+                    className={`${styles.thFilterBtn} ${dateRange !== 'all' ? styles.thFilterBtnActive : ''}`}
+                    onClick={() => setActiveHeaderFilter((c) => (c === 'time' ? null : 'time'))}
+                  >
+                    <span>TIME</span>
+                    <Icon.ChevronDown width={12} height={12} className={`${styles.filterIcon} ${activeHeaderFilter === 'time' ? styles.filterIconActive : ''}`} />
+                    {dateRange !== 'all' && <span className={styles.filterDot} />}
+                  </button>
+                  {activeHeaderFilter === 'time' && (
+                    <div className={styles.filterPopover}>
+                      <div className={styles.popoverHeader}>
+                        <span className={styles.popoverTitle}>Filter Time</span>
+                        {dateRange !== 'all' && (
+                          <button
+                            type="button"
+                            className={styles.popoverClearBtn}
+                            onClick={() => { setDateRange('all'); setCustomFrom(''); setCustomTo(''); setCustomDraftFrom(''); setCustomDraftTo('') }}
+                          >
+                            Reset
+                          </button>
+                        )}
+                      </div>
+                      <div className={styles.popoverList}>
+                        {DATE_RANGES.map((r) => (
+                          <button
+                            key={r.key}
+                            type="button"
+                            className={`${styles.popoverItem} ${dateRange === r.key ? styles.popoverItemActive : ''}`}
+                            onClick={() => { setDateRange(r.key); setActiveHeaderFilter(null) }}
+                          >
+                            <span>{r.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                      <div className={styles.popoverDivider} />
+                      <div className={styles.customDateSection}>
+                        <span className={styles.customDateLabel}>Custom Range</span>
+                        <div className={styles.customDateRow}>
+                          <input
+                            type="date"
+                            className={styles.dateInput}
+                            value={customDraftFrom || customFrom}
+                            onChange={(e) => setCustomDraftFrom(e.target.value)}
+                          />
+                          <span style={{ fontSize: '11px', color: '#94a3b8' }}>to</span>
+                          <input
+                            type="date"
+                            className={styles.dateInput}
+                            value={customDraftTo || customTo}
+                            onChange={(e) => setCustomDraftTo(e.target.value)}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          className={styles.applyDateBtn}
+                          onClick={() => {
+                            setCustomFrom(customDraftFrom)
+                            setCustomTo(customDraftTo)
+                            setDateRange('custom')
+                            setActiveHeaderFilter(null)
+                          }}
+                        >
+                          Apply Custom Range
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </th>
+
+                {/* SERVICE */}
+                <th className={styles.thFilterable}>
+                  <button
+                    type="button"
+                    className={`${styles.thFilterBtn} ${service ? styles.thFilterBtnActive : ''}`}
+                    onClick={() => setActiveHeaderFilter((c) => (c === 'service' ? null : 'service'))}
+                  >
+                    <span>SERVICE</span>
+                    <Icon.ChevronDown width={12} height={12} className={`${styles.filterIcon} ${activeHeaderFilter === 'service' ? styles.filterIconActive : ''}`} />
+                    {service && <span className={styles.filterDot} />}
+                  </button>
+                  {activeHeaderFilter === 'service' && (
+                    <div className={styles.filterPopover}>
+                      <div className={styles.popoverHeader}>
+                        <span className={styles.popoverTitle}>Filter Service</span>
+                        {service && <button type="button" className={styles.popoverClearBtn} onClick={() => { setService(''); setServiceSearch('') }}>Reset</button>}
+                      </div>
+                      <input
+                        type="text"
+                        className={styles.popoverInput}
+                        placeholder="Type to search service..."
+                        value={serviceSearch}
+                        onChange={(e) => setServiceSearch(e.target.value)}
+                        autoFocus
+                      />
+                      <div className={styles.popoverList}>
+                        <button
+                          type="button"
+                          className={`${styles.popoverItem} ${!service ? styles.popoverItemActive : ''}`}
+                          onClick={() => { setService(''); setActiveHeaderFilter(null) }}
+                        >
+                          <span>All Services</span>
+                        </button>
+                        {availableServices.map((s) => (
+                          <button
+                            key={s}
+                            type="button"
+                            className={`${styles.popoverItem} ${service.toLowerCase() === s.toLowerCase() ? styles.popoverItemActive : ''}`}
+                            onClick={() => { setService(s); setActiveHeaderFilter(null) }}
+                          >
+                            <Badge tone={serviceTone(s)}>{s}</Badge>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </th>
+
+                {/* ACTOR */}
+                <th className={styles.thFilterable}>
+                  <button
+                    type="button"
+                    className={`${styles.thFilterBtn} ${actorSearch ? styles.thFilterBtnActive : ''}`}
+                    onClick={() => setActiveHeaderFilter((c) => (c === 'actor' ? null : 'actor'))}
+                  >
+                    <span>ACTOR</span>
+                    <Icon.ChevronDown width={12} height={12} className={`${styles.filterIcon} ${activeHeaderFilter === 'actor' ? styles.filterIconActive : ''}`} />
+                    {actorSearch && <span className={styles.filterDot} />}
+                  </button>
+                  {activeHeaderFilter === 'actor' && (
+                    <div className={styles.filterPopover}>
+                      <div className={styles.popoverHeader}>
+                        <span className={styles.popoverTitle}>Filter Actor</span>
+                        {actorSearch && <button type="button" className={styles.popoverClearBtn} onClick={() => setActorSearch('')}>Reset</button>}
+                      </div>
+                      <input
+                        type="text"
+                        className={styles.popoverInput}
+                        placeholder="Search actor name..."
+                        value={actorSearch}
+                        onChange={(e) => setActorSearch(e.target.value)}
+                        autoFocus
+                      />
+                      {availableActors.length > 0 && (
+                        <>
+                          <div className={styles.popoverDivider} />
+                          <span className={styles.customDateLabel}>Known Actors:</span>
+                          <div className={styles.userListSection}>
+                            {availableActors.map((a) => (
+                              <button
+                                key={a.id || a.name}
+                                type="button"
+                                className={`${styles.userItem} ${actorSearch.toLowerCase() === a.name.toLowerCase() ? styles.userItemActive : ''}`}
+                                onClick={() => { setActorSearch(a.name); setActiveHeaderFilter(null) }}
+                              >
+                                <div className={styles.userAvatarSmall}>
+                                  {a.name.charAt(0).toUpperCase()}
+                                </div>
+                                <span>{a.name}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </th>
+
+                {/* ACTION */}
+                <th className={styles.thFilterable}>
+                  <button
+                    type="button"
+                    className={`${styles.thFilterBtn} ${actionFilter ? styles.thFilterBtnActive : ''}`}
+                    onClick={() => setActiveHeaderFilter((c) => (c === 'action' ? null : 'action'))}
+                  >
+                    <span>ACTION</span>
+                    <Icon.ChevronDown width={12} height={12} className={`${styles.filterIcon} ${activeHeaderFilter === 'action' ? styles.filterIconActive : ''}`} />
+                    {actionFilter && <span className={styles.filterDot} />}
+                  </button>
+                  {activeHeaderFilter === 'action' && (
+                    <div className={styles.filterPopover}>
+                      <div className={styles.popoverHeader}>
+                        <span className={styles.popoverTitle}>Filter Action</span>
+                        {actionFilter && <button type="button" className={styles.popoverClearBtn} onClick={() => { setActionFilter(''); setActionSearch('') }}>Reset</button>}
+                      </div>
+                      <input
+                        type="text"
+                        className={styles.popoverInput}
+                        placeholder="Search action..."
+                        value={actionSearch}
+                        onChange={(e) => setActionSearch(e.target.value)}
+                        autoFocus
+                      />
+                      <div className={styles.popoverList}>
+                        <button
+                          type="button"
+                          className={`${styles.popoverItem} ${!actionFilter ? styles.popoverItemActive : ''}`}
+                          onClick={() => { setActionFilter(''); setActiveHeaderFilter(null) }}
+                        >
+                          <span>All Actions</span>
+                        </button>
+                        {availableActions.map((a) => (
+                          <button
+                            key={a.raw}
+                            type="button"
+                            className={`${styles.popoverItem} ${actionFilter === a.raw ? styles.popoverItemActive : ''}`}
+                            onClick={() => { setActionFilter(a.raw); setActiveHeaderFilter(null) }}
+                          >
+                            <span className={styles.actionCell}>{a.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </th>
+
+                {/* ENTITY */}
+                <th className={styles.thFilterable}>
+                  <button
+                    type="button"
+                    className={`${styles.thFilterBtn} ${entitySearch ? styles.thFilterBtnActive : ''}`}
+                    onClick={() => setActiveHeaderFilter((c) => (c === 'entity' ? null : 'entity'))}
+                  >
+                    <span>ENTITY</span>
+                    <Icon.ChevronDown width={12} height={12} className={`${styles.filterIcon} ${activeHeaderFilter === 'entity' ? styles.filterIconActive : ''}`} />
+                    {entitySearch && <span className={styles.filterDot} />}
+                  </button>
+                  {activeHeaderFilter === 'entity' && (
+                    <div className={`${styles.filterPopover} ${styles.popoverRight}`}>
+                      <div className={styles.popoverHeader}>
+                        <span className={styles.popoverTitle}>Search Entity</span>
+                        {entitySearch && <button type="button" className={styles.popoverClearBtn} onClick={() => setEntitySearch('')}>Reset</button>}
+                      </div>
+                      <input
+                        type="text"
+                        className={styles.popoverInput}
+                        placeholder="Filter by entity type or label..."
+                        value={entitySearch}
+                        onChange={(e) => setEntitySearch(e.target.value)}
+                        autoFocus
+                      />
+                    </div>
+                  )}
+                </th>
+
                 <th>DETAILS</th>
               </tr>
             )}
@@ -616,7 +1514,7 @@ export function AuditLogsPage() {
                       {log.sourceIp ? (
                         <span className={styles.ipBadge}>
                           <span className={styles.ipDot} aria-hidden="true" />
-                          {log.sourceIp}
+                          {formatIpv4(log.sourceIp)}
                         </span>
                       ) : (
                         <span className={styles.mutedText}>—</span>
@@ -739,11 +1637,11 @@ export function AuditLogsPage() {
               <div className={drawerStyles.header}>
                 <div className={drawerStyles.headerLeft}>
                   <div className={drawerStyles.headerIcon}>
-                    <Icon.FileText width={20} height={20} />
+                    <Icon.Shield width={20} height={20} />
                   </div>
                   <div>
                     <h2 className={drawerStyles.title}>Audit Record Details</h2>
-                    <p className={drawerStyles.subtitle}>Full details of this audit trail entry</p>
+                    <p className={drawerStyles.subtitle}>Full event context, actor, and execution metadata</p>
                   </div>
                 </div>
                 <button
@@ -758,93 +1656,323 @@ export function AuditLogsPage() {
 
               <div className={drawerStyles.tabBody}>
                 <div className={styles.drawerSections}>
-                  {/* Overview — when, who, what happened, how it ended. The four facts anyone opening
-                      this drawer wants first, before drilling into entity/network detail below. */}
+                  {/* 1. Overview & Timeline Two-Column Section */}
                   <section className={styles.drawerSection}>
-                    <h3 className={styles.drawerSectionTitle}>Overview</h3>
-                    <dl className={styles.detailList}>
-                      <dt>Time</dt>
-                      <dd>{formatTimestamp(viewingLog.occurredAt)}</dd>
+                    <div className={styles.overviewTimelineGrid}>
+                      <div className={styles.overviewTimelineCol}>
+                        <h3 className={styles.drawerSectionTitle}>
+                          <Icon.Grid width={12} height={12} />
+                          Overview
+                        </h3>
+                        <dl className={styles.detailList}>
+                          <div className={styles.detailRow}>
+                            <span className={styles.detailIcon}>
+                              <Icon.Layers width={15} height={15} />
+                            </span>
+                            <div className={styles.detailRowBody}>
+                              <dt className={styles.detailRowLabel}>Service</dt>
+                              <dd className={styles.detailRowValue}>
+                                <Badge tone={serviceTone(viewingLog.serviceName)}>
+                                  {viewingLog.serviceName}
+                                </Badge>
+                              </dd>
+                            </div>
+                          </div>
 
-                      <dt>Service</dt>
-                      <dd><Badge tone={serviceTone(viewingLog.serviceName)}>{viewingLog.serviceName}</Badge></dd>
+                          <div className={styles.detailRow}>
+                            <span className={`${styles.detailIcon} ${styles.detailIconNeutral}`}>
+                              <Icon.Activity width={15} height={15} />
+                            </span>
+                            <div className={styles.detailRowBody}>
+                              <dt className={styles.detailRowLabel}>Action</dt>
+                              <dd className={styles.detailRowValue}>
+                                <span className={styles.actionCell}>
+                                  {formatActionLabel(viewingLog.action)}
+                                </span>
+                              </dd>
+                            </div>
+                          </div>
 
-                      <dt>Actor</dt>
-                      <dd>{viewingLog.actorName ?? 'System'}</dd>
+                          <div className={styles.detailRow}>
+                            <span
+                              className={`${styles.detailIcon} ${
+                                viewingLog.result === 'Success'
+                                  ? styles.detailIconSuccess
+                                  : styles.detailIconDanger
+                              }`}
+                            >
+                              {viewingLog.result === 'Success' ? (
+                                <Icon.CheckCircle width={15} height={15} />
+                              ) : (
+                                <Icon.AlertTriangle width={15} height={15} />
+                              )}
+                            </span>
+                            <div className={styles.detailRowBody}>
+                              <dt className={styles.detailRowLabel}>Result</dt>
+                              <dd className={styles.detailRowValue}>
+                                <Badge
+                                  tone={viewingLog.result === 'Success' ? 'success' : 'danger'}
+                                  dot
+                                >
+                                  {viewingLog.result}
+                                </Badge>
+                              </dd>
+                            </div>
+                          </div>
 
-                      <dt>Action</dt>
-                      <dd>{formatActionLabel(viewingLog.action)}</dd>
+                          <div className={styles.detailRow}>
+                            <span className={`${styles.detailIcon} ${styles.detailIconPurple}`}>
+                              <Icon.Clock width={15} height={15} />
+                            </span>
+                            <div className={styles.detailRowBody}>
+                              <dt className={styles.detailRowLabel}>Timestamp</dt>
+                              <dd className={styles.detailRowValue}>
+                                {formatTimestamp(viewingLog.occurredAt)}
+                              </dd>
+                            </div>
+                          </div>
+                        </dl>
+                      </div>
 
-                      <dt>Result</dt>
-                      <dd>
-                        <Badge tone={viewingLog.result === 'Success' ? 'success' : 'danger'} dot>
-                          {viewingLog.result}
-                        </Badge>
-                      </dd>
+                      <div className={`${styles.overviewTimelineCol} ${styles.overviewTimelineColDivider}`}>
+                        <h3 className={styles.drawerSectionTitle}>
+                          <Icon.Clock width={12} height={12} />
+                          Event Timeline
+                        </h3>
+                        <div className={styles.timeline}>
+                          <div className={styles.timelineStep}>
+                            <span className={styles.timelineDot} />
+                            <div className={styles.timelineStepCard}>
+                              <span className={styles.timelineLabel}>
+                                Triggered by {viewingLog.actorName ?? 'System'}
+                              </span>
+                              <span className={styles.timelineTime}>
+                                <Icon.Clock width={12} height={12} />
+                                {formatTimestamp(viewingLog.occurredAt)}
+                              </span>
+                            </div>
+                          </div>
 
-                      {viewingLog.failureReason && (
-                        <>
-                          <dt>Failure Reason</dt>
-                          <dd className={styles.dangerText}>{viewingLog.failureReason}</dd>
-                        </>
-                      )}
-                    </dl>
+                          <div className={styles.timelineStep}>
+                            <span
+                              className={`${styles.timelineDot} ${
+                                viewingLog.result === 'Success'
+                                  ? styles.timelineDotSuccess
+                                  : styles.timelineDotDanger
+                              }`}
+                            />
+                            <div className={styles.timelineStepCard}>
+                              <span className={styles.timelineLabel}>
+                                {viewingLog.result === 'Success'
+                                  ? 'Event Completed Successfully'
+                                  : 'Event Execution Failed'}
+                              </span>
+                              <span className={styles.timelineTime}>
+                                <Icon.ShieldCheck width={12} height={12} />
+                                {viewingLog.serviceName}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {viewingLog.failureReason && (
+                          <div className={styles.failureAlert}>
+                            <Icon.AlertTriangle className={styles.failureAlertIcon} width={15} height={15} />
+                            <div>
+                              <strong>Failure Reason:</strong> {viewingLog.failureReason}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </section>
 
-                  {/* Entity — what record this action touched, in the friendly name an admin actually
-                      recognizes ("Lead Management"), never the raw type/UUID pair. */}
+                  {/* 2. Actor & Authentication Context */}
+                  <section className={styles.drawerSection}>
+                    <h3 className={styles.drawerSectionTitle}>
+                      <Icon.User width={12} height={12} />
+                      Actor &amp; Authentication Context
+                    </h3>
+                    <div className={styles.fieldCardGrid}>
+                      <div className={styles.fieldCard}>
+                        <span className={styles.fieldCardIcon}>
+                          <Icon.User width={15} height={15} />
+                        </span>
+                        <div className={styles.fieldCardBody}>
+                          <span className={styles.fieldCardLabel}>Actor Name</span>
+                          <span className={styles.fieldCardValue}>
+                            {viewingLog.actorName ?? 'System'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className={styles.fieldCard}>
+                        <span className={styles.fieldCardIcon}>
+                          <Icon.Key width={15} height={15} />
+                        </span>
+                        <div className={styles.fieldCardBody}>
+                          <span className={styles.fieldCardLabel}>Actor ID</span>
+                          <span className={`${styles.fieldCardValue} ${styles.monoText}`}>
+                            {viewingLog.actorId ? (
+                              viewingLog.actorId.length > 22
+                                ? `${viewingLog.actorId.slice(0, 10)}…${viewingLog.actorId.slice(-8)}`
+                                : viewingLog.actorId
+                            ) : (
+                              'System / None'
+                            )}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className={styles.fieldCard}>
+                        <span className={styles.fieldCardIcon}>
+                          <Icon.Shield width={15} height={15} />
+                        </span>
+                        <div className={styles.fieldCardBody}>
+                          <span className={styles.fieldCardLabel}>Auth Method</span>
+                          <span className={styles.fieldCardValue}>
+                            {viewingLog.authMethod ? (
+                              <span className={styles.authPill}>{viewingLog.authMethod}</span>
+                            ) : (
+                              <span className={styles.mutedText}>Not recorded</span>
+                            )}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className={styles.fieldCard}>
+                        <span className={styles.fieldCardIcon}>
+                          <Icon.Globe width={15} height={15} />
+                        </span>
+                        <div className={styles.fieldCardBody}>
+                          <span className={styles.fieldCardLabel}>Client IP (IPv4)</span>
+                          <span className={styles.fieldCardValue}>
+                            <span className={styles.ipBadge}>
+                              <span className={styles.ipDot} />
+                              {formatIpv4(viewingLog.sourceIp)}
+                            </span>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* 3. Device & Environment Context */}
+                  <section className={styles.drawerSection}>
+                    <h3 className={styles.drawerSectionTitle}>
+                      <Icon.Globe width={12} height={12} />
+                      Device &amp; Environment Context
+                    </h3>
+                    {(() => {
+                      const parsed = parseUserAgent(viewingLog.userAgent)
+                      return (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <div className={styles.fieldCardGrid}>
+                            <div className={styles.fieldCard}>
+                              <span className={styles.fieldCardIcon}>
+                                <Icon.Globe width={15} height={15} />
+                              </span>
+                              <div className={styles.fieldCardBody}>
+                                <span className={styles.fieldCardLabel}>Browser</span>
+                                <span className={styles.fieldCardValue}>
+                                  {parsed ? (
+                                    <span className={styles.browserPill}>{parsed.browser}</span>
+                                  ) : (
+                                    <span className={styles.mutedText}>—</span>
+                                  )}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className={styles.fieldCard}>
+                              <span className={styles.fieldCardIcon}>
+                                <Icon.Box width={15} height={15} />
+                              </span>
+                              <div className={styles.fieldCardBody}>
+                                <span className={styles.fieldCardLabel}>Operating System</span>
+                                <span className={styles.fieldCardValue}>
+                                  {parsed ? (
+                                    <span className={styles.osPill}>{parsed.os}</span>
+                                  ) : (
+                                    <span className={styles.mutedText}>—</span>
+                                  )}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {viewingLog.userAgent && (
+                            <div>
+                              <div style={{ fontSize: '10px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '4px' }}>
+                                Raw User Agent
+                              </div>
+                              <pre className={styles.payloadCodeBox}>{viewingLog.userAgent}</pre>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })()}
+                  </section>
+
+                  {/* 4. Target Entity (if present) */}
                   {viewingLog.entityType && (
                     <section className={styles.drawerSection}>
-                      <h3 className={styles.drawerSectionTitle}>Entity</h3>
-                      <dl className={styles.detailList}>
-                        <dt>Type</dt>
-                        <dd><Badge tone="neutral">{viewingLog.entityType}</Badge></dd>
+                      <h3 className={styles.drawerSectionTitle}>
+                        <Icon.Box width={12} height={12} />
+                        Target Entity
+                      </h3>
+                      <div className={styles.fieldCardGrid}>
+                        <div className={styles.fieldCard}>
+                          <span className={styles.fieldCardIcon}>
+                            <Icon.Layers width={15} height={15} />
+                          </span>
+                          <div className={styles.fieldCardBody}>
+                            <span className={styles.fieldCardLabel}>Entity Type</span>
+                            <span className={styles.fieldCardValue}>
+                              <Badge tone="neutral">{viewingLog.entityType}</Badge>
+                            </span>
+                          </div>
+                        </div>
 
-                        <dt>Name</dt>
-                        <dd>{viewingLog.entityLabel ?? <span className={styles.mutedText}>Not recorded</span>}</dd>
-                      </dl>
+                        <div className={styles.fieldCard}>
+                          <span className={styles.fieldCardIcon}>
+                            <Icon.FileText width={15} height={15} />
+                          </span>
+                          <div className={styles.fieldCardBody}>
+                            <span className={styles.fieldCardLabel}>Entity Name / Label</span>
+                            <span className={styles.fieldCardValue}>
+                              {viewingLog.entityLabel ?? <span className={styles.mutedText}>Not recorded</span>}
+                            </span>
+                          </div>
+                        </div>
+
+                        {viewingLog.entityId && (
+                          <div className={styles.fieldCard} style={{ gridColumn: '1 / -1' }}>
+                            <span className={styles.fieldCardIcon}>
+                              <Icon.Key width={15} height={15} />
+                            </span>
+                            <div className={styles.fieldCardBody}>
+                              <span className={styles.fieldCardLabel}>Entity ID / Key</span>
+                              <span className={`${styles.fieldCardValue} ${styles.monoText}`}>
+                                {viewingLog.entityId}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </section>
                   )}
 
-                  {/* Details — free-form context the writer chose to include, e.g. what specifically
-                      changed. Not present on every action type. */}
+                  {/* 5. Event Details & Payload (if present) */}
                   {viewingLog.details && (
                     <section className={styles.drawerSection}>
-                      <h3 className={styles.drawerSectionTitle}>Details</h3>
-                      <p className={styles.detailsText}>{viewingLog.details}</p>
+                      <h3 className={styles.drawerSectionTitle}>
+                        <Icon.FileText width={12} height={12} />
+                        Event Details &amp; Payload
+                      </h3>
+                      <pre className={styles.payloadCodeBox}>{viewingLog.details}</pre>
                     </section>
                   )}
-
-                  {/* Sign-in-only fields render inside the same Network & Device section below when
-                      present; auth method only makes sense for login/logout-shaped events. */}
-                  <section className={styles.drawerSection}>
-                    <h3 className={styles.drawerSectionTitle}>Network &amp; Device</h3>
-                    <dl className={styles.detailList}>
-                      {viewingLog.authMethod && (
-                        <>
-                          <dt>Auth Method</dt>
-                          <dd>{viewingLog.authMethod}</dd>
-                        </>
-                      )}
-
-                      <dt>IP Address</dt>
-                      <dd className={styles.monoText}>{viewingLog.sourceIp ?? '—'}</dd>
-
-                      <dt>Browser / Device</dt>
-                      <dd>
-                        {(() => {
-                          const parsed = parseUserAgent(viewingLog.userAgent)
-                          if (!parsed) return <span className={styles.mutedText}>—</span>
-                          return (
-                            <div className={styles.devicePillGroup}>
-                              <span className={styles.browserPill}>{parsed.browser}</span>
-                              <span className={styles.osPill}>{parsed.os}</span>
-                            </div>
-                          )
-                        })()}
-                      </dd>
-                    </dl>
-                  </section>
                 </div>
               </div>
             </div>

@@ -54,6 +54,7 @@ export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
   const [assignedUsers, setAssignedUsers] = useState<RoleUserDto[]>([])
   const [assignedUsersTotal, setAssignedUsersTotal] = useState(0)
   const [userSearch, setUserSearch] = useState('')
+  const [appSearch, setAppSearch] = useState('')
 
   // Accordion expanded state for remote apps
   const [expandedApps, setExpandedApps] = useState<Record<string, boolean>>({})
@@ -165,6 +166,53 @@ export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
     [appGroups],
   )
 
+  const filteredAppGroups = useMemo(() => {
+    if (!appSearch.trim()) return visibleAppGroups
+    const q = appSearch.toLowerCase().trim()
+    return visibleAppGroups.filter(({ feature, rows, app }) => {
+      if (feature.displayName.toLowerCase().includes(q)) return true
+      if (feature.key.toLowerCase().includes(q)) return true
+      if (app?.name?.toLowerCase().includes(q)) return true
+      if (rows.some((r) => r.label.toLowerCase().includes(q) || r.key.toLowerCase().includes(q))) return true
+      return false
+    })
+  }, [visibleAppGroups, appSearch])
+
+  const allAppPermissions = useMemo(
+    () =>
+      visibleAppGroups.flatMap((g) =>
+        g.rows.flatMap((row) =>
+          row.capabilities.map((cap) => ({ featureKey: row.key, capability: cap.key })),
+        ),
+      ),
+    [visibleAppGroups],
+  )
+
+  const grantedAppPermsCount = useMemo(() => {
+    if (isAdministrator) return allAppPermissions.length
+    return allAppPermissions.filter((p) =>
+      permissions.some((perm) => perm.featureKey === p.featureKey && perm.capability === p.capability),
+    ).length
+  }, [isAdministrator, allAppPermissions, permissions])
+
+  const isAllAppsSelected = useMemo(() => {
+    if (isAdministrator) return true
+    return allAppPermissions.length > 0 && grantedAppPermsCount === allAppPermissions.length
+  }, [isAdministrator, allAppPermissions.length, grantedAppPermsCount])
+
+  const handleToggleAllApps = (checked: boolean) => {
+    if (isAdministrator) return
+    const allAppKeys = new Set(allAppPermissions.map((p) => p.featureKey))
+    setPermissions((prev) => {
+      const hostOnly = prev.filter((p) => !allAppKeys.has(p.featureKey))
+      if (checked) {
+        return [...hostOnly, ...allAppPermissions]
+      } else {
+        return hostOnly
+      }
+    })
+  }
+
   // Capability checking helpers
   const isGranted = (featureKey: string, capability: string) => {
     if (isAdministrator) return true
@@ -195,25 +243,30 @@ export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
     setExpandedApps({})
   }
 
-  /**
-   * Grant every capability an application declares, sub-modules included, keyed by the FEATURE key.
-   *
-   * Two bugs fixed. It took an app key and rebuilt `remote.${appKey}`, which broke as soon as the grid
-   * started keying rows by feature; and it only granted the parent feature's own capabilities, so on a
-   * two-level app — where the parent declares none — "Select all" granted literally nothing while
-   * appearing to work.
-   */
-  const handleSelectAllAppPerms = (featureKey: string) => {
-    const group = appGroups.find((g) => g.feature.key === featureKey)
+  const isAppFullyGranted = (group: (typeof visibleAppGroups)[number]) => {
+    if (isAdministrator) return true
+    const perms = group.rows.flatMap((r) => r.capabilities.map((c) => ({ featureKey: r.key, capability: c.key })))
+    if (perms.length === 0) return false
+    return perms.every((p) => isGranted(p.featureKey, p.capability))
+  }
+
+  const toggleAppAll = (featureKey: string) => {
+    if (isAdministrator) return
+    const group = visibleAppGroups.find((g) => g.feature.key === featureKey)
     if (!group) return
 
+    const appPerms = group.rows.flatMap((r) => r.capabilities.map((c) => ({ featureKey: r.key, capability: c.key })))
     const rowKeys = new Set(group.rows.map((r) => r.key))
-    setPermissions((prev) => [
-      ...prev.filter((p) => !rowKeys.has(p.featureKey)),
-      ...group.rows.flatMap((row) =>
-        row.capabilities.map((cap) => ({ featureKey: row.key, capability: cap.key })),
-      ),
-    ])
+    const currentlyAll = isAppFullyGranted(group)
+
+    setPermissions((prev) => {
+      const withoutThisApp = prev.filter((p) => !rowKeys.has(p.featureKey))
+      if (currentlyAll) {
+        return withoutThisApp
+      } else {
+        return [...withoutThisApp, ...appPerms]
+      }
+    })
   }
 
   /**
@@ -463,7 +516,7 @@ export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
       <div className={styles.header}>
         <div className={styles.headerTitleWrap}>
           <div className={styles.headerIconBox}>
-            <Icon.ShieldCheck width={20} height={20} />
+            <Icon.ShieldCheck width={17} height={17} />
           </div>
           <div>
             <h2 className={styles.title}>{isEdit ? 'Edit Role Definition' : 'Create System Role'}</h2>
@@ -476,7 +529,7 @@ export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
           onClick={popLayer}
           aria-label="Close Role Editor"
         >
-          <Icon.X width={20} height={20} />
+          <Icon.X width={16} height={16} />
         </button>
       </div>
 
@@ -512,7 +565,7 @@ export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
               >
                 <div className={styles.stepBadge}>
                   {isDone ? (
-                    <Icon.CheckCircle width={14} height={14} className={styles.stepCheckIcon} />
+                    <Icon.CheckCircle width={13} height={13} className={styles.stepCheckIcon} />
                   ) : (
                     <span>{idx + 1}</span>
                   )}
@@ -524,7 +577,9 @@ export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
                   </span>
                 </div>
               </button>
-              {idx < stepOrder.length - 1 && <div className={styles.stepperLine} />}
+              {idx < stepOrder.length - 1 && (
+                <div className={`${styles.stepperLine} ${idx < currentStepIndex ? styles.stepperLineDone : ''}`} />
+              )}
             </Fragment>
           )
         })}
@@ -710,6 +765,43 @@ export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
                 </div>
               </div>
 
+              {/* Global Select All Toolbar for Remote Apps */}
+              <div className={styles.globalSelectToolbar}>
+                <label className={styles.globalCheckboxLabel}>
+                  <input
+                    type="checkbox"
+                    className={styles.checkbox}
+                    checked={isAllAppsSelected}
+                    onChange={(e) => handleToggleAllApps(e.target.checked)}
+                  />
+                  <div className={styles.globalTextGroup}>
+                    <span className={styles.globalSelectText}>
+                      Select All Permissions Across Applications
+                    </span>
+                    <span className={styles.globalSelectSub}>
+                      Grant all capabilities across all registered remote applications
+                    </span>
+                  </div>
+                </label>
+                <div className={styles.toolbarRightMeta}>
+                  <span className={styles.selectedCountBadge}>
+                    {grantedAppPermsCount} of {allAppPermissions.length} selected
+                  </span>
+                </div>
+              </div>
+
+              {/* Search & Filter Applications */}
+              <div className={styles.filterWrap}>
+                <input
+                  type="text"
+                  className={styles.filterInput}
+                  placeholder="Filter applications and sub-modules..."
+                  value={appSearch}
+                  onChange={(e) => setAppSearch(e.target.value)}
+                />
+                <Icon.Search width={14} height={14} className={styles.filterIcon} />
+              </div>
+
               <div className={styles.accordionList}>
                 {visibleAppGroups.length === 0 && (
                   <p className={styles.sectionHint}>
@@ -718,12 +810,18 @@ export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
                   </p>
                 )}
 
-                {visibleAppGroups.map(({ feature, rows, columns, app }) => {
+                {filteredAppGroups.length === 0 && visibleAppGroups.length > 0 && (
+                  <p className={styles.sectionHint}>No applications match your search "{appSearch}".</p>
+                )}
+
+                {filteredAppGroups.map((group) => {
+                  const { feature, rows, columns, app } = group
                   const isExpanded = Boolean(expandedApps[feature.key])
                   const AppIcon = resolveIcon(app?.iconKey)
                   const grantedCount = permissions.filter((p) =>
                     rows.some((r) => r.key === p.featureKey),
                   ).length
+                  const isFullyGranted = isAppFullyGranted(group)
 
                   return (
                     <div key={feature.key} className={styles.accordionCard}>
@@ -777,9 +875,9 @@ export function RoleFormLayer({ roleId, initialTab }: RoleFormLayerProps) {
                             <button
                               type="button"
                               className={styles.selectLink}
-                              onClick={() => handleSelectAllAppPerms(feature.key)}
+                              onClick={() => toggleAppAll(feature.key)}
                             >
-                              Select all
+                              {isFullyGranted ? 'Deselect all' : 'Select all'}
                             </button>
                           </div>
 

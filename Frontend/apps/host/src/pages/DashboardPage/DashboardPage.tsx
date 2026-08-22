@@ -559,14 +559,14 @@ export function DashboardPage() {
         </div>
       </div>
 
-      {/* Row 2: Live System Audit Trail (Left) & Registered Micro-Frontends (Right) */}
-      <div className={styles.twoColumnGrid}>
+      {/* Row 2: Live System Audit Trail (Left, compact) & Registered Micro-Frontends (Right, wider) */}
+      <div className={styles.auditAppsGrid}>
         {/* Widget 3: Live System Audit Trail */}
         <div className={styles.widgetCard}>
           <div className={styles.widgetHeader}>
             <div>
               <h2 className={styles.widgetTitle}>Live System Audit Trail</h2>
-              <p className={styles.widgetSubtitle}>Recent authentication events and changes</p>
+              <p className={styles.widgetSubtitle}>Recent authentication events and platform activity</p>
             </div>
             <Link to="/system/audit-logs" className={styles.viewAllLink}>
               <span>Full Audit Logs</span>
@@ -603,17 +603,18 @@ export function DashboardPage() {
                     </div>
 
                     <div className={styles.activityInfo}>
-                      <span className={styles.activityActor}>
-                        {log.actorName || log.actorUserId || 'System'}
-                      </span>
-                      <span className={styles.activityDescription}>
+                      <div className={styles.activityHeaderLine}>
+                        <span className={styles.activityActor}>
+                          {log.actorName || log.actorUserId || 'System'}
+                        </span>
+                        <span className={styles.activityTime}>
+                          {formatEventTime(log.occurredAt)}
+                        </span>
+                      </div>
+                      <span className={styles.activityDescription} title={formatActionText(log)}>
                         {formatActionText(log)}
                       </span>
                     </div>
-
-                    <span className={styles.activityTime}>
-                      {formatEventTime(log.occurredAt)}
-                    </span>
                   </div>
                 )
               })

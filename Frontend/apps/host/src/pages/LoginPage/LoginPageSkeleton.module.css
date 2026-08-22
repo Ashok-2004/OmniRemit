@@ -11,7 +11,24 @@
   display: grid;
   grid-template-columns: 52% 48%;
   height: 100vh;
+  /*
+   * Suppresses the skeleton on warm-cache loads without causing a white screen.
+   *
+   * DeferredFallback (rendering null for 200 ms) fixed the flicker but introduced a
+   * blank page because the Suspense boundary showed nothing during the delay. This CSS
+   * approach is better: the skeleton IS in the DOM immediately (Suspense is satisfied,
+   * no white screen), but stays transparent for 200 ms. If the LoginPage chunk resolves
+   * within that window the component unmounts before it ever becomes visible — zero
+   * flicker. If the download takes longer, opacity animates to 1 and the skeleton shows.
+   */
+  animation: login-skeleton-appear 150ms ease 200ms both;
 }
+
+@keyframes login-skeleton-appear {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
 
 /* Same gradient as LoginHero.module.css .heroContainer — the background alone
    renders instantly (it's CSS, not JS), so painting it immediately is most of

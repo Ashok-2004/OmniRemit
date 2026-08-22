@@ -344,7 +344,7 @@
 }
 
 /* ════════════════════════════════════════════════════
-   TWO-COLUMN GRID
+   TWO-COLUMN GRID & AUDIT-APPS ASYMMETRIC GRID
    ════════════════════════════════════════════════════ */
 
 .twoColumnGrid {
@@ -354,6 +354,20 @@
 }
 
 @media (max-width: 960px) { .twoColumnGrid { grid-template-columns: 1fr; } }
+
+/* Asymmetric 40% / 60% grid for Audit Trail (left, compact) vs Registered Apps (right, wider) */
+.auditAppsGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 42fr) minmax(0, 58fr);
+  gap: 20px;
+}
+
+@media (max-width: 1024px) {
+  .auditAppsGrid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
 
 /* ════════════════════════════════════════════════════
    WIDGET CARDS
@@ -606,7 +620,7 @@
 
 .appsListContainer {
   min-height: 200px;
-  max-height: 240px;
+  max-height: 250px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -624,41 +638,66 @@
 .appRow {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
+  gap: 14px;
+  padding: 10px 14px;
   border: 1px solid #eaecf0;
-  border-radius: 11px;
+  border-radius: 12px;
   background: #f8fafc;
-  transition: background 130ms ease, border-color 130ms ease;
+  transition: background 130ms ease, border-color 130ms ease, box-shadow 130ms ease;
 }
 
-.appRow:hover { background: #ffffff; border-color: #d4dbe8; }
+.appRow:hover {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+}
 
 .appRowIcon {
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
 }
 
-.appRowContent { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.appRowContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
 
-.appNameRow { display: flex; align-items: center; gap: 6px; }
+.appNameRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
 
 .appRowName {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   color: #0f172a;
   letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .appRowKey {
-  font-size: 10.5px;
-  color: #94a3b8;
+  font-size: 11px;
+  color: #64748b;
   font-weight: 500;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: #f1f5f9;
+  padding: 1.5px 7px;
+  border-radius: 5px;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .progressBarTrack {
@@ -681,10 +720,11 @@
   gap: 5px;
   background: #ecfdf5;
   color: #059669;
+  border: 1px solid #a7f3d0;
   border-radius: 999px;
-  padding: 3px 9px;
+  padding: 3px 10px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   flex-shrink: 0;
 }
 
@@ -694,10 +734,11 @@
   gap: 5px;
   background: #fffbeb;
   color: #b45309;
+  border: 1px solid #fde68a;
   border-radius: 999px;
-  padding: 3px 9px;
+  padding: 3px 10px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   flex-shrink: 0;
 }
 
@@ -766,15 +807,15 @@
 }
 
 /* ════════════════════════════════════════════════════
-   WIDGET 4: ACTIVITY FEED
+   WIDGET 4: ACTIVITY FEED (Spacious & Non-Clipping)
    ════════════════════════════════════════════════════ */
 
 .activityFeed {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   min-height: 200px;
-  max-height: 240px;
+  max-height: 250px;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: #e2e8f0 transparent;
@@ -785,33 +826,45 @@
 
 .activityRow {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
-  padding: 10px 12px;
+  padding: 10px 14px;
   background: #f8fafc;
   border: 1px solid #eaecf0;
-  border-radius: 11px;
-  transition: background 130ms ease, border-color 130ms ease;
+  border-radius: 12px;
+  transition: background 130ms ease, border-color 130ms ease, box-shadow 130ms ease;
 }
 
-.activityRow:hover { background: #ffffff; border-color: #d4dbe8; }
+.activityRow:hover {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+}
 
 .activityIconWrap {
   width: 32px;
   height: 32px;
-  border-radius: 8px;
+  border-radius: 9px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  margin-top: 1px;
 }
 
 .activityInfo {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
+}
+
+.activityHeaderLine {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .activityActor {
@@ -819,14 +872,9 @@
   font-weight: 700;
   color: #0f172a;
   letter-spacing: -0.01em;
-}
-
-.activityDescription {
-  font-size: 11.5px;
-  color: #64748b;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .activityTime {
@@ -835,6 +883,15 @@
   white-space: nowrap;
   flex-shrink: 0;
   font-weight: 500;
+}
+
+.activityDescription {
+  font-size: 12px;
+  color: #475569;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ════════════════════════════════════════════════════
